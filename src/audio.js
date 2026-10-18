@@ -1,11 +1,80 @@
-// Fully synthesised audio (Web Audio API). No audio files are needed, so
-// nothing can fail to load; if Web Audio is unavailable every call is a no-op.
+// Riot soundscape (Web Audio API). Openly licensed field recordings (see
+// README: sirens, crowds, fireworks, glass, whistle) are layered with
+// synthesised voices, explosions, helicopter, alarms and fire crackle. If a
+// recording fails to load or decode, the synthesised version is used instead,
+// so the game never depends on an audio file.
+const SAMPLE_FILES = {
+  crowd: 'crowd_large.wav', stadium: 'stadium.ogg', siren: 'siren_twotone.ogg',
+  fwFar1: 'fireworks_far1.ogg', fwFar3: 'fireworks_far3.ogg', fwStreet: 'fireworks_street.ogg',
+  glass: 'glass.wav', whistle: 'whistle.ogg',
+};
+const R = (a, b) => a + Math.random() * (b - a);
 export class Audio {
   constructor() {
     this.ctx = null;
     this.listener = { x: 0, z: 0, yaw: 0 };
     this.crowdLevel = 0.5;
     this.enabled = false;
+    this.samples = {};
+    this.vehicles = [];
+    this.alarms = [];
+    this.sirenT = 1;
+  }
+
+  // ------------------------------------------------------------ samples
+  async loadSamples(base = 'assets/audio/') {
+    if (!this.ctx) return;
+    await Promise.all(Object.entries(SAMPLE_FILES).map(async ([k, f]) => {
+      try {
+        const res = await fetch(base + f);
+        if (!res.ok) throw new Error(res.status);
+        const buf = await res.arrayBuffer();
+        this.samples[k] = await this.ctx.decodeAudioData(buf);
+      } catch (e) { console.warn('audio sample unavailable, using synthesis:', f, e.message || e); }
+    }));
+    this._startSampleBeds();
+  }
+
+  // one-shot (or looping) sample at a world position
+  playSample(name, { pos = null, vol = 1, rate = 1, offset = 0, dur = 0, loop = false, ref = 8, max = 160, fadeIn = 0.01, fadeOut = 0.15, filter = 0 } = {}) {
+    const buf = this.samples[name];
+    if (!this.enabled || !buf) return null;
+    const c = this.ctx, t = c.currentTime;
+    const { node, level } = this._out(pos, vol, ref, max);
+    if (!loop && level < 0.003) return null;
+    const src = c.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate; src.loop = loop;
+    const g = c.createGain();
+    let head = g;
+    if (filter) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = filter; g.connect(f); f.connect(node); } else g.connect(node);
+    src.connect(head);
+    const length = dur || buf.duration - offset;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(1, t + fadeIn);
+    if (!loop) { g.gain.setValueAtTime(1, t + Math.max(fadeIn, length - fadeOut)); g.gain.exponentialRampToValueAtTime(0.0001, t + length); }
+    src.start(t, offset % buf.duration, loop ? undefined : length + 0.05);
+    return { src, gain: g, out: node };
+  }
+
+  // continuous beds from the recordings
+  _startSampleBeds() {
+    const c = this.ctx;
+    const bed = (name, vol, filter, rate = 1) => {
+      const buf = this.samples[name]; if (!buf) return null;
+      const src = c.createBufferSource(); src.buffer = buf; src.loop = true; src.playbackRate.value = rate;
+      const g = c.createGain(); g.gain.value = vol;
+      let n = src;
+      if (filter) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = filter; src.connect(f); n = f; }
+      n.connect(g).connect(this.amb);
+      src.start(c.currentTime, Math.random() * buf.duration);
+      return g;
+    };
+    this.crowdBed = bed('crowd', 0.7);
+    this.crowdBed2 = bed('crowd', 0.35, 1800, 0.93); // second, detuned copy widens the crowd
+    this.roarBed = bed('stadium', 0.22, 2600);
+    this.fwBed1 = bed('fwFar1', 0.35, 3500);
+    this.fwBed2 = bed('fwFar3', 0.25, 2500, 0.9);
+    // with real crowd recordings in place, pull the synthetic murmur back
+    if (this.crowdBed) { this.murmur1.gain.value *= 0.35; this.murmur2.gain.value *= 0.35; }
   }
 
   init() {
@@ -28,7 +97,10 @@ export class Audio {
     for (let i = 0; i < len; i++) { w[i] = Math.random() * 2 - 1; last = (last + 0.02 * w[i]) / 1.02; b[i] = last * 3.5; }
     this.enabled = true;
     this._startAmbience();
+    this._startHelicopter();
+    this._startCrackle();
     this._timers();
+    this.loadSamples();
   }
 
   setListener(x, z, yaw) { this.listener.x = x; this.listener.z = z; this.listener.yaw = yaw; }
@@ -107,6 +179,14 @@ export class Audio {
     if (!this.enabled) return;
     const t = this.ctx.currentTime;
     this.crowdLevel = level;
+    if (this.crowdBed) {
+      this.crowdBed.gain.setTargetAtTime(0.5 + level * 0.55, t, 0.8);
+      this.crowdBed2.gain.setTargetAtTime(0.25 + level * 0.3, t, 0.8);
+      if (this.roarBed) this.roarBed.gain.setTargetAtTime(0.12 + level * 0.45, t, 1.2);
+      this.murmur1.gain.setTargetAtTime((0.35 + level * 0.5) * 0.35, t, 0.8);
+      this.murmur2.gain.setTargetAtTime((0.12 + level * 0.35) * 0.35, t, 0.8);
+      return;
+    }
     this.murmur1.gain.setTargetAtTime(0.35 + level * 0.5, t, 0.8);
     this.murmur2.gain.setTargetAtTime(0.12 + level * 0.35, t, 0.8);
     this.murmur3.gain.setTargetAtTime(0.02 + level * 0.05, t, 0.8);
@@ -117,6 +197,122 @@ export class Audio {
     this.engineGain.gain.setTargetAtTime(0.02 + k * 0.08, this.ctx.currentTime, 0.5);
   }
 
+  // ------------------------------------------------------------ helicopter, alarms, crackle
+  _startHelicopter() {
+    const c = this.ctx;
+    const src = c.createBufferSource(); src.buffer = this.brown; src.loop = true;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+    const am = c.createGain(); am.gain.value = 0.5;
+    const rotor = c.createOscillator(); rotor.frequency.value = 11.5;
+    const depth = c.createGain(); depth.gain.value = 0.5;
+    rotor.connect(depth).connect(am.gain); rotor.start();
+    const g = c.createGain(); g.gain.value = 0;
+    const pan = c.createStereoPanner ? c.createStereoPanner() : null;
+    src.connect(lp).connect(am).connect(g);
+    if (pan) { g.connect(pan); pan.connect(this.amb); } else g.connect(this.amb);
+    src.start();
+    this.heli = { g, pan, a: Math.random() * 6.28, r: 70 };
+  }
+
+  _startCrackle() {
+    const c = this.ctx;
+    // fire crackle: sparse clicks + hiss, gain driven by distance to the nearest fire
+    const len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() < 0.0016 ? (Math.random() * 2 - 1) * 0.9 : 0) + (Math.random() * 2 - 1) * 0.04;
+    const src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+    const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 700;
+    const g = c.createGain(); g.gain.value = 0;
+    src.connect(hp).connect(g).connect(this.amb); src.start();
+    this.crackle = g;
+  }
+
+  // car / shop alarm at a position for a while
+  alarm(pos, seconds = 14) {
+    if (!this.enabled) return;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(); o.type = 'square';
+    const per = Math.random() < 0.5 ? 0.25 : 0.5;
+    for (let k = 0; k < seconds / per; k++) o.frequency.setValueAtTime(k % 2 ? 1250 : 850, t + k * per);
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1100; f.Q.value = 1.2;
+    const g = c.createGain(); g.gain.value = 0;
+    const pan = c.createStereoPanner ? c.createStereoPanner() : null;
+    o.connect(f).connect(g);
+    if (pan) { g.connect(pan); pan.connect(this.sfx); } else g.connect(this.sfx);
+    o.start(t); o.stop(t + seconds);
+    this.alarms.push({ pos: pos.clone(), g, pan, end: t + seconds });
+  }
+
+  // a police / fire vehicle passing with the French two-tone siren
+  _spawnVehicle() {
+    const L = this.listener;
+    // drive along a cross street or the far boulevard, past the listener at a distance
+    const lanes = [[-110, 'x'], [-20, 'x'], [70, 'x'], [175, 'x'], [-190, 'x']];
+    const [lz] = lanes[Math.floor(Math.random() * lanes.length)];
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const v = { x: -dir * R(120, 180), z: lz + R(-3, 3), vx: dir * R(14, 22), vz: 0, t: 0, life: 18 };
+    if (Math.abs(lz - L.z) > 160) v.z = L.z + (Math.random() < 0.5 ? -1 : 1) * R(60, 120);
+    const c = this.ctx;
+    const g = c.createGain(); g.gain.value = 0;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3000;
+    const pan = c.createStereoPanner ? c.createStereoPanner() : null;
+    let src;
+    if (this.samples.siren) {
+      src = c.createBufferSource(); src.buffer = this.samples.siren; src.loop = true;
+      src.start(c.currentTime, Math.random() * this.samples.siren.duration);
+      src.connect(lp);
+    } else {
+      src = c.createOscillator(); src.type = 'square';
+      const t = c.currentTime;
+      for (let k = 0; k < 40; k++) src.frequency.setValueAtTime(k % 2 ? 580 : 435, t + k * 0.5);
+      src.start(); const f2 = c.createGain(); f2.gain.value = 0.25; src.connect(f2).connect(lp);
+    }
+    lp.connect(g);
+    if (pan) { g.connect(pan); pan.connect(this.amb); } else g.connect(this.amb);
+    v.src = src; v.g = g; v.pan = pan; v.lp = lp; v.prevD = null;
+    this.vehicles.push(v);
+  }
+
+  // per-frame: moving sirens (distance, pan, doppler), helicopter, alarms, crackle
+  update(dt, info = {}) {
+    if (!this.enabled || this.paused) return;
+    const c = this.ctx, t = c.currentTime, L = this.listener;
+    const rx = Math.cos(L.yaw), rz = -Math.sin(L.yaw);
+    const place = (x, z, ref, max) => { const dx = x - L.x, dz = z - L.z, d = Math.hypot(dx, dz); return { d, g: (d < ref ? 1 : ref / d) * Math.max(0, 1 - d / max), pan: d > 0.1 ? Math.max(-1, Math.min(1, (dx * rx + dz * rz) / d)) * 0.85 : 0 }; };
+    // keep two to four sirens on the move at any time ("a lot of sirens")
+    this.sirenT -= dt;
+    const want = 2 + (info.intensity > 0.5 ? 2 : info.intensity > 0.2 ? 1 : 0);
+    if (this.sirenT <= 0 && this.vehicles.length < want) { this._spawnVehicle(); this.sirenT = R(2.5, 7); }
+    for (let i = this.vehicles.length - 1; i >= 0; i--) {
+      const v = this.vehicles[i];
+      v.t += dt; v.x += v.vx * dt; v.z += v.vz * dt;
+      const p = place(v.x, v.z, 18, 260);
+      const fade = Math.min(1, v.t / 2, (v.life - v.t) / 2);
+      v.g.gain.setTargetAtTime(Math.max(0, p.g * 0.55 * fade), t, 0.1);
+      if (v.pan) v.pan.pan.setTargetAtTime(p.pan, t, 0.1);
+      v.lp.frequency.setTargetAtTime(1200 + 4000 * Math.min(1, 40 / (p.d + 1)), t, 0.2);
+      // doppler from the radial speed (skip zero-length frames, which would divide by zero)
+      if (v.prevD !== null && v.src.playbackRate && dt > 1e-4) { const vr = (p.d - v.prevD) / dt; if (Number.isFinite(vr)) v.src.playbackRate.setTargetAtTime(Math.max(0.85, Math.min(1.15, 1 - vr / 343)), t, 0.1); }
+      v.prevD = p.d;
+      if (v.t > v.life) { try { v.src.stop(); } catch (e) {} v.g.disconnect(); this.vehicles.splice(i, 1); }
+    }
+    // helicopter circling overhead
+    if (this.heli) {
+      const h = this.heli; h.a += dt * 0.05;
+      const hx = L.x + Math.cos(h.a) * h.r, hz = L.z + Math.sin(h.a * 0.7) * h.r;
+      const p = place(hx, hz, 50, 400);
+      h.g.gain.setTargetAtTime(0.16 * p.g * (0.6 + 0.4 * Math.sin(h.a * 3)), t, 0.3);
+      if (h.pan) h.pan.pan.setTargetAtTime(p.pan, t, 0.3);
+    }
+    for (let i = this.alarms.length - 1; i >= 0; i--) {
+      const a = this.alarms[i];
+      if (t > a.end) { this.alarms.splice(i, 1); continue; }
+      const p = place(a.pos.x, a.pos.z, 6, 120);
+      a.g.gain.setTargetAtTime(0.09 * p.g, t, 0.1);
+      if (a.pan) a.pan.pan.setTargetAtTime(p.pan, t, 0.1);
+    }
+    if (this.crackle) this.crackle.gain.setTargetAtTime(info.fireDist !== undefined ? 0.5 * Math.max(0, 1 - info.fireDist / 14) : 0, t, 0.3);
+  }
+
   _timers() {
     const loop = (fn, min, max) => {
       const go = () => { if (this.enabled && !this.paused) fn(); setTimeout(go, (min + Math.random() * (max - min)) * 1000); };
@@ -124,8 +320,8 @@ export class Audio {
     };
     loop(() => this.chant(), 5, 11);
     loop(() => this.shout(this._randomCrowdPos?.()), 0.6, 2.4);
-    loop(() => this.siren(), 16, 34);
-    loop(() => this.whistle(), 6, 15);
+    loop(() => this.whistle(), 5, 12);
+    loop(() => this.distantBang(), 2.5, 8);
   }
 
   // ------------------------------------------------------------ voices
@@ -191,8 +387,21 @@ export class Audio {
     }
   }
 
+  // distant firecracker / mortar bangs from the recordings (short random slices)
+  distantBang() {
+    if (!this.enabled || !this.samples.fwStreet) return;
+    const L = this.listener, a = Math.random() * 6.28, r = R(60, 160);
+    const buf = this.samples.fwStreet;
+    this.playSample('fwStreet', { pos: { x: L.x + Math.cos(a) * r, z: L.z + Math.sin(a) * r }, vol: R(0.6, 1.1), offset: R(0, buf.duration - 4), dur: R(1.5, 3.5), filter: R(1500, 4000), ref: 20, max: 260, fadeIn: 0.005, rate: R(0.9, 1.1) });
+  }
+
   whistle() {
     if (!this.enabled) return;
+    if (this.samples.whistle) {
+      const L = this.listener;
+      this.playSample('whistle', { pos: { x: L.x + R(-25, 25), z: L.z + R(-25, 25) }, vol: R(0.25, 0.45), rate: R(0.95, 1.05), ref: 8, max: 90 });
+      return;
+    }
     const c = this.ctx, t = c.currentTime;
     const pos = this._randomCrowdPos ? this._randomCrowdPos() : null;
     const { node, level } = this._out(pos, 0.08, 10, 120);
@@ -267,6 +476,7 @@ export class Audio {
 
   glass(pos) {
     if (!this.enabled) return;
+    if (this.samples.glass) { this.playSample('glass', { pos, vol: 0.8, rate: R(0.85, 1.2), ref: 6, max: 90 }); return; }
     const c = this.ctx, t = c.currentTime;
     const { node, level } = this._out(pos, 0.6, 5, 70);
     if (level < 0.01) return;
@@ -308,6 +518,8 @@ export class Audio {
     const fb = c.createGain(); fb.gain.value = 0.28;
     g.connect(d); d.connect(fb).connect(node);
     if (size > 0.7) this.glass(pos);
+    // recorded detonation texture on top of the synthesised blast
+    if (this.samples.fwStreet) { const buf = this.samples.fwStreet; this.playSample('fwStreet', { pos, vol: 0.7 * size, offset: R(0, buf.duration - 2), dur: R(0.8, 1.4), ref: 10, max: 200, fadeIn: 0.003, rate: R(0.7, 0.85), filter: 2200 }); }
   }
 
   // firework mortar launch thump and airborne burst with crackle
@@ -326,6 +538,10 @@ export class Audio {
 
   firework(pos) {
     if (!this.enabled) return;
+    if (this.samples.fwStreet) {
+      const buf = this.samples.fwStreet;
+      this.playSample('fwStreet', { pos, vol: 1.1, offset: R(0, buf.duration - 3), dur: R(1.2, 2.4), ref: 12, max: 220, fadeIn: 0.004 });
+    }
     const c = this.ctx;
     const dist = pos ? Math.hypot(pos.x - this.listener.x, pos.z - this.listener.z) : 0;
     const t = c.currentTime + Math.min(0.4, dist / 343);

@@ -167,7 +167,7 @@ const R = (a, b) => a + Math.random() * (b - a);
 export class Effects {
   constructor(scene, world, audio) {
     this.scene = scene; this.world = world; this.audio = audio;
-    this.smoke = new ParticleSystem(scene, 2400, false, smokeAtlas());
+    this.smoke = new ParticleSystem(scene, 2000, false, smokeAtlas());
     this.fire = new ParticleSystem(scene, 1300, true, fireAtlas());
     this.wind = new THREE.Vector3(0.9, 0, -0.5); // steady wind blowing smoke north-east
     this.emitAcc = 0;

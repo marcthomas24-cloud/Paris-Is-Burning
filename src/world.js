@@ -129,6 +129,16 @@ export class World {
     m.palFlagBig = this.makeCloth(T.palestineFlagTexture(), 0.25);
     m.frFlag = this.makeCloth(T.franceFlagTexture(), 0.12);
     m.palFlagStatic = new THREE.MeshStandardMaterial({ map: T.palestineFlagTexture(), side: THREE.DoubleSide, roughness: 0.9 });
+    m.algFlag = this.makeCloth(T.algeriaFlagTexture(), 0.14);
+    m.algFlagBig = this.makeCloth(T.algeriaFlagTexture(), 0.25);
+    m.algFlagStatic = new THREE.MeshStandardMaterial({ map: T.algeriaFlagTexture(), side: THREE.DoubleSide, roughness: 0.9 });
+    m.frFlagBig = this.makeCloth(T.franceFlagTexture(), 0.25);
+    m.frFlagStatic = new THREE.MeshStandardMaterial({ map: T.franceFlagTexture(), side: THREE.DoubleSide, roughness: 0.9 });
+    // red union strike flags
+    m.uniFlag = this.makeCloth(T.unionFlagTexture('GRÈVE'), 0.14);
+    m.uniFlagBig = this.makeCloth(T.unionFlagTexture('GRÈVE\nGÉNÉRALE'), 0.25);
+    m.uniFlagStatic = new THREE.MeshStandardMaterial({ map: T.unionFlagTexture('TOUS\nENSEMBLE'), side: THREE.DoubleSide, roughness: 0.9 });
+    m.binLid = std({ color: 0xe8c21a, roughness: 0.55 });
   }
 
   // ---------------------------------------------------------------- helpers
@@ -424,7 +434,10 @@ export class World {
     }
     // occasional hanging flags / banners from balconies
     const r = rnd();
-    if (floors > 1 && r < 0.12) this._hangingFlag(out(p0.clone().addScaledVector(d, R(2, w - 2)).setY(GH + FH + 1.0), 0.9), n, 'palFlagStatic');
+    if (floors > 1 && r < 0.12) {
+      const f = rnd();
+      this._hangingFlag(out(p0.clone().addScaledVector(d, R(2, w - 2)).setY(GH + FH + 1.0), 0.9), n, f < 0.35 ? 'palFlagStatic' : f < 0.55 ? 'algFlagStatic' : f < 0.85 ? 'frFlagStatic' : 'uniFlagStatic');
+    }
   }
 
   _hangingFlag(pos, n, matKey) {
@@ -588,7 +601,7 @@ export class World {
       this.box('binGreen', 0.7, 1.05, 0.8, x, 0.38, z, ry, 0, Math.PI / 2);
     } else {
       this.box('binGreen', 0.7, 1.05, 0.8, x, 0.55, z, ry);
-      this.box('binGreen', 0.74, 0.06, 0.85, x, 1.1, z, ry);
+      this.box(rnd() < 0.5 ? 'binLid' : 'binGreen', 0.74, 0.06, 0.85, x, 1.1, z, ry); // yellow lid = recycling bin
     }
     this.addColliderRotated(x, z, 1.0, 0.8, ry, 1.1);
   }
@@ -758,18 +771,44 @@ export class World {
   }
 
   // ---------------------------------------------------------------- barricades
-  _vauban(x, z, ry) {
-    // metal crowd-control barrier, 2 m wide
+  _vauban(x, z, ry, { mat = 'metal', tilt = 0, roll = 0, y = 0, collide = true } = {}) {
+    // metal crowd-control barrier, 2 m wide (tilt / roll lean it onto a pile)
     const B = (w, h, d, ox, oy) => {
       const g = new THREE.BoxGeometry(w, h, d);
-      g.translate(ox, oy, 0); g.rotateY(ry); g.translate(x, 0, z);
-      this.add('metal', g);
+      g.translate(ox, oy, 0); g.rotateZ(roll); g.rotateX(tilt); g.rotateY(ry); g.translate(x, y, z);
+      this.add(mat, g);
     };
     B(2.0, 0.05, 0.05, 0, 1.08); B(2.0, 0.05, 0.05, 0, 0.25);
     for (let k = -0.95; k <= 0.96; k += 0.16) B(0.025, 0.85, 0.025, k, 0.66);
     B(0.06, 1.1, 0.06, -1.0, 0.55); B(0.06, 1.1, 0.06, 1.0, 0.55);
     B(0.06, 0.04, 0.7, -0.9, 0.02); B(0.06, 0.04, 0.7, 0.9, 0.02);
-    this.addColliderRotated(x, z, 2.0, 0.35, ry, 1.1);
+    if (collide) this.addColliderRotated(x, z, 2.0, 0.35, ry, 1.1);
+  }
+
+  _binPyre(cx, cz, scale = 1) {
+    // bins dragged into the road, crowd barriers thrown on top, set alight
+    const gy = this.groundHeight(cx, cz);
+    this.box('charred', 2.6, 0.03, 2.4, cx, gy + 0.02, cz, rnd() * 6);
+    const nb = 2 + Math.floor(rnd() * 2);
+    for (let i = 0; i < nb; i++) {
+      const a = (i / nb) * Math.PI * 2 + R(-0.4, 0.4), d = R(0.3, 0.6);
+      const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, ry = rnd() * 6;
+      const burnt = rnd() < 0.5;
+      if (rnd() < 0.5) {
+        this.box(burnt ? 'charred' : 'binGreen', 0.7, 1.05, 0.8, x, 0.38, z, ry, 0, Math.PI / 2);
+      } else {
+        this.box(burnt ? 'charred' : 'binGreen', 0.7, 1.05, 0.8, x, 0.55, z, ry);
+        if (!burnt) this.box('binLid', 0.74, 0.06, 0.85, x, 1.1, z, ry, R(-0.5, 0));
+      }
+    }
+    for (let k = 0; k < 2; k++) {
+      this._vauban(cx + R(-0.4, 0.4), cz + R(-0.4, 0.4), rnd() * 6, { mat: rnd() < 0.5 ? 'rust' : 'metal', tilt: R(0.6, 1.1) * (rnd() < 0.5 ? 1 : -1), roll: R(-0.3, 0.3), y: 0.3 + k * 0.25, collide: false });
+    }
+    for (let k = 0; k < 4; k++) this.box(rnd() < 0.5 ? 'cardboard' : 'trash', R(0.4, 0.7), R(0.2, 0.4), R(0.4, 0.6), cx + R(-0.9, 0.9), gy + 0.15, cz + R(-0.9, 0.9), rnd() * 6, R(-0.2, 0.2));
+    this.addCollider(cx - 1.1, cz - 1.1, cx + 1.1, cz + 1.1, 1.2);
+    this.fires.push({ pos: new THREE.Vector3(cx, 1.0, cz), scale: 1.7 * scale });
+    this.fires.push({ pos: new THREE.Vector3(cx + R(-0.6, 0.6), 0.6, cz + R(-0.6, 0.6)), scale: 1.0 * scale });
+    this.smokes.push({ pos: new THREE.Vector3(cx, 1.6, cz), rate: 2.2 * scale, scale: 1.4 });
   }
 
   _barricade(cx, cz, width, burning) {
@@ -799,6 +838,8 @@ export class World {
     }
     // overturned barriers in the crowd
     for (let i = 0; i < 16; i++) this._vauban(R(-8, 8), R(-150, 115), R(0, 3.14));
+    // burning piles of bins and barriers in the road
+    for (const [x, z, s] of [[6.5, 98, 1], [-7, 44, 1.1], [7.2, 4, 0.9], [-6.8, -72, 1.2], [6.8, -126, 1], [-2, -150, 1.3]]) this._binPyre(x, z, s);
     // improvised barricades
     this._barricade(-5, 22, 7, false);
     this._barricade(5, -88, 6, true);
@@ -820,6 +861,10 @@ export class World {
     big.position.set(-14.6, 9, 4); big.rotation.y = Math.PI / 2; this.scene.add(big);
     const big2 = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.6), this.makeCloth(T.bannerTexture('JUSTICE · LIBERTÉ', '#f2efe8', '#111'), 0.05));
     big2.position.set(14.6, 10, -52); big2.rotation.y = -Math.PI / 2; this.scene.add(big2);
+    const big3 = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.6), this.makeCloth(T.bannerTexture('LYCÉENS EN COLÈRE', '#f2efe8', '#111'), 0.05));
+    big3.position.set(-14.6, 8.5, -74); big3.rotation.y = Math.PI / 2; this.scene.add(big3);
+    const big4 = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.6), this.makeCloth(T.bannerTexture('LA VIE CHÈRE ÇA SUFFIT', '#c8161d', '#ffffff'), 0.05));
+    big4.position.set(14.6, 9.5, 100); big4.rotation.y = -Math.PI / 2; this.scene.add(big4);
   }
 
   // ---------------------------------------------------------------- distant crowds
@@ -850,15 +895,18 @@ export class World {
     // distant flags above the impostor crowds
     const fg = new THREE.PlaneGeometry(1.6, 1.0, 8, 1); fg.translate(0.8, 0, 0);
     const pole = new THREE.CylinderGeometry(0.02, 0.02, 3.2, 4); pole.translate(0, -1.0, 0);
-    const n = 46;
-    const flags = new THREE.InstancedMesh(fg, this.materials.palFlagBig, n);
-    const poles = new THREE.InstancedMesh(pole, this.materials.darkMetal, n);
-    for (let i = 0; i < n; i++) {
-      const [x, z] = spots[Math.floor(rnd() * spots.length)];
-      m.compose(new THREE.Vector3(x, 3.4, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), R(-1, 1) + (Math.abs(x) > 40 ? Math.PI / 2 : 0)), new THREE.Vector3(1, 1, 1));
-      flags.setMatrixAt(i, m); poles.setMatrixAt(i, m);
+    // distant flags over the crowds: Palestinian, Algerian, French and red union flags
+    const fm = this.materials;
+    for (const [mat, n] of [[fm.palFlagBig, 30], [fm.algFlagBig, 18], [fm.frFlagBig, 24], [fm.uniFlagBig, 22]]) {
+      const flags = new THREE.InstancedMesh(fg, mat, n);
+      const poles = new THREE.InstancedMesh(pole, this.materials.darkMetal, n);
+      for (let i = 0; i < n; i++) {
+        const [x, z] = spots[Math.floor(rnd() * spots.length)];
+        m.compose(new THREE.Vector3(x, 3.4 + R(-0.3, 0.6), z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), R(-1, 1) + (Math.abs(x) > 40 ? Math.PI / 2 : 0)), new THREE.Vector3(1, 1, 1));
+        flags.setMatrixAt(i, m); poles.setMatrixAt(i, m);
+      }
+      this.scene.add(flags, poles);
     }
-    this.scene.add(flags, poles);
   }
 
   updateImpostors(t) {

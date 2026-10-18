@@ -151,3 +151,5 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
   .logo { font-size: 56px; }
   #onboarding { width: calc(100% - 32px); }
 }
+
+.credits { max-width: 560px; line-height: 1.5; letter-spacing: 0.02em; margin-top: 10px; }

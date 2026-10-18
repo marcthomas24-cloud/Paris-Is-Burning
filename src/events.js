@@ -201,6 +201,7 @@ export class IncidentScheduler {
     g.effects.explosion(spot, 1.1);
     g.effects.addFire(spot, 1.4, 2.0);
     g.audio.explosion(spot, 1.1);
+    g.audio.alarm(spot, 16 + Math.random() * 10);
     g.crowd.disturb(spot, 22, 1.0, 'explosion');
     this._shakeFrom(spot, 0.5);
     if (spot.distanceTo(p) < 60) g.hud.alert('A vehicle has caught fire', 'warn', 2.2, 'carfire');

@@ -297,11 +297,48 @@ export function palestineFlagTexture() {
   return tex(c, { repeat: false });
 }
 
+// Algerian flag: green (hoist) and white halves, red crescent and star.
+export function algeriaFlagTexture() {
+  const W = 256, H = 170;
+  const [c, ctx] = canvas(W, H);
+  ctx.fillStyle = '#006233'; ctx.fillRect(0, 0, W / 2, H);
+  ctx.fillStyle = '#f7f7f7'; ctx.fillRect(W / 2, 0, W / 2, H);
+  const cx = W / 2, cy = H / 2, r = H * 0.25;
+  ctx.fillStyle = '#d21034';
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  // cut the inner circle to form the crescent (paint with the background halves)
+  ctx.save(); ctx.beginPath(); ctx.arc(cx + r * 0.25, cy, r * 0.8, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = '#006233'; ctx.fillRect(0, 0, W / 2, H);
+  ctx.fillStyle = '#f7f7f7'; ctx.fillRect(W / 2, 0, W / 2, H);
+  ctx.restore();
+  // five-pointed star inside the crescent
+  ctx.fillStyle = '#d21034';
+  const sx = cx + r * 0.32, sy = cy, R1 = r * 0.36, R2 = R1 * 0.4;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + Math.PI / 2 + (i * Math.PI) / 5; const rr = i % 2 ? R2 : R1; ctx.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); }
+  ctx.closePath(); ctx.fill();
+  return tex(c, { repeat: false });
+}
+
 export function franceFlagTexture() {
   const [c, ctx] = canvas(192, 128);
   ctx.fillStyle = '#1f3fa0'; ctx.fillRect(0, 0, 64, 128);
   ctx.fillStyle = '#f5f5f5'; ctx.fillRect(64, 0, 64, 128);
   ctx.fillStyle = '#e1262d'; ctx.fillRect(128, 0, 64, 128);
+  return tex(c, { repeat: false });
+}
+
+// Red trade-union strike flag with a white slogan.
+export function unionFlagTexture(text = 'GRÈVE') {
+  const W = 256, H = 170;
+  const [c, ctx] = canvas(W, H);
+  ctx.fillStyle = '#c8161d'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(0, H - 18, W, 18);
+  ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const lines = text.split('\n');
+  const size = lines.length > 1 ? 50 : 64;
+  ctx.font = `900 ${size}px Impact, Arial Black, sans-serif`;
+  lines.forEach((l, i) => ctx.fillText(l, W / 2, H / 2 + (i - (lines.length - 1) / 2) * (size + 4), W - 24));
   return tex(c, { repeat: false });
 }
 

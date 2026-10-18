@@ -62,7 +62,7 @@ export class Post {
     this.composer = new EffectComposer(renderer, rt);
     this.composer.setPixelRatio(renderer.getPixelRatio());
     this.composer.addPass(new RenderPass(scene, camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.55, 0.6, 0.92);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2.5, size.y / 2.5), 0.55, 0.6, 0.92);
     this.composer.addPass(this.bloom);
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.grade);
@@ -72,7 +72,7 @@ export class Post {
   }
   setSize(w, h) {
     this.composer.setSize(w, h);
-    this.bloom.setSize(w / 2, h / 2);
+    this.bloom.setSize(w / 2.5, h / 2.5);
   }
   render(dt, time, smoke, hurt) {
     this.grade.uniforms.uSmoke.value = smoke;

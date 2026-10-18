@@ -22,7 +22,7 @@ export function installDev(game) {
   window.__botTick = () => {
     const g = game, I = g.input, m = g.missions, B = window.__bot, p = g.player.pos;
     I.keys.clear(); I.buttons.clear();
-    const threat = g.crowd.nearest(p, (n) => g.crowd.isThreat(n) || (n.script && n.script.active), 30);
+    const threat = g.crowd.nearest(p, (n) => g.crowd.isThreat(n) || (n.script && n.script.active), m.stage === 'p3' ? 12 : 30);
     let goal = null, fight = false;
     if (threat) { goal = threat.pos; fight = true; } else if (m.markerPos) goal = m.markerPos;
     if (g.crowd.arrestable(p) && !threat) I.edges.add('KeyE');
@@ -30,10 +30,10 @@ export function installDev(game) {
     if (goal) {
       const dx = goal.x - p.x, dz = goal.z - p.z, d = Math.hypot(dx, dz);
       g.cameraRig.yaw = Math.atan2(-dx, -dz) + (B.stuckT > 0.6 ? B.side * 0.9 : 0);
-      if (fight && d < 1.8) I.edges.add('Mouse0'); else { I.keys.add('KeyW'); if (d > 6) I.keys.add('ShiftLeft'); }
+      if (fight && d < 1.8) I.edges.add('Mouse0'); else { I.keys.add('KeyW'); if (d > 6) I.keys.add('ShiftLeft'); if (B.strafeT > 0) { B.strafeT -= 0.1; I.keys.add(B.side > 0 ? 'KeyD' : 'KeyA'); I.keys.delete('KeyW'); } }
       const before = p.clone();
       window.__step(0.1);
-      if (p.distanceTo(before) < 0.05 && !(fight && d < 1.8)) { B.stuckT += 0.1; if (B.stuckT > 1.6) { B.stuckT = 0; B.side *= -1; } } else B.stuckT = Math.max(0, B.stuckT - 0.05);
+      if (p.distanceTo(before) < 0.05 && !(fight && d < 1.8)) { B.stuckT += 0.1; if (B.stuckT > 1.2) { B.stuckT = 0; B.side *= -1; B.strafeT = 1.6; } } else B.stuckT = Math.max(0, B.stuckT - 0.05);
     } else window.__step(0.1);
     if (B.last !== m.stage) { B.log.push([m.stage, +m.t.toFixed(1)]); B.last = m.stage; }
   };

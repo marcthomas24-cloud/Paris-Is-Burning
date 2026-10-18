@@ -78,7 +78,7 @@ class Game {
     loading.textContent = 'Populating the boulevard…';
     await new Promise((r) => setTimeout(r, 30));
     this.player = new Player(this);
-    this.crowd = new Crowd(this, 110);
+    this.crowd = new Crowd(this, 150);
     this.missions = new Missions(this);
     this.events = new IncidentScheduler(this);
     // wet, reflective street surfaces
@@ -243,7 +243,10 @@ class Game {
     p.acc = 0; p.frames = 0;
     if (document.hidden) return;
     let pr = this.pr;
+    const c = this.crowd;
     if (ms > 21 && pr > 0.85) pr = Math.max(0.85, pr - 0.1);
+    else if (ms > 21 && c && c.maxSkinned > 12) c.maxSkinned -= 2; // then trade crowd detail
+    else if (ms < 15 && c && c.maxSkinned < 20) c.maxSkinned += 2;
     else if (ms < 13 && pr < this.maxPR) pr = Math.min(this.maxPR, pr + 0.1);
     if (pr !== this.pr) {
       this.pr = pr;
@@ -329,6 +332,10 @@ class Game {
     this.audio.setCrowdLevel(Math.min(1, close / 18 + panic / 10));
     const vanD = Math.min(...this.world.lightBars.map((b) => b.distanceTo(this.player.pos)));
     this.audio.setEngineProximity(Math.max(0, 1 - vanD / 25));
+    let fireDist = 999;
+    for (const f of this.world.fires) { const d = Math.hypot(f.pos.x - this.camera.position.x, f.pos.z - this.camera.position.z); if (d < fireDist) fireDist = d; }
+    const threats = this.crowd.threats().length;
+    this.audio.update(rawDt, { intensity: Math.min(1, panic / 8 + threats / 5 + (this.missions.phase || 0) * 0.2), fireDist });
 
     this.hud.update(rawDt);
     if (this.pendingEnd) { this.pendingEnd.t -= rawDt; if (this.pendingEnd.t <= 0) this._showEnd(); }
