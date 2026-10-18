@@ -9,7 +9,7 @@ import { FarCrowd, outfitColors } from './impostors.js';
 
 const LOD_FAR = 34;   // beyond this, agents are drawn as instanced impostors
 const LOD_MID = 20;   // beyond this, skeletal animation runs at a reduced rate
-const MAX_SKINNED = 24; // hard cap on fully rigged agents drawn at once
+const MAX_SKINNED = 20; // hard cap on fully rigged agents drawn at once
 
 const V = () => new THREE.Vector3();
 const tmp = V(), tmp2 = V();
@@ -39,6 +39,7 @@ export class Crowd {
     this.grid = new Map();
     this.time = 0;
     this.count = count;
+    this.maxSkinned = MAX_SKINNED;
     for (let i = 0; i < count; i++) {
       const outfit = randomOutfit(this.rng);
       const rig = buildCharacter(this.world, outfit, 'civ');
@@ -47,7 +48,7 @@ export class Crowd {
     }
     // far-distance instanced crowd (distant agents + background population)
     if (Humans.ready) {
-      this.far = new FarCrowd(this.scene, 360);
+      this.far = new FarCrowd(this.scene, 520);
       this._buildBackground();
       if (this.world.impostors) this.world.impostors.mesh.visible = false;
     }
@@ -110,8 +111,12 @@ export class Crowd {
 
   equip(n) {
     const map = { flag: 'flag', bigflag: 'bigflag', placard: 'placard', film: 'phone', banner: 'banner', photo: 'camera' };
-    if (map[n.role]) giveItem(n.rig, map[n.role], this.rng);
-    else if (n.role === 'chant' && this.rng() < 0.25) { n.role = 'flag'; giveItem(n.rig, this.rng() < 0.85 ? 'flag' : 'frflag', this.rng); }
+    // flags carried in the demonstrations: Palestinian, Algerian, French and red union flags;
+    // gilets jaunes mostly carry the tricolore
+    const f = this.rng();
+    const variant = n.outfit.vest && f < 0.7 ? 'fr' : f < 0.34 ? 'pal' : f < 0.54 ? 'alg' : f < 0.8 ? 'fr' : 'uni';
+    if (map[n.role]) giveItem(n.rig, map[n.role], this.rng, variant);
+    else if (n.role === 'chant' && this.rng() < 0.25) { n.role = 'flag'; giveItem(n.rig, 'flag', this.rng, variant); }
     else clearItem(n.rig);
   }
 
@@ -293,12 +298,12 @@ export class Crowd {
         const qx = cam.x + sx * u - n.pos.x, qz = cam.z + sz * u - n.pos.z;
         blocking = qx * qx + qz * qz < 0.5 * 0.5;
       }
-      const lod = !this.far ? 0 : n.distToPlayer > LOD_FAR || n.rank >= MAX_SKINNED ? 2 : n.distToPlayer > LOD_MID ? 1 : 0;
+      const lod = !this.far ? 0 : n.distToPlayer > LOD_FAR || n.rank >= this.maxSkinned ? 2 : n.distToPlayer > LOD_MID ? 1 : 0;
       n.lod = lod;
       if (lod === 2) {
         r.visible = false;
         const lyingDown = n.state === 'down' || n.state === 'arrested';
-        if (!lyingDown) this.far.add(n.rig.kind, n.speed > 0.5, { x: n.pos.x, y: n.pos.y, z: n.pos.z, heading: n.heading, scale: n.outfit.height || 1, colors: n.colors, pat: n.outfit.pattern === 1 });
+        if (!lyingDown) this.far.add(n.rig.kind, n.speed > 0.5, { x: n.pos.x, y: n.pos.y, z: n.pos.z, heading: n.heading, scale: n.outfit.height || 1, colors: n.colors, pat: n.outfit.shellPattern === 1 });
         n.animAcc += dt;
         continue;
       }
@@ -322,26 +327,31 @@ export class Crowd {
     const R = (a, b) => a + (b - a) * rng();
     for (const s of LAYOUT.crossStreets) for (const xs of [-1, 1]) {
       // groups clustered around a few centres
-      for (let gI = 0; gI < 5; gI++) {
+      for (let gI = 0; gI < 7; gI++) {
         const cx = xs * (63.5 + Math.pow(rng(), 1.7) * 52), cz = s.z + R(-s.half + 1.5, s.half - 1.5), n = 6 + Math.floor(rng() * 10);
         for (let i = 0; i < n; i++) spots.push([cx + R(-3, 3), Math.max(s.z - s.half + 0.6, Math.min(s.z + s.half - 0.6, cz + R(-2.5, 2.5)))]);
       }
     }
-    for (let gI = 0; gI < 9; gI++) {
+    // dense crowd held behind the northern barricade, and gathering just in front of it
+    for (let gI = 0; gI < 5; gI++) {
+      const cx = R(-11, 11), cz = R(-163, -146), n = 8 + Math.floor(rng() * 8);
+      for (let i = 0; i < n; i++) spots.push([Math.max(-13, Math.min(13, cx + R(-3, 3))), cz + R(-3, 3)]);
+    }
+    for (let gI = 0; gI < 12; gI++) {
       const cx = R(-12, 12), cz = R(-214, -172), n = 10 + Math.floor(rng() * 12);
       for (let i = 0; i < n; i++) spots.push([Math.max(-14, Math.min(14, cx + R(-4, 4))), cz + R(-4, 4)]);
     }
     for (let i = 0; i < 14; i++) spots.push([R(-12, 12), R(186, 200)]);
-    this.bg = spots.slice(0, 300).map(([x, z]) => {
+    this.bg = spots.slice(0, 560).map(([x, z]) => {
       const o = randomOutfit(rng);
-      return { x, z, h: rng() * 6.28, ph: rng() * 6.28, kind: o.gender === 'f' ? 'michelle' : 'male', scale: o.height, colors: outfitColors(o), pat: o.pattern === 1, walk: rng() < 0.15 };
+      return { x, z, h: rng() * 6.28, ph: rng() * 6.28, kind: o.base || (o.gender === 'f' ? 'michelle' : 'male'), scale: o.height, colors: outfitColors(o), pat: o.shellPattern === 1, walk: rng() < 0.15 };
     });
   }
 
   _drawBackground(t) {
     const cam = this.game.camera.position;
     for (const b of this.bg) {
-      if ((b.x - cam.x) ** 2 + (b.z - cam.z) ** 2 > 230 * 230) continue;
+      if ((b.x - cam.x) ** 2 + (b.z - cam.z) ** 2 > 180 * 180) continue;
       const bob = Math.max(0, Math.sin(t * 3.1 + b.ph)) * 0.05;
       this.far.add(b.kind, b.walk, { x: b.x, y: 0, z: b.z, heading: b.h + Math.sin(t * 0.4 + b.ph) * 0.4, scale: b.scale, bob, colors: b.colors, pat: b.pat });
     }
@@ -745,7 +755,22 @@ export class Crowd {
       P.shRX = -0.5; P.shRZ = 0.25; P.elR = -0.05; P.spY = 0.6; P.spX = 0.45; P.shLX = -0.2;
       P.hpLX = -0.6; P.knL = 0.5; P.hpRX = 0.35;
     }
-    if (s === 'down' || s === 'recover') { P.y += 0; }
+    // face: mouth and smile follow what the person is doing
+    {
+      const beat = Math.max(0, Math.sin(t * 5.2 + (n.group || 0)));
+      const jit = 0.5 + 0.5 * Math.sin(t * 13 + n.id * 1.7) * Math.sin(t * 7.3 + n.id);
+      if (s === 'act' || s === 'walk' || s === 'surge' || s === 'calm') {
+        const r = n.role;
+        if (r === 'chant' || r === 'flag' || r === 'bigflag' || r === 'placard' || r === 'banner' || s === 'surge') { P.mouth = beat * 0.85; P.smile = n.temperament === 'peaceful' ? 0.25 : 0; P.brow = n.temperament === 'peaceful' ? 0 : 0.4; }
+        else if (r === 'shout') { P.mouth = 0.45 + jit * 0.5; P.brow = 0.7; }
+        else if (r === 'clap') { P.mouth = beat * 0.5; P.smile = 0.6; }
+        else { P.mouth = jit > 0.75 ? (jit - 0.75) * 1.6 : 0; P.smile = (n.id % 3 === 0) ? 0.35 : 0.1; } // chatting
+      } else if (s === 'flee') { P.mouth = 0.45 + jit * 0.35; P.brow = -1; }
+      else if (s === 'pursue' || s === 'circle' || s.startsWith('atk') || s.startsWith('throw') || s.startsWith('bomb')) { P.mouth = 0.35 + jit * 0.6; P.brow = 1; }
+      else if (s === 'stagger') { P.mouth = 0.85; P.brow = -1; }
+      else if (s === 'down' || s === 'recover') { P.mouth = 0.3 + jit * 0.2; P.brow = -0.8; }
+      else if (s === 'surrender') { P.mouth = 0.15; P.brow = -0.6; }
+    }
     applyPose(rig, P, dt, rate);
     // lying bodies sit slightly above ground
     rig.root.position.y = n.pos.y + (s === 'down' ? 0.12 : s === 'recover' ? 0.12 * Math.max(0, 1 - n.st / (n.dur * 0.5)) : 0);
@@ -757,6 +782,7 @@ export class Crowd {
       const rig = p.rig;
       const P = newPose();
       baseLayer(P, rig, 0, t + p.pos.x, dt, true);
+      if (p.role !== 'injured') this._copCombat(p, P, dt);
       if (p.role === 'line' || p.role === 'squad') {
         const k = hostileNear ? 1 : 0.5;
         rig.shieldBlend += (k - rig.shieldBlend) * Math.min(1, dt * 4);
@@ -767,7 +793,7 @@ export class Crowd {
         let best = null, bd = 400;
         for (const n of this.npcs) if (this.isThreat(n)) { const d = n.pos.distanceToSquared(p.pos); if (d < bd) { bd = d; best = n; } }
         const want = best ? headingTo(p.pos, best.pos) : Math.PI;
-        p.heading = angleLerp(p.heading, want, 1 - Math.exp(-dt * 3));
+        if (!p.atk) p.heading = angleLerp(p.heading, want, 1 - Math.exp(-dt * 3));
       } else if (p.role === 'injured') {
         P.hpLX = P.hpRX = -1.5; P.knL = 0.2; P.knR = 1.2; P.y = -0.62; P.spX = -0.3; P.shLX = -0.4; P.shLZ = 0.4; P.hdX = 0.2;
         updateShield(rig, 0);
@@ -775,17 +801,85 @@ export class Crowd {
       } else {
         updateShield(rig, 1);
         P.shLX = -1.3; P.elL = -0.5;
-        p.heading = angleLerp(p.heading, headingTo(p.pos, player.pos), 1 - Math.exp(-dt * 1.5));
+        if (!p.atk) p.heading = angleLerp(p.heading, headingTo(p.pos, player.pos), 1 - Math.exp(-dt * 1.5));
       }
+      if (p.atk) this._copPose(p, P);
       const pd = p.pos.distanceTo(player.pos);
       rig.root.visible = pd < 70;
       const sh = pd < 16;
       if (sh !== p.shadow) { p.shadow = sh; for (const m of rig.meshes) m.castShadow = sh; }
       if (!rig.root.visible) continue;
-      applyPose(rig, P, dt, 8);
+      applyPose(rig, P, dt, p.atk ? 26 : 8);
       rig.root.position.copy(p.pos);
       rig.root.rotation.y = p.heading;
     }
+  }
+
+  // Officers defend themselves: step out towards an aggressor that comes close,
+  // wind up and strike with the baton, then fall back to their post.
+  _copCombat(p, P, dt) {
+    if (!p.home) p.home = p.pos.clone();
+    p.cool = Math.max(0, (p.cool || 0) - dt);
+    let target = null, bd = 4.2 * 4.2;
+    for (const n of this.query(p.pos.x, p.pos.z, 4.5, [])) {
+      if (n.id === undefined || !this.isThreat(n) || n.state === 'down' || n.state === 'stagger') continue;
+      const d = n.pos.distanceToSquared(p.pos); if (d < bd) { bd = d; target = n; }
+    }
+    if (p.atk) {
+      p.atk.t += dt;
+      const tg = p.atk.target;
+      p.heading = angleLerp(p.heading, headingTo(p.pos, tg.pos), 1 - Math.exp(-dt * 10));
+      if (p.atk.phase === 'wind' && p.atk.t > 0.28) {
+        p.atk.phase = 'strike'; p.atk.t = 0;
+        this.game.audio.swing();
+        const dx = tg.pos.x - p.pos.x, dz = tg.pos.z - p.pos.z, d = Math.hypot(dx, dz);
+        if (d < 2.2 && tg.state !== 'down') {
+          const dir = new THREE.Vector3(dx / d, 0, dz / d);
+          this.copHit(tg, dir);
+        }
+      } else if (p.atk.phase === 'strike' && p.atk.t > 0.16) { p.atk.phase = 'rec'; p.atk.t = 0; }
+      else if (p.atk.phase === 'rec' && p.atk.t > 0.35) { p.atk = null; p.cool = 0.9 + this.rng() * 1.2; }
+      return;
+    }
+    if (target && p.cool <= 0) {
+      const d = Math.sqrt(bd);
+      if (d > 1.9) {
+        // step towards the aggressor, but don't leave the post by more than ~2.5 m
+        const step = Math.min(dt * 2.2, d - 1.6);
+        const nx = p.pos.x + (target.pos.x - p.pos.x) / d * step, nz = p.pos.z + (target.pos.z - p.pos.z) / d * step;
+        if (Math.hypot(nx - p.home.x, nz - p.home.z) < 2.5 && !this.world.blocked(nx, nz, 0.3)) { p.pos.x = nx; p.pos.z = nz; P.knL = 0.3; P.knR = 0.15; }
+      } else p.atk = { phase: 'wind', t: 0, target };
+    } else if (!target) {
+      // drift back to the post
+      const dx = p.home.x - p.pos.x, dz = p.home.z - p.pos.z, d = Math.hypot(dx, dz);
+      if (d > 0.05) { const st = Math.min(d, dt * 1.2); p.pos.x += dx / d * st; p.pos.z += dz / d * st; }
+    }
+  }
+
+  _copPose(p, P) {
+    const a = p.atk;
+    if (a.phase === 'wind') { P.shRX = -2.6; P.shRZ = -0.45; P.elR = -1.35; P.spY = -0.45; P.spX = -0.05; }
+    else if (a.phase === 'strike') { P.shRX = -0.55; P.shRZ = 0.32; P.elR = -0.15; P.spY = 0.5; P.spX = 0.25; P.hpLX = -0.5; P.knL = 0.35; }
+    else { P.shRX = -0.6; P.elR = -0.6; P.spY = 0.15; }
+  }
+
+  // a police baton strike: staggers the aggressor and drives them back; repeated
+  // hits can put them down (counts as neutralised, with a smaller assist score)
+  copHit(n, dir) {
+    const g = this.game;
+    g.audio.impact(n.pos, false);
+    g.effects.impact(n.pos.clone().setY(n.pos.y + 1.3));
+    n.knock.copy(dir).multiplyScalar(3.6);
+    n.copHits = (n.copHits || 0) + 1;
+    if (n.copHits >= 4 && this.rng() < 0.35 && !n.script) {
+      n.fallDir = -1;
+      this.setState(n, 'down', 4 + this.rng() * 2);
+      if (!n.neutralized) { n.neutralized = true; g.missions.stats.neutralized++; g.missions.addScore(50, 'Officer assist'); }
+    } else {
+      this.setState(n, 'stagger', 0.6);
+      n.staggerBack = true;
+    }
+    this.disturb(n.pos, 6, 0.35, 'violence', n);
   }
 
   // Helpers used by missions --------------------------------------------------

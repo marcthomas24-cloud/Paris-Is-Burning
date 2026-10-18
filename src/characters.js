@@ -58,7 +58,12 @@ function initShared(world) {
     keffiyeh: new THREE.MeshStandardMaterial({ map: T.keffiyehTexture(), roughness: 0.9 }),
     palFlag: world.materials.palFlag,
     palFlagBig: world.materials.palFlagBig,
+    algFlag: world.materials.algFlag,
+    algFlagBig: world.materials.algFlagBig,
     frFlag: world.materials.frFlag,
+    frFlagBig: world.materials.frFlagBig,
+    uniFlag: world.materials.uniFlag,
+    uniFlagBig: world.materials.uniFlagBig,
     shield: new THREE.MeshStandardMaterial({ map: T.shieldTexture(), transparent: true, opacity: 0.55, roughness: 0.1, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide }),
     visor: new THREE.MeshStandardMaterial({ color: 0x8fa3b8, transparent: true, opacity: 0.35, roughness: 0.05, metalness: 0.5, depthWrite: false, side: THREE.DoubleSide }),
     vest: new THREE.MeshStandardMaterial({ map: T.vestTexture('POLICE'), roughness: 0.7 }),
@@ -71,9 +76,13 @@ function initShared(world) {
     rag: new THREE.MeshStandardMaterial({ color: 0xc8b89a }),
     placards: [
       'FREE\nPALESTINE', 'JUSTICE', 'LIBERTÉ\nÉGALITÉ', 'PAIX', 'ON LÂCHE\nRIEN', 'ICI C\'EST\nPARIS', 'STOP', 'RÉSISTANCE', 'NON !', 'CESSEZ-LE-FEU',
+      'VIE CHÈRE\nÇA SUFFIT', 'SAUVONS\nL\'HÔPITAL', 'GRÈVE !', 'LYCÉES\nEN LUTTE', 'PAS DE\nJUSTICE\nPAS DE PAIX', 'SMIC\nINDIGNE',
     ].map((txt, i) => new THREE.MeshStandardMaterial({ map: T.placardTexture(txt, i % 3 === 1 ? '#111' : '#f4f1ea', i % 3 === 1 ? '#f4f1ea' : (i % 2 ? '#b31b1b' : '#151515')), roughness: 0.9, side: THREE.FrontSide })),
     banners: [
       ['PALESTINE VIVRA', '#f2efe8', '#0a7a35'], ['ICI C\'EST PARIS', '#132447', '#ffffff'], ['JUSTICE POUR TOUS', '#111', '#f2f2f2'], ['STOP AUX VIOLENCES', '#f2efe8', '#b31b1b'],
+      // student and union banners
+      ['LYCÉENS EN COLÈRE', '#f2efe8', '#111'], ['FACS EN GRÈVE', '#c8161d', '#ffffff'], ['JEUNESSE EN LUTTE', '#111', '#f2c230'],
+      ['LA VIE CHÈRE ÇA SUFFIT', '#f2efe8', '#c8161d'], ['SERVICES PUBLICS EN DANGER', '#1b2a4a', '#ffffff'],
     ].map(([t, b, f]) => new THREE.MeshStandardMaterial({ map: T.bannerTexture(t, b, f), side: THREE.DoubleSide, roughness: 0.9 })),
   };
 }
@@ -109,6 +118,13 @@ export function randomOutfit(rng) {
   const sr = rng();
   o.scarf = sr < 0.2 ? 'keffiyeh' : sr < 0.3 ? 'psg' : sr < 0.34 ? 'red' : 'none';
   skinnedOutfit(o, rng);
+  // gilets jaunes: a hi-vis vest worn over whatever garment they have on
+  if (rng() < 0.14) {
+    o.vest = true;
+    if (!o.garment) { o.garment = 'shirt'; o.shellColor = o.topColor ?? 0x222222; o.keepTop = false; }
+    o.shellPattern = 7; o.pa = 0xd8ec1a; o.pb = 0xb8bec4;
+    if (o.mask === 'black' && rng() < 0.6) o.mask = 'none';
+  }
   return o;
 }
 
@@ -120,9 +136,19 @@ const FOOTBALL = [
   // [pattern, a, b, c]  pattern: 2 vertical stripes, 3 hoops, 4 two-tone, 0 solid
   [2, 0x0b0b0b, 0xf2f2f2], [3, 0x0a7a35, 0xf2f2f2], [0, 0x1f3fa0], [4, 0xf2f2f2, 0x0a7a35], [0, 0xc8102e], [2, 0x7a1d3a, 0x1b2a6a], [0, 0xf2c230], [4, 0x0b0b0b, 0xd4202f],
 ];
+// Rocketbox bodies keep their own face/skin texture (only a slight tint) and can
+// keep their original clothes; these are the colours used for far impostors then.
+const RB_BASE = {
+  rb_female: { top: 0x8c8c8a, pants: 0x3b4d6e, shoes: 0x5a3a26, hair: 0x2a1a12 },
+  rb_male_a: { top: 0x1e1f21, pants: 0x4a4332, shoes: 0xd8d8dc, hair: 0x0e0b09 },
+  rb_male_b: { top: 0x3c4f6e, pants: 0x6f87a6, shoes: 0xe8e8e8, hair: 0x0e0b09 },
+};
 function skinnedOutfit(o, rng) {
   const pick = (a) => a[Math.floor(rng() * a.length)];
   o.gender = rng() < 0.38 ? 'f' : 'm';
+  // base body: original Michelle / Ready Player Me bodies plus the Rocketbox people
+  const br = rng();
+  o.base = o.gender === 'f' ? (br < 0.55 ? 'rb_female' : 'michelle') : br < 0.4 ? 'male' : br < 0.7 ? 'rb_male_a' : 'rb_male_b';
   o.skinTone = pick(SKIN_TONES);
   const tone = new THREE.Color(o.skinTone);
   o.skinMul = o.gender === 'f'
@@ -142,6 +168,40 @@ function skinnedOutfit(o, rng) {
   o.beard = o.gender === 'm' && rng() < 0.4;
   o.packColor = pick([0x1d1f22, 0x2a3a5a, 0x4a3a2a, 0x3a4a3a, 0x6a1d1d]);
   o.height = o.gender === 'f' ? 0.96 + rng() * 0.08 : 0.93 + rng() * 0.1;
+  // garment layer over the base body + body shape
+  const gr = rng();
+  if (o.top === 'psg') { o.garment = 'shirt'; o.shellColor = 0x132447; o.shellPattern = 1; }
+  else if (o.top === 'tee') {
+    o.garment = 'shirt'; o.shellColor = o.topColor; o.shellPattern = o.pattern || 0;
+    if (rng() < 0.3) { o.shellPattern = 6; o.pa = 0x0a7a35; o.pb = 0xf4f4f4; o.shellColor = 0xf4f4f4; } // Algeria-style shirt
+  } else if (o.top === 'hoodie') { o.garment = gr < 0.75 ? 'hoodie' : 'puffer'; o.shellColor = o.topColor; o.shellPattern = 0; }
+  else { o.garment = gr < 0.4 ? 'puffer' : gr < 0.7 ? 'coat' : gr < 0.9 ? 'hoodie' : null; o.shellColor = o.topColor; o.shellPattern = 0; }
+  if (o.garment === 'coat') o.shellColor = pick([0x2a2622, 0x3a3226, 0x1b1d22, 0x4a4036, 0x22324a]);
+  if (o.garment === 'puffer') o.shellColor = pick([0x111111, 0x1a1c22, 0x2a3a5a, 0x5a1a1a, 0x2f3b33, 0x8a7a5a, 0x6a6a70]);
+  if (o.garment && rng() < 0.1) o.garment = null; // some keep the base outfit
+  if (o.gender === 'f' && !o.garment) { o.garment = 'shirt'; o.shellColor = pick([0x111111, 0xf2f2f2, 0x7a1d3a, 0x2a3a5a]); o.shellPattern = 0; }
+  const heavy = rng() < 0.25;
+  o.body = {
+    girth: heavy ? 1.08 + rng() * 0.1 : 0.95 + rng() * 0.07,
+    chest: 0.97 + rng() * 0.08,
+    shoulders: o.gender === 'f' ? 0.95 + rng() * 0.05 : 0.98 + rng() * 0.09,
+    head: 0.96 + rng() * 0.07,
+  };
+  if (o.gender === 'f' && rng() < 0.2) { o.headscarf = pick([0x111111, 0x2a2a3a, 0x5a2a3a, 0xd8d0c0, 0x3a4a3a, 0x6a4a3a]); o.hat = 'none'; o.hood = false; }
+  const rb = RB_BASE[o.base];
+  if (rb) {
+    // the face texture sets the complexion: tint only slightly so faces stay natural
+    const v = 0.94 + rng() * 0.1;
+    o.skinMul = new THREE.Color(v * (1 + (rng() - 0.5) * 0.04), v, v * (1 - rng() * 0.04));
+    o.hair = rb.hair; o.hairStyle = 'none'; o.beard = false;
+    if (o.base === 'rb_male_a') { o.hat = 'none'; o.hood = false; } // his afro stays visible
+    o.keepTop = !o.garment || rng() < 0.4;
+    o.keepBottom = rng() < 0.5; o.keepShoes = rng() < 0.6;
+    if (o.keepTop && !o.garment) { o.topColor = rb.top; o.pattern = 0; }
+    if (o.keepBottom) o.pants = rb.pants;
+    if (o.keepShoes) o.shoes = rb.shoes;
+    if (o.base === 'rb_female' && o.garment === 'shirt' && rng() < 0.5) { o.garment = null; o.keepTop = true; o.topColor = rb.top; o.shellColor = undefined; o.shellPattern = 0; }
+  }
 }
 
 // Build a rig. kind: 'civ' | 'police'. Uses skinned glTF humans when loaded,
@@ -160,7 +220,7 @@ export function buildCharacter(world, outfit, kind = 'civ') {
 
   const police = kind === 'police';
   const skin = colMat(outfit.skin || 0xd0a080);
-  const topMat = police ? colMat(0x1a2233, { roughness: 0.7 }) : outfit.top === 'psg' ? M.psg[outfit.psg] : colMat(outfit.topColor);
+  const topMat = police ? colMat(0x1a2233, { roughness: 0.7 }) : outfit.vest ? colMat(0xd8ec1a, { roughness: 0.6 }) : outfit.top === 'psg' ? M.psg[outfit.psg] : colMat(outfit.topColor);
   const sleeveMat = police ? colMat(0x1a2233, { roughness: 0.7 }) : outfit.top === 'psg' ? colMat(0x132447, { roughness: 0.6 }) : colMat(outfit.topColor);
   const pantsMat = police ? colMat(0x161c29) : colMat(outfit.pants);
   const shoeMat = police ? colMat(0x0b0b0b, { roughness: 0.5 }) : colMat(outfit.shoes);
@@ -265,16 +325,22 @@ function buildSkinned(outfit, kind) {
     rig.chest.add(front);
   } else {
     const female = outfit.gender === 'f';
-    rig = createHuman(female ? 'michelle' : 'male', outfit);
+    rig = createHuman(outfit.base || (female ? 'michelle' : 'male'), outfit);
+    const rbBody = /^rb_/.test(rig.kind);
     const add = (geo, mat, parent, cast = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = cast; parent.add(m); rig.meshes.push(m); return m; };
     if (!female) {
-      if (outfit.hood) add(H.hood, fabric(outfit.topColor), rig.head);
+      if (outfit.hood) { const h = add(H.hood, fabric(outfit.topColor), rig.head); if (rbBody) { h.rotation.x = -0.45; h.position.set(0, 0.012, -0.02); } }
       else if (outfit.hat === 'cap') { add(H.cap, fabric(outfit.hatColor, 0.8), rig.head); add(H.brim, fabric(outfit.hatColor, 0.8), rig.head); }
       else if (outfit.hat === 'beanie') add(H.beanie, fabric(outfit.hatColor), rig.head);
-      else if (outfit.hairStyle !== 'none') add(H[outfit.hairStyle] || H.short, M.hair[outfit.hairIdx], rig.head);
+      else if (outfit.hairStyle !== 'none' && !rbBody) add(H[outfit.hairStyle] || H.short, M.hair[outfit.hairIdx], rig.head);
     } else {
-      if (outfit.hat === 'cap') { const c = add(H.cap, fabric(outfit.hatColor, 0.8), rig.head); c.scale.setScalar(1.12); const b = add(H.brim, fabric(outfit.hatColor, 0.8), rig.head); b.scale.setScalar(1.12); }
-      else if (outfit.hood) { const h = add(H.hood, fabric(0x111214), rig.head); h.scale.setScalar(1.15); }
+      if (outfit.hat === 'cap') { const k = rbBody ? 1.04 : 1.12; const c = add(H.cap, fabric(outfit.hatColor, 0.8), rig.head); c.scale.setScalar(k); const b = add(H.brim, fabric(outfit.hatColor, 0.8), rig.head); b.scale.setScalar(k); }
+      else if (outfit.hood) { const h = add(H.hood, fabric(0x111214), rig.head); h.scale.setScalar(1.15); if (rbBody) { h.rotation.x = -0.62; h.position.set(0, 0.03, -0.05); } }
+      else if (outfit.headscarf) {
+        const h = add(H.hood, fabric(outfit.headscarf), rig.head); h.scale.set(1.2, 1.18, 1.18);
+        if (rbBody) { h.rotation.x = -0.62; h.position.set(0, 0.03, -0.05); }
+        const d = add(H.scarf, fabric(outfit.headscarf), rig.chest); d.position.set(0, 0.17, 0.0); d.scale.set(1.35, 1.6, 1.35);
+      }
     }
     if (outfit.mask !== 'none') {
       const mm = add(H.mask, outfit.mask === 'black' ? fabric(0x0b0b0c) : outfit.mask === 'keffiyeh' ? M.keffiyeh : fabric(0xdfe4e6, 0.9), rig.head, false);
@@ -330,20 +396,21 @@ export function updateShield(rig, k) {
   s.rotation.set(0.05 * (1 - k), (Math.PI / 2 - 0.15) * (1 - k) + 0.12 * k, 0);
 }
 
-export function giveItem(rig, type, rng = Math.random) {
+export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
   initShared();
   clearItem(rig);
   const g = new THREE.Group();
   rig.itemType = type;
   if (type === 'flag' || type === 'frflag') {
     g.add(new THREE.Mesh(G.pole, colMat(0x6a5a40)));
-    const cloth = new THREE.Mesh(G.flag, type === 'flag' ? M.palFlag : M.frFlag);
+    const v = type === 'frflag' ? 'fr' : variant;
+    const cloth = new THREE.Mesh(G.flag, v === 'fr' ? M.frFlag : v === 'uni' ? M.uniFlag : v === 'alg' ? M.algFlag : M.palFlag);
     cloth.position.set(0, -0.76, 0); cloth.rotation.x = Math.PI; // local -Y is 'up' when the arm is raised
     g.add(cloth);
     rig.handR.add(g);
   } else if (type === 'bigflag') {
     g.add(new THREE.Mesh(G.bigPole, colMat(0x3a3a3a)));
-    const cloth = new THREE.Mesh(G.bigFlag, M.palFlagBig);
+    const cloth = new THREE.Mesh(G.bigFlag, variant === 'fr' ? M.frFlagBig : variant === 'uni' ? M.uniFlagBig : variant === 'alg' ? M.algFlagBig : M.palFlagBig);
     cloth.position.set(0, -2.25, 0); cloth.rotation.x = Math.PI;
     g.add(cloth);
     g.position.set(0, 0.25, 0); // hands lower on the pole
@@ -404,7 +471,7 @@ export function clearItem(rig) {
 }
 
 // -------------------------------------------------------------------- poses
-const KEYS = ['y', 'lean', 'spX', 'spY', 'spZ', 'hdX', 'hdY', 'shLX', 'shLY', 'shLZ', 'elL', 'shRX', 'shRY', 'shRZ', 'elR', 'hpLX', 'hpLZ', 'knL', 'hpRX', 'hpRZ', 'knR', 'tiltX', 'tiltZ', 'itemZ', 'itemX'];
+const KEYS = ['mouth', 'smile', 'brow', 'y', 'lean', 'spX', 'spY', 'spZ', 'hdX', 'hdY', 'shLX', 'shLY', 'shLZ', 'elL', 'shRX', 'shRY', 'shRZ', 'elR', 'hpLX', 'hpLZ', 'knL', 'hpRX', 'hpRZ', 'knR', 'tiltX', 'tiltZ', 'itemZ', 'itemX'];
 export function newPose() { const p = {}; for (const k of KEYS) p[k] = 0; return p; }
 
 // Locomotion + idle base layer. speed in m/s.

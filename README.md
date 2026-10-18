@@ -20,7 +20,7 @@ npm run build      # outputs a static site to dist/
 npm run preview    # optional: serve dist/ locally to check it
 ```
 
-`dist/` is a fully static site of about 11 MB (the character models are 10 MB), with relative paths (`base: './'`). It works at a domain root or in a sub-folder. Both were tested: with a plain static server at `/`, and from `/dist/`. There's no server component and nothing needs an API key.
+`dist/` is a fully static site of about 20 MB (character models 10 MB, audio 9 MB), with relative paths (`base: './'`). It works at a domain root or in a sub-folder. Both were tested: with a plain static server at `/`, and from `/dist/`. There's no server component and nothing needs an API key.
 
 - **Netlify / Vercel / Cloudflare Pages:** drag and drop the `dist/` folder, or connect the repo with build command `npm run build` and output directory `dist`.
 - **GitHub Pages:** push the contents of `dist/` to a `gh-pages` branch, or use a Pages workflow that runs `npm ci && npm run build` and publishes `dist/`.
@@ -76,6 +76,24 @@ Who becomes aggressive is chosen at random from the crowd, independently of clot
 
 ## Characters, crowd and effects
 
+**Base bodies.** Civilians use five realistic base bodies: the Mixamo female (Michelle), the Ready Player Me male, and three [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) people (a woman in a tee and jeans, a young man in a hoodie, a man in a denim jacket). The Rocketbox bodies are converted offline by `tools/rocketbox/` (see its `convert.js`): Biped bones renamed to Mixamo names, one skinned mesh with a texture atlas, a per-vertex garment part and six ARKit facial blendshapes kept. Their faces keep their own textures (only a slight skin tint), and they keep their original clothes or get recoloured ones.
+
+**Building on the base models.** The base bodies are extended in code:
+- **Garment layers:** skinned clothing shells are generated from each body's own mesh and pushed out along its normals. There are football shirts (PSG-style band, stripes, hoops, Algeria-style green and white), hoodies, quilted puffer jackets and long coats, so outfits change silhouette, not just colour. About 14% of demonstrators wear a hi-vis *gilet jaune* over their garment, with reflective hoops and shoulder straps.
+- **Body variation:** generated *belly* and *chest* blendshapes give varied builds, plus shoulder-width and head-size variation.
+- **Accessories:** headscarves, caps, beanies, hoods, masks, keffiyehs, scarves and backpacks.
+
+**Faces:**
+- **Men:** the male model's `mouthOpen` and `mouthSmile` blendshapes and teeth are kept in the merged mesh. They drive talking, chanting in rhythm, shouting, screaming while fleeing, and smiling, all from each person's behaviour. Eye bones add saccades, gaze and blinks.
+- **Women:** the Michelle model gets a generated jaw blendshape (its face is covered by a printed mask in the texture).
+- **Rocketbox people:** real ARKit blendshapes: `jawOpen` (talking, chanting, shouting), `mouthSmile`, `eyeBlink` (blinks and squinting in distress), `browDown` (anger while attacking or shouting), `browInnerUp` (fear while fleeing, staggering or down) and `mouthFunnel` (rounded vowels while chanting). The crowd sets a per-person `brow` mood from behaviour.
+
+**Flags:** handheld and large flags are roughly 34% Palestinian, 20% Algerian, 26% French and 20% red union strike flags (*GRÈVE*). Gilets jaunes mostly carry the tricolore. The same mix appears over the distant crowds and hanging from balconies.
+
+**Banners and placards:** cost-of-living, public-services, union and student slogans (*LYCÉENS EN COLÈRE*, *FACS EN GRÈVE*, *JEUNESSE EN LUTTE*, *LA VIE CHÈRE ÇA SUFFIT*) alongside the original ones, plus two more large banners hung on the façades.
+
+**Police:** CRS officers in the line, squads and at the objective step out towards nearby aggressors, wind up and strike with the baton. That staggers and drives attackers back; repeated hits occasionally put someone down, which earns a small *Officer assist* score.
+
 **Characters.** Everyone in the game is a rigged, skinned glTF human driven by motion-capture clips, as follows:
 
 | Who | Model |
@@ -97,12 +115,12 @@ Who becomes aggressive is chosen at random from the crowd, independently of clot
 | Mid | 20–34 m | Skeletal animation at a reduced rate, no shadows |
 | Far | over 34 m | Each model is baked into idle and walking poses, decimated by vertex clustering, coloured per garment region from the original textures, and drawn as instanced meshes with per-instance clothing colours |
 
-The same far system draws about 300 background people beyond the police cordons and at the end of the boulevard. In total there are 110 AI agents (at most 24 fully rigged at once) plus the background crowd. Bystanders and photographers stand on the pavements, and CRS squads hold the line and the vans. Marching groups move along the boulevard and slow down at bottlenecks.
+The same far system draws about 300 background people beyond the police cordons and at the end of the boulevard. In total there are 150 AI agents (at most 20 fully rigged at once, dropping to 12 automatically on slower GPUs) plus about 560 background people. Bystanders and photographers stand on the pavements, and CRS squads hold the line and the vans. Marching groups move along the boulevard and slow down at bottlenecks.
 
 **Smoke, fire and explosions.**
 - Layered noise-puff smoke columns: dark at the base, greying and expanding as they rise, lit from below near fires, and all pushed by a consistent wind.
 - Low haze in the affected streets, plus fog that thickens and warms in smoke-filled stretches.
-- About 30 fires: bins, rubbish heaps, barricades, cars, side streets and the far end. There are also embers, soot stains, and the four nearest fires cast flickering light.
+- About 45 fires: bins, rubbish heaps, barricades, cars, side streets and the far end. Six burning piles of wheelie bins with crowd barriers thrown on top stand in the road, and some bins have the yellow recycling lid. There are also embers, soot stains, and the four nearest fires cast flickering light.
 - Explosions have a flash, fireball, sparks, an expanding smoke cloud, a dust ring, debris, dynamic light, camera shake and spatialised, delayed and echoing sound.
 - An **incident scheduler** (`events.js`) keeps several areas active. It schedules petrol bombs, firework mortars, projectile volleys, fire flare-ups and parked cars catching fire, with randomised timing, size and direction.
 
@@ -116,6 +134,32 @@ The same far system draws about 300 background people beyond the police cordons 
 
 On an AMD Radeon integrated laptop GPU, the dense crowd areas run at roughly 50 fps and the open areas at 60 fps.
 
+## Sound
+
+The soundscape layers openly licensed field recordings with synthesis:
+- **Recorded layers:**
+  - A real crowd bed (two detuned copies) and a distant stadium-style roar.
+  - French two-tone *pin-pon* sirens on two to four virtual vehicles that drive past, with distance, panning and doppler.
+  - Distant fireworks backdrops, random firecracker and mortar bangs around the city, real glass breaks, and police whistles.
+- **Synthesised layers:** chant rhythms, individual shouts, a police helicopter circling overhead, car alarms when vehicles catch fire, fire crackle near flames, explosions (with a recorded detonation layered on top), footsteps and baton impacts.
+- **Dynamic mix:** crowd and siren intensity rise with panic, active threats and mission phase.
+
+If a recording can't load or decode (for example, older Safari can't decode Ogg Vorbis), that layer falls back to synthesis automatically.
+
+**Recordings:** none are recordings of current events. They are general-purpose, openly licensed field recordings from Wikimedia Commons, with no identifiable speech.
+
+| File | Source (Wikimedia Commons) | Author | Licence |
+|---|---|---|---|
+| `siren_twotone.ogg` | Deux-Tons-Pompiers-France.ogg | Manotechnologie | CC BY-SA 4.0 |
+| `crowd_large.wav` (trimmed, mono, 24 kHz loop) | 360703 eguobyte large-crowd-medium-distance-stereo.wav | eguobyte | CC0 |
+| `stadium.ogg` | WWS FootballAustriavs.Sweden.ogg | Work With Sounds / Torsten Nilsson | CC BY 4.0 |
+| `fireworks_far1.ogg`, `fireworks_far3.ogg` | Fireworks in distance 1 / 3.ogg | ezwa | Public domain |
+| `fireworks_street.ogg` | Silvester fireworks from the street 03 end.ogg | stephan | Public domain |
+| `glass.wav` | Glass breaking (Gravity Sound).wav | Gravity Sound | CC BY 4.0 |
+| `whistle.ogg` | Bobbypfeife.ogg | Christoph Waghubinger (Lewenstein) | CC BY-SA 3.0 AT |
+
+The CC BY and CC BY-SA recordings require attribution. The game credits them on the Controls screen. Under CC BY-SA, the trimmed siren and whistle files (and any edits to them) stay under that licence; the rest of the game is unaffected.
+
 ## Assets and licences
 
 All assets are bundled locally in `public/assets/models/`, and nothing is fetched at runtime. Everything else (city, props, textures, flags, shirts, particles and audio) is generated procedurally in code.
@@ -126,6 +170,17 @@ All assets are bundled locally in `public/assets/models/`, and nothing is fetche
 | `Xbot.glb` (animations only) | three.js examples repository, from mixamo.com | As above |
 | `Michelle.glb` | three.js examples repository, Mixamo character | As above |
 | `rpm_male.glb` (from `readyplayer.me.glb`) | three.js examples repository, Ready Player Me avatar | Ready Player Me terms. Treat as prototype / non-commercial use and verify before any commercial release |
+| `rb_female.glb`, `rb_male_a.glb`, `rb_male_b.glb` | Microsoft Rocketbox Avatar Library, avatars `Female_Adult_08`, `Male_Adult_04`, `Male_Adult_12` (`*_facial.fbx` with blendshapes), https://github.com/microsoft/Microsoft-Rocketbox. Converted with `tools/rocketbox/convert.js` (bones renamed, textures atlased and downsized, 6 of 170 blendshapes kept) | MIT License, Copyright (c) 2020 Microsoft. Commercial use, modification and redistribution allowed; keep the copyright and permission notice (reproduced below) |
+
+Microsoft Rocketbox licence notice (MIT):
+
+> Copyright (c) 2020 Microsoft
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 If the models fail to load, the game falls back to the original procedural primitive characters, so it always starts.
 
@@ -154,7 +209,9 @@ src/
 
 ## Known limitations
 
-- There are three base body models. Variety comes from recolouring, accessories and proportions, so close inspection still shows shared faces and silhouettes.
+- There are still three base meshes. Garment layers, blendshapes and accessories make silhouettes vary, but faces repeat on close inspection: one male face (with varied skin tone, beard and hair) and one female face.
+- **The female model ships with a printed face covering in its texture**, so her generated jaw movement is barely visible. Proper female facial animation needs a different female base model with an exposed, rigged face.
+- Garment layers are generated shells, so very tight poses can show slight clipping at the elbows and armpits.
 - The male model's clothing is a waistcoat and shirt outfit, so football shirts read as shirt-and-jacket.
 - Facial animation is absent.
 - Combat, throwing and knockdown motions are procedural layers over mocap rather than dedicated mocap clips.

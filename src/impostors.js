@@ -2,7 +2,7 @@
 // vertex clustering, coloured per garment region and drawn with instancing.
 // Used for distant AI agents (LOD 2) and the large background crowd.
 import * as THREE from 'three';
-import { Humans } from './humans.js';
+import { Humans, CIV_KINDS } from './humans.js';
 
 const canon = (n) => n.replace(/^mixamorig:?/, '');
 
@@ -95,7 +95,7 @@ function bake(kind, clipAlias, time) {
   mixer.stopAllAction(); mixer.uncacheRoot(model);
   model.traverse((o) => { if (o.isBone && o.userData.bindQ) o.quaternion.copy(o.userData.bindQ); });
   T.holder.updateMatrixWorld(true);
-  return decimate(pos, col, part, 0.042);
+  return decimate(pos, col, part, 0.06);
 }
 
 // Vertex clustering: snap to a grid, merge, drop collapsed triangles.
@@ -161,7 +161,7 @@ export class FarCrowd {
     this.sets = {};
     this.capacity = capacity;
     const mat = impostorMaterial();
-    for (const kind of ['male', 'michelle']) for (const pose of ['idle', 'walk']) {
+    for (const kind of CIV_KINDS) for (const pose of ['idle', 'walk']) {
       const geo = bake(kind, pose === 'idle' ? 'idle' : 'walk', pose === 'idle' ? 0.4 : 0.25);
       const n = capacity;
       const attrs = {};
@@ -181,7 +181,7 @@ export class FarCrowd {
 
   // o: {x, y, z, heading, scale, bob, colors:{skin,top,bottom,shoes,hair}, pat}
   add(kind, walking, o) {
-    const set = this.sets[`${kind === 'michelle' ? 'michelle' : 'male'}_${walking ? 'walk' : 'idle'}`];
+    const set = this.sets[`${kind}_${walking ? 'walk' : 'idle'}`] || this.sets[`male_${walking ? 'walk' : 'idle'}`];
     if (set.n >= this.capacity) return;
     const i = set.n++;
     this.p.set(o.x, o.y + (o.bob || 0), o.z);
@@ -213,9 +213,9 @@ export function outfitColors(o) {
   const female = o.gender === 'f';
   return {
     skin: female ? o.skinMul.clone() : o.skinMul.clone(),
-    top: c(o.top === 'hoodie' && female ? 0x141414 : o.topColor ?? 0x222222),
+    top: c(o.vest ? 0xb8c818 : o.shellColor ??(o.top === 'hoodie' && female ? 0x141414 : o.topColor ?? 0x222222)),
     bottom: c(o.pants ?? 0x2a3a5a),
     shoes: c(o.shoes ?? 0xeeeeee),
-    hair: c(o.hood ? o.topColor : o.hat === 'cap' || o.hat === 'beanie' ? o.hatColor : o.hair ?? 0x111111),
+    hair: c(o.headscarf ?? (o.hood ? o.topColor : o.hat === 'cap' || o.hat === 'beanie' ? o.hatColor : o.hair ?? 0x111111)),
   };
 }

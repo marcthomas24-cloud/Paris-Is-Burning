@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>conv</title>
+<script type="importmap">{ "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/" } }</script>
+</head><body><pre id="log"></pre>
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { TGALoader } from 'three/addons/loaders/TGALoader.js';
+window.THREE = THREE;
+const manager = new THREE.LoadingManager();
+manager.addHandler(/\.tga$/i, new TGALoader(manager));
+manager.setURLModifier((u) => u); // textures resolved later by name
+window.loadFbx = async (dir, name) => {
+  const buf = await (await fetch(`/dl/${dir}/${name}`)).arrayBuffer();
+  const l = new FBXLoader(manager);
+  return l.parse(buf, `/dl/${dir}/`);
+};
+window.inspect = async (dir, name) => {
+  const o = await loadFbx(dir, name);
+  window.cur = o;
+  const out = { meshes: [], bones: 0, scale: o.scale.toArray() };
+  o.traverse((m) => {
+    if (m.isBone) out.bones++;
+    if (m.isMesh) {
+      const g = m.geometry;
+      out.meshes.push({ name: m.name, skinned: m.isSkinnedMesh, verts: g.attributes.position.count, tris: g.index ? g.index.count / 3 : g.attributes.position.count / 3,
+        groups: g.groups.map((x) => [x.start, x.count, x.materialIndex]),
+        mats: (Array.isArray(m.material) ? m.material : [m.material]).map((x) => [x.name, x.map && x.map.name, x.map && x.map.image && x.map.image.width, x.transparent, x.alphaMap && x.alphaMap.name]),
+        morphs: Object.keys(m.morphTargetDictionary || {}), attrs: Object.keys(g.attributes) });
+    }
+  });
+  const box = new THREE.Box3().setFromObject(o); out.box = [box.min.toArray(), box.max.toArray()];
+  return out;
+};
+document.getElementById('log').textContent = 'ready';
+</script></body></html>
