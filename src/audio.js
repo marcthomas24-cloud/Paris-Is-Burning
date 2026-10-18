@@ -32,36 +32,9 @@ export class Audio {
         this.samples[k] = await this.ctx.decodeAudioData(buf);
       } catch (e) { console.warn('audio sample unavailable, using synthesis:', f, e.message || e); }
     }));
-    await this.loadVoices(base + 'voices/');
     this._startSampleBeds();
   }
 
-  // French shouts, chants and a mob walla bed rendered offline (tools/voices).
-  // Missing files just leave the synthesised voices in place.
-  async loadVoices(base) {
-    this.voices = { shouts: [], chants: [] };
-    try {
-      const res = await fetch(base + 'manifest.json');
-      if (!res.ok) throw new Error(res.status);
-      const man = await res.json();
-      const load = async (f) => { try { const r = await fetch(base + f); if (!r.ok) return null; return await this.ctx.decodeAudioData(await r.arrayBuffer()); } catch (e) { return null; } };
-      const [mob, shouts, chants] = await Promise.all([man.mob ? load(man.mob) : null, Promise.all((man.shouts || []).map((s) => load(s.file))), Promise.all((man.chants || []).map((s) => load(s.file)))]);
-      if (mob) this.samples.mob = mob;
-      this.voices.shouts = shouts.filter(Boolean);
-      this.voices.chants = chants.filter(Boolean);
-    } catch (e) { console.warn('voice clips unavailable, using synthesis:', e.message || e); }
-  }
-
-  // play a decoded buffer at a world position, optionally later
-  _playBuf(buf, { pos = null, vol = 1, rate = 1, when = 0, ref = 8, max = 160, lowpass = 0 } = {}) {
-    const c = this.ctx;
-    const { node, level } = this._out(pos, vol, ref, max);
-    if (level < 0.003) return null;
-    const src = c.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate;
-    if (lowpass) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lowpass; src.connect(f).connect(node); } else src.connect(node);
-    src.start(c.currentTime + when);
-    return src;
-  }
 
   // one-shot (or looping) sample at a world position
   playSample(name, { pos = null, vol = 1, rate = 1, offset = 0, dur = 0, loop = false, ref = 8, max = 160, fadeIn = 0.01, fadeOut = 0.15, filter = 0 } = {}) {
@@ -99,9 +72,6 @@ export class Audio {
     // the recorded crowd is darkened and kept low: the angry roar on top is synthesised
     this.crowdBed = bed('crowd', 0.5, 2400);
     this.crowdBed2 = bed('crowd', 0.25, 1500, 0.9); // second, detuned copy widens the crowd
-    // rendered mob walla (dozens of overlapping French shouts and curses) replaces the synthetic roar
-    const mob = bed('mob', 0.4, 3200);
-    if (mob) { this.angerBed.gain.value = 0; this.angerBed = mob; }
     this.fwBed1 = bed('fwFar1', 0.35, 3500);
     this.fwBed2 = bed('fwFar3', 0.25, 2500, 0.9);
     // with real crowd recordings in place, pull the synthetic murmur back
@@ -370,7 +340,9 @@ export class Audio {
     loop(() => this.shout(this._randomCrowdPos?.()), 0.4, 1.6); // extra layer of individual curses
     loop(() => this.roar(), 6, 14);
     loop(() => this.ambientCrash(), 1.0, 3.5);
-    loop(() => this.distantExplosion(), 3, 9);
+    loop(() => this.distantExplosion(), 1.5, 5);
+    loop(() => this.nearExplosion(), 8, 18);
+    loop(() => this.ambientGlass(), 1.2, 3.5);
   }
 
   _aroundListener(rMin, rMax) {
@@ -387,7 +359,6 @@ export class Audio {
     const dur = R(1.2, 2.4);
     const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.connect(node);
     for (let k = 0; k < 14; k++) this._voice(lp, t + Math.random() * 0.35, dur * R(0.6, 1), R(150, 330), Math.random() < 0.6 ? 'a' : 'o', 0.05, R(-0.25, 0.05));
-    if (this.voices?.shouts.length) for (let k = 0; k < 4; k++) this._playBuf(this.voices.shouts[Math.floor(Math.random() * this.voices.shouts.length)], { pos, vol: 0.35, rate: R(0.92, 1.08), when: Math.random() * 0.6, ref: 14, max: 160, lowpass: 3000 });
   }
 
   // things being smashed nearby: barriers thrown, bins kicked over, shutters battered, windows
@@ -449,6 +420,20 @@ export class Audio {
     }
   }
 
+  // windows and shopfronts being smashed nearby, sometimes several panes in a row
+  ambientGlass() {
+    if (!this.enabled) return;
+    const pos = this._aroundListener(8, 60);
+    const n = Math.random() < 0.35 ? 2 + Math.floor(Math.random() * 3) : 1;
+    for (let i = 0; i < n; i++) setTimeout(() => this.glass({ x: pos.x + R(-3, 3), z: pos.z + R(-3, 3) }), i * R(150, 500));
+  }
+
+  // a big blast close enough to feel: car tank, gas canister
+  nearExplosion() {
+    if (!this.enabled) return;
+    this.explosion(this._aroundListener(20, 45), R(1.0, 1.4));
+  }
+
   // explosions going off around the city (gas canisters, car tanks, mortars)
   distantExplosion() {
     if (!this.enabled) return;
@@ -482,13 +467,6 @@ export class Audio {
     if (!this.enabled) return;
     const c = this.ctx, t = c.currentTime + 0.05;
     const pos = this._randomCrowdPos ? this._randomCrowdPos() : null;
-    // rendered French chants (many voices, pre-mixed), repeated two or three times
-    if (this.voices?.chants.length) {
-      const buf = this.voices.chants[Math.floor(Math.random() * this.voices.chants.length)];
-      const reps = 2 + Math.floor(Math.random() * 2), rate = R(0.96, 1.04);
-      for (let r = 0; r < reps; r++) this._playBuf(buf, { pos, vol: 0.7 * (0.6 + this.crowdLevel), rate, when: r * ((buf.duration - 1.6) / rate + R(0.1, 0.3)), ref: 14, max: 170, lowpass: 3400 });
-      return;
-    }
     // synthesised fallback rhythms: "Li-bé-rez la Pa-les-tine", "Tout le monde dé-teste la po-lice", "Po-lice, as-sas-sins"
     const patterns = [
       [['i', 0.18], ['e', 0.18], ['e', 0.2], ['a', 0.18], ['a', 0.18], ['e', 0.18], ['i', 0.5], [null, 0.35]],
@@ -512,11 +490,6 @@ export class Audio {
 
   shout(pos) {
     if (!this.enabled) return;
-    if (this.voices?.shouts.length && Math.random() < 0.85) {
-      const buf = this.voices.shouts[Math.floor(Math.random() * this.voices.shouts.length)];
-      this._playBuf(buf, { pos, vol: R(0.45, 0.75), rate: R(0.94, 1.08), ref: 6, max: 90 });
-      return;
-    }
     const c = this.ctx, t = c.currentTime + 0.02;
     const { node, level } = this._out(pos, 0.35, 5, 70);
     if (level < 0.01) return;

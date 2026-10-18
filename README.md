@@ -144,11 +144,10 @@ On an AMD Radeon integrated laptop GPU, the dense crowd areas run at roughly 50 
 
 The soundscape layers openly licensed field recordings with synthesis:
 - **Recorded layers:**
-  - A real crowd bed (two detuned copies), darkened and kept low under an angry mob walla.
-  - **French voices:** 26 individual shouts and curses (*Va te faire foutre, la police !*, *Putain de flics !*, *Libérez la Palestine !*, *La France va en enfer !*, *Tout le monde déteste la police !* and more), 7 chants sung by 18 voices each, and a 24 s seamless mob loop of about 170 overlapping curses. They are rendered offline with Piper TTS from 44 different speakers (see `tools/voices/render.py`), then pitched up, saturated and given room reverb so they sound shouted.
+  - A real crowd bed (two detuned copies), darkened and kept low under a synthesised angry roar.
   - French two-tone *pin-pon* sirens on two to four virtual vehicles that drive past, with distance, panning and doppler.
   - Distant fireworks backdrops, random firecracker and mortar bangs around the city, real glass breaks, and police whistles.
-- **Synthesised layers:** an angry roar that swells irregularly, whole-crowd yells after big bangs, metal crashes (barriers and bins thrown, with bounces), shop shutters being kicked, explosions going off around the city every few seconds, chant rhythms and shouts (used only if the voice clips fail to load), a police helicopter circling overhead, car alarms when vehicles catch fire, fire crackle near flames, explosions (with a recorded detonation layered on top), footsteps and baton impacts.
+- **Synthesised layers:** an angry roar that swells irregularly, whole-crowd yells after big bangs, metal crashes (barriers and bins thrown, with bounces), shop shutters being kicked, explosions going off around the city every few seconds (and a close, heavy blast every 8–18 s), windows smashing nearby (sometimes several panes in a row), chant rhythms and shouts, a police helicopter circling overhead, car alarms when vehicles catch fire, fire crackle near flames, explosions (with a recorded detonation layered on top), footsteps and baton impacts.
 - **Dynamic mix:** crowd and siren intensity rise with panic, active threats and mission phase.
 
 If a recording can't load or decode (for example, older Safari can't decode Ogg Vorbis), that layer falls back to synthesis automatically.
@@ -163,8 +162,6 @@ If a recording can't load or decode (for example, older Safari can't decode Ogg 
 | `fireworks_street.ogg` | Silvester fireworks from the street 03 end.ogg | stephan | Public domain |
 | `glass.wav` | Glass breaking (Gravity Sound).wav | Gravity Sound | CC BY 4.0 |
 | `whistle.ogg` | Bobbypfeife.ogg | Christoph Waghubinger (Lewenstein) | CC BY-SA 3.0 AT |
-
-`voices/*.wav` are generated with [Piper](https://github.com/rhasspy/piper) and the `fr_FR-mls-medium` voice from rhasspy/piper-voices (CC BY 4.0, trained on Multilingual LibriSpeech). To regenerate them: `pip install piper-tts numpy`, download the voice's `.onnx` and `.onnx.json`, then run `python tools/voices/render.py <voice.onnx> public/assets/audio/voices`. On Windows, keep the venv on a short path, because the onnxruntime install fails on paths longer than 260 characters.
 
 The CC BY and CC BY-SA recordings require attribution. The game credits them on the Controls screen. Under CC BY-SA, the trimmed siren and whistle files (and any edits to them) stay under that licence; the rest of the game is unaffected.
 
