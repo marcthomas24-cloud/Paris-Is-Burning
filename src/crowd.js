@@ -114,7 +114,8 @@ export class Crowd {
     // flags carried in the demonstrations: Palestinian, Algerian, French and red union flags;
     // gilets jaunes mostly carry the tricolore
     const f = this.rng();
-    const variant = n.outfit.vest && f < 0.7 ? 'fr' : f < 0.34 ? 'pal' : f < 0.54 ? 'alg' : f < 0.8 ? 'fr' : 'uni';
+    // (weighted after the reference photos: Palestinian flags dominate, then Algerian)
+    const variant = n.outfit.vest && f < 0.7 ? 'fr' : f < 0.55 ? 'pal' : f < 0.78 ? 'alg' : f < 0.9 ? 'fr' : 'uni';
     if (map[n.role]) giveItem(n.rig, map[n.role], this.rng, variant);
     else if (n.role === 'chant' && this.rng() < 0.25) { n.role = 'flag'; giveItem(n.rig, 'flag', this.rng, variant); }
     else clearItem(n.rig);

@@ -265,12 +265,21 @@ function fabricNormal() {
   return FABRIC_N;
 }
 
-function garmentMaterial(o, garment, bind) {
+function armPoint(T, name) {
+  const m = T.bind[name] || T.bind[name.replace('Left', 'Right')];
+  const v = m ? new THREE.Vector3().setFromMatrixPosition(m) : new THREE.Vector3(0.2, 1.4, 0);
+  v.x = Math.abs(v.x);
+  return v;
+}
+
+function garmentMaterial(o, garment, bind, T) {
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: garment === 'puffer' ? 0.55 : garment === 'shirt' ? 0.75 : 0.92, normalMap: fabricNormal(), normalScale: new THREE.Vector2(0.6, 0.6), envMap: Humans.envMap, envMapIntensity: garment === 'puffer' ? 0.5 : 0.2 });
   const U = {
     uBase: { value: new THREE.Color(o.shellColor) }, uPattern: { value: o.shellPattern || 0 },
     uPA: { value: new THREE.Color(o.pa ?? o.shellColor) }, uPB: { value: new THREE.Color(o.pb ?? o.shellColor) }, uPC: { value: new THREE.Color(o.pc ?? 0xffffff) },
     uQuilt: { value: garment === 'puffer' ? 1 : 0 }, uBind: { value: bind },
+    // arm axis (left side, mirrored by |x|) for tracksuit sleeve stripes
+    uArmA: { value: armPoint(T, 'LeftArm') }, uArmB: { value: armPoint(T, 'LeftHand') },
   };
   mat.userData.U = U;
   mat.onBeforeCompile = (sh) => {
@@ -280,7 +289,7 @@ function garmentMaterial(o, garment, bind) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCharPos = (uBind * vec4(position, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-        uniform vec3 uBase, uPA, uPB, uPC; uniform int uPattern; uniform float uQuilt; varying vec3 vCharPos;`)
+        uniform vec3 uBase, uPA, uPB, uPC, uArmA, uArmB; uniform int uPattern; uniform float uQuilt; varying vec3 vCharPos;`)
       .replace('#include <map_fragment>', `#include <map_fragment>
         {
           vec3 p = vCharPos; vec3 o = uBase;
@@ -300,11 +309,23 @@ function garmentMaterial(o, garment, bind) {
             float straps = (1.0 - smoothstep(0.016, 0.02, abs(abs(p.x) - 0.1))) * step(1.22, p.y);
             o = mix(o, mix(uPA, uPB, clamp(hoops + straps, 0.0, 1.0)), vest);
           }
+          else if (uPattern == 8) { // tracksuit top: three stripes down the outside of each sleeve
+            vec3 q = vec3(abs(p.x), p.y, p.z);
+            vec3 ax = uArmB - uArmA; float L = length(ax); ax /= L;
+            float t = dot(q - uArmA, ax);
+            vec3 d = normalize(q - uArmA - ax * t);
+            vec3 outer = normalize(cross(ax, vec3(0.0, 0.0, 1.0))); outer *= sign(outer.y + 1e-4);
+            vec3 side = cross(ax, outer);
+            float a = atan(dot(d, side), dot(d, outer));
+            float st = 0.0;
+            for (int k = -1; k <= 1; k++) st += 1.0 - smoothstep(0.07, 0.1, abs(a - float(k) * 0.3));
+            o = mix(o, uPA, clamp(st, 0.0, 1.0) * step(0.04, t) * step(t, L * 0.92) * step(0.15, q.x));
+          }
           if (uQuilt > 0.5) o *= 0.82 + 0.18 * smoothstep(0.0, 0.5, abs(sin(p.y * 38.0)));
           diffuseColor.rgb *= o;
         }`);
   };
-  mat.customProgramCacheKey = () => 'garment-v1';
+  mat.customProgramCacheKey = () => 'garment-v2';
   return mat;
 }
 
@@ -809,7 +830,7 @@ export function createHuman(kind, outfit, extra = {}) {
     const base = mainMesh(model);
     const geo = shellGeometry(T, outfit.garment);
     if (geo.index.count > 0) {
-      const sh = new THREE.SkinnedMesh(geo, garmentMaterial(outfit, outfit.garment, restFrame(mainMesh(T.scene)).L.clone()));
+      const sh = new THREE.SkinnedMesh(geo, garmentMaterial(outfit, outfit.garment, restFrame(mainMesh(T.scene)).L.clone(), T));
       sh.name = 'Garment';
       sh.updateMorphTargets();
       sh.morphTargetDictionary = { belly: 0, chest: 1 };

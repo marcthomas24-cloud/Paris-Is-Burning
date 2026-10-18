@@ -76,7 +76,7 @@ Who becomes aggressive is chosen at random from the crowd, independently of clot
 
 ## Characters, crowd and effects
 
-**Base bodies.** Civilians use five realistic base bodies: the Mixamo female (Michelle), the Ready Player Me male, and three [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) people (a woman in a tee and jeans, a young man in a hoodie, a man in a denim jacket). The Rocketbox bodies are converted offline by `tools/rocketbox/` (see its `convert.js`): Biped bones renamed to Mixamo names, one skinned mesh with a texture atlas, a per-vertex garment part and six ARKit facial blendshapes kept. Their faces keep their own textures (only a slight skin tint), and they keep their original clothes or get recoloured ones.
+**Base bodies.** Civilians use five realistic base bodies: the Mixamo female (Michelle), the Ready Player Me male, and three [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) people (a woman in a tee and jeans, a young man in a hoodie, a man in a denim jacket). The Rocketbox bodies are converted offline by `tools/rocketbox/` (see its `convert.js`): Biped bones renamed to Mixamo names, one skinned mesh with a texture atlas, a per-vertex garment part and six ARKit facial blendshapes kept. Their faces keep their own textures, tinted darker and warmer towards each person's complexion, and they keep their original clothes or get recoloured ones.
 
 **Building on the base models.** The base bodies are extended in code:
 - **Garment layers:** skinned clothing shells are generated from each body's own mesh and pushed out along its normals. There are football shirts (PSG-style band, stripes, hoops, Algeria-style green and white), hoodies, quilted puffer jackets and long coats, so outfits change silhouette, not just colour. About 14% of demonstrators wear a hi-vis *gilet jaune* over their garment, with reflective hoops and shoulder straps.
@@ -88,7 +88,7 @@ Who becomes aggressive is chosen at random from the crowd, independently of clot
 - **Women:** the Michelle model gets a generated jaw blendshape (its face is covered by a printed mask in the texture).
 - **Rocketbox people:** real ARKit blendshapes: `jawOpen` (talking, chanting, shouting), `mouthSmile`, `eyeBlink` (blinks and squinting in distress), `browDown` (anger while attacking or shouting), `browInnerUp` (fear while fleeing, staggering or down) and `mouthFunnel` (rounded vowels while chanting). The crowd sets a per-person `brow` mood from behaviour.
 
-**Flags:** handheld and large flags are roughly 34% Palestinian, 20% Algerian, 26% French and 20% red union strike flags (*GRÈVE*). Gilets jaunes mostly carry the tricolore. The same mix appears over the distant crowds and hanging from balconies.
+**Flags:** handheld and large flags are roughly 55% Palestinian, 23% Algerian, 12% French and 10% red union strike flags (*GRÈVE*). Gilets jaunes mostly carry the tricolore. The same mix appears over the distant crowds and hanging from balconies.
 
 **Banners and placards:** cost-of-living, public-services, union and student slogans (*LYCÉENS EN COLÈRE*, *FACS EN GRÈVE*, *JEUNESSE EN LUTTE*, *LA VIE CHÈRE ÇA SUFFIT*) alongside the original ones, plus two more large banners hung on the façades.
 
@@ -105,6 +105,12 @@ Who becomes aggressive is chosen at random from the crowd, independently of clot
 - **Retargeting.** The Mixamo clips (idle, walk, run, nod, head-shake, and a second walk/run style) are retargeted at load in world space against a shared T-pose reference. This copes with A-pose binds, different bone roll and Y-up/Z-up armatures.
 - **Actions.** Strikes, throws, chants, flag waving, shoves, crouches and knockdowns are additive bone rotations applied in character space on top of the mocap.
 - **Items.** Flags, placards, phones, bottles, the baton and the shield attach to sockets derived from the bind pose, so they follow the hands.
+- **Crowd mix.** Modelled on reference photos of the Paris protests:
+  - About 88% men and 12% women.
+  - Mostly North African / Middle Eastern (about 54%) and Black (about 38%) complexions. White Europeans are hard-capped at 10% of everyone generated.
+  - Clothing is mostly all-black streetwear: hoodies (some red or grey), puffers, and black tracksuit tops with orange, white or red sleeve stripes. Also PSG and Algeria shirts, keffiyehs, white caps and some gilets jaunes.
+  - About half wear face coverings: balaclavas with an eye slot, black face masks, blue surgical masks and keffiyeh masks.
+  - Appearance is never used to pick who turns violent; that is decided by behaviour (see above).
 - **Variety.** Each person is unique: skin tone, height, PSG / other football shirt / hoodie / jacket colours, trousers, shoes, beards, procedural hair, caps, beanies, hoods, masks, keffiyehs, scarves and backpacks.
 
 **Crowd LOD.**

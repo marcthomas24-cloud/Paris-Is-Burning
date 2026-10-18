@@ -104,19 +104,28 @@ export function randomOutfit(rng) {
     build: 0.9 + rng() * 0.22,
     backpack: rng() < 0.35,
   };
-  // ~30% PSG shirts, ~35% black hoodies / dark streetwear, rest casual
-  if (r < 0.3) { o.top = 'psg'; o.psg = rng() < 0.5 ? 0 : 1; o.topColor = 0x132447; o.longSleeve = rng() < 0.3; }
-  else if (r < 0.65) { o.top = 'hoodie'; o.topColor = DARKS[Math.floor(rng() * DARKS.length)]; o.longSleeve = true; o.hood = rng() < 0.45; }
-  else if (r < 0.8) { o.top = 'jacket'; o.topColor = rng() < 0.6 ? DARKS[Math.floor(rng() * DARKS.length)] : CASUAL[Math.floor(rng() * CASUAL.length)]; o.longSleeve = true; }
-  else { o.top = 'tee'; o.topColor = CASUAL[Math.floor(rng() * CASUAL.length)]; o.longSleeve = false; }
+  // Modelled on the reference photos of the Paris street protests: mostly
+  // all-black streetwear (hoodies, puffers, tracksuits), some red hoodies,
+  // PSG and Algeria shirts, keffiyehs, balaclavas and surgical masks.
+  if (r < 0.14) { o.top = 'psg'; o.psg = rng() < 0.5 ? 0 : 1; o.topColor = 0x132447; o.longSleeve = rng() < 0.3; }
+  else if (r < 0.54) {
+    o.top = 'hoodie'; const hc = rng();
+    o.topColor = hc < 0.8 ? DARKS[Math.floor(rng() * DARKS.length)] : hc < 0.9 ? 0x8e1418 : 0x4a4c50;
+    o.longSleeve = true; o.hood = rng() < 0.55;
+  }
+  else if (r < 0.68) { o.top = 'track'; o.topColor = DARKS[Math.floor(rng() * 3)]; o.stripe = [0xe0601a, 0xf2f2f2, 0xf2f2f2, 0xc8102e][Math.floor(rng() * 4)]; o.longSleeve = true; }
+  else if (r < 0.84) { o.top = 'jacket'; o.topColor = rng() < 0.8 ? DARKS[Math.floor(rng() * DARKS.length)] : CASUAL[Math.floor(rng() * CASUAL.length)]; o.longSleeve = true; }
+  else { o.top = 'tee'; o.topColor = rng() < 0.5 ? DARKS[Math.floor(rng() * DARKS.length)] : CASUAL[Math.floor(rng() * CASUAL.length)]; o.longSleeve = false; }
   if (o.top === 'psg' && rng() < 0.3) o.pants = 0x132447;
   const hr = rng();
-  o.hat = o.hood ? 'none' : hr < 0.25 ? 'cap' : hr < 0.35 ? 'beanie' : 'none';
-  o.hatColor = rng() < 0.6 ? 0x111111 : rng() < 0.5 ? 0x132447 : 0xd4202f;
+  o.hat = o.hood ? 'none' : hr < 0.28 ? 'cap' : hr < 0.4 ? 'beanie' : 'none';
+  o.hatColor = rng() < 0.6 ? 0x111111 : rng() < 0.6 ? 0xeeeeee : rng() < 0.5 ? 0x132447 : 0xd4202f;
   const mr = rng();
-  o.mask = mr < 0.2 ? 'black' : mr < 0.26 ? 'white' : mr < 0.31 ? 'keffiyeh' : 'none';
+  // balaclava: black full-head cover with an eye slot
+  o.mask = mr < 0.16 ? 'balaclava' : mr < 0.32 ? 'black' : mr < 0.44 ? 'surgical' : mr < 0.48 ? 'white' : mr < 0.52 ? 'keffiyeh' : 'none';
+  if (o.mask === 'balaclava') o.hat = 'none';
   const sr = rng();
-  o.scarf = sr < 0.2 ? 'keffiyeh' : sr < 0.3 ? 'psg' : sr < 0.34 ? 'red' : 'none';
+  o.scarf = sr < 0.24 ? 'keffiyeh' : sr < 0.31 ? 'psg' : sr < 0.34 ? 'red' : 'none';
   skinnedOutfit(o, rng);
   // gilets jaunes: a hi-vis vest worn over whatever garment they have on
   if (rng() < 0.14) {
@@ -129,7 +138,16 @@ export function randomOutfit(rng) {
 }
 
 // Extra parameters used by the skinned (glTF) characters.
-const SKIN_TONES = [0xf3d2bd, 0xe8b996, 0xd9a07a, 0xc08562, 0xa06a48, 0x84553a, 0x6a412b, 0x4d2e1f, 0xdcb08c, 0xb98a6a];
+// Complexion groups. The crowd mix follows the reference photos: mostly North
+// African / Middle Eastern and Black, with at most ~10% white Europeans.
+// (Appearance never feeds into who is hostile; that is decided by behaviour.)
+const SKIN_GROUPS = {
+  eu: [0xf3d2bd, 0xe8b996, 0xdcb08c],
+  na: [0xc08562, 0xb47b55, 0xa87a58, 0xa06a48, 0x956040, 0x8a5a3c],
+  af: [0x84553a, 0x6a412b, 0x5a3624, 0x4d2e1f, 0x3e2418],
+};
+export const SHARE = { female: 0.12, eu: 0.08, af: 0.38 };
+export const MIX = { n: 0, eu: 0 };
 const JEANS = [0x2a3a5a, 0x1e2a44, 0x3b4b6b, 0x151a24, 0x222222, 0x4a4a48, 0x5a5040, 0x3a3f46, 0x6a6a70, 0x1b1b1b];
 const SHOES = [0xf0f0f0, 0xe8e8e8, 0x151515, 0x222222, 0x8a2a2a, 0x3a4a6a, 0xc8c0b0, 0xf4f4f4];
 const FOOTBALL = [
@@ -145,11 +163,19 @@ const RB_BASE = {
 };
 function skinnedOutfit(o, rng) {
   const pick = (a) => a[Math.floor(rng() * a.length)];
-  o.gender = rng() < 0.38 ? 'f' : 'm';
-  // base body: original Michelle / Ready Player Me bodies plus the Rocketbox people
+  o.gender = rng() < SHARE.female ? 'f' : 'm';
+  const er = rng();
+  o.ethnicity = er < SHARE.eu ? 'eu' : er < SHARE.eu + SHARE.af ? 'af' : 'na';
+  // hard cap: white Europeans never exceed 10% of the people generated so far
+  if (o.ethnicity === 'eu' && (MIX.eu + 1) / (MIX.n + 1) > 0.1) o.ethnicity = 'na';
+  MIX.n++; if (o.ethnicity === 'eu') MIX.eu++;
+  // base body: original Michelle / Ready Player Me bodies (tinted to any
+  // complexion) plus the Rocketbox people, whose face textures are brown-skinned
   const br = rng();
-  o.base = o.gender === 'f' ? (br < 0.55 ? 'rb_female' : 'michelle') : br < 0.4 ? 'male' : br < 0.7 ? 'rb_male_a' : 'rb_male_b';
-  o.skinTone = pick(SKIN_TONES);
+  if (o.ethnicity === 'eu') o.base = o.gender === 'f' ? 'michelle' : 'male';
+  else o.base = o.gender === 'f' ? (br < 0.6 ? 'rb_female' : 'michelle') : br < 0.4 ? 'male' : br < 0.7 ? 'rb_male_a' : 'rb_male_b';
+  o.skinTone = pick(SKIN_GROUPS[o.ethnicity]);
+  o.skin = o.skinTone; // procedural fallback rig
   const tone = new THREE.Color(o.skinTone);
   o.skinMul = o.gender === 'f'
     ? new THREE.Color(tone.r / 0.45, tone.g / 0.29, tone.b / 0.2).multiplyScalar(0.92)
@@ -162,8 +188,8 @@ function skinnedOutfit(o, rng) {
     const f = pick(FOOTBALL); o.pattern = f[0]; o.topColor = f[1]; o.pa = f[1]; o.pb = f[2] ?? f[1]; o.topBase = f[1];
   } else o.topBase = o.top === 'hoodie' ? 0x000000 : o.topColor;
   o.accent = pick([0xd4202f, 0x2c6ef2, 0xf2f2f2, 0x16a34a, 0xf2c230, 0x111111]);
-  o.hairStyle = pick(['short', 'short', 'buzz', 'curly', 'short', 'none']);
-  o.hairIdx = Math.floor(rng() * 6);
+  o.hairStyle = o.ethnicity === 'af' ? pick(['buzz', 'buzz', 'curly', 'short', 'none']) : pick(['short', 'short', 'buzz', 'curly', 'short', 'none']);
+  o.hairIdx = o.ethnicity === 'eu' ? Math.floor(rng() * 6) : Math.floor(rng() * 3);
   o.hair = [0x0f0b08, 0x1c140e, 0x2e2018, 0x4a3524, 0x6b5238, 0x111111][o.hairIdx];
   o.beard = o.gender === 'm' && rng() < 0.4;
   o.packColor = pick([0x1d1f22, 0x2a3a5a, 0x4a3a2a, 0x3a4a3a, 0x6a1d1d]);
@@ -175,6 +201,7 @@ function skinnedOutfit(o, rng) {
     o.garment = 'shirt'; o.shellColor = o.topColor; o.shellPattern = o.pattern || 0;
     if (rng() < 0.3) { o.shellPattern = 6; o.pa = 0x0a7a35; o.pb = 0xf4f4f4; o.shellColor = 0xf4f4f4; } // Algeria-style shirt
   } else if (o.top === 'hoodie') { o.garment = gr < 0.75 ? 'hoodie' : 'puffer'; o.shellColor = o.topColor; o.shellPattern = 0; }
+  else if (o.top === 'track') { o.garment = 'hoodie'; o.shellColor = o.topColor; o.shellPattern = 8; o.pa = o.stripe; o.pants = rng() < 0.7 ? 0x141416 : 0x3a3d42; }
   else { o.garment = gr < 0.4 ? 'puffer' : gr < 0.7 ? 'coat' : gr < 0.9 ? 'hoodie' : null; o.shellColor = o.topColor; o.shellPattern = 0; }
   if (o.garment === 'coat') o.shellColor = pick([0x2a2622, 0x3a3226, 0x1b1d22, 0x4a4036, 0x22324a]);
   if (o.garment === 'puffer') o.shellColor = pick([0x111111, 0x1a1c22, 0x2a3a5a, 0x5a1a1a, 0x2f3b33, 0x8a7a5a, 0x6a6a70]);
@@ -188,13 +215,17 @@ function skinnedOutfit(o, rng) {
     head: 0.96 + rng() * 0.07,
   };
   if (o.gender === 'f' && rng() < 0.2) { o.headscarf = pick([0x111111, 0x2a2a3a, 0x5a2a3a, 0xd8d0c0, 0x3a4a3a, 0x6a4a3a]); o.hat = 'none'; o.hood = false; }
+  if (o.gender === 'f' && o.mask === 'balaclava') { o.mask = 'black'; o.hood = true; }
   const rb = RB_BASE[o.base];
   if (rb) {
-    // the face texture sets the complexion: tint only slightly so faces stay natural
-    const v = 0.94 + rng() * 0.1;
-    o.skinMul = new THREE.Color(v * (1 + (rng() - 0.5) * 0.04), v, v * (1 - rng() * 0.04));
+    // darken / warm the face texture towards the drawn complexion
+    // (linear-space multiplier: 0.5 reads as roughly 25% darker on screen)
+    const v = o.ethnicity === 'af' ? 0.3 + rng() * 0.14 : o.base === 'rb_female' ? 0.42 + rng() * 0.12 : 0.72 + rng() * 0.2;
+    const warm = (1 - v) * 0.6; // darker skin also gets a little warmer
+    o.skinMul = new THREE.Color(v * (1 + warm * 0.15 + (rng() - 0.5) * 0.04), v * (1 - warm * 0.05), v * (1 - warm * 0.3 - rng() * 0.04));
     o.hair = rb.hair; o.hairStyle = 'none'; o.beard = false;
-    if (o.base === 'rb_male_a') { o.hat = 'none'; o.hood = false; } // his afro stays visible
+    if (o.base === 'rb_female' && o.hat === 'cap') o.hat = 'none'; // caps float on her long hair
+    if (o.base === 'rb_male_a') { o.hat = 'none'; o.hood = false; if (o.mask === 'balaclava') o.mask = 'black'; } // his afro stays visible
     o.keepTop = !o.garment || rng() < 0.4;
     o.keepBottom = rng() < 0.5; o.keepShoes = rng() < 0.6;
     if (o.keepTop && !o.garment) { o.topColor = rb.top; o.pattern = 0; }
@@ -301,6 +332,8 @@ function hairGeo() {
     cap: sphere(0.108, Math.PI * 0.5, 0.96, 0.9, 1.06, 0.032, -0.006),
     brim: (() => { const g = new THREE.CylinderGeometry(0.1, 0.1, 0.012, 16, 1, false, -Math.PI * 0.5, Math.PI); g.translate(0, 0.035, 0.07); return g; })(),
     beanie: sphere(0.112, Math.PI * 0.56, 0.97, 1.08, 1.06, 0.02, -0.01),
+    balaclava: (() => { const g = new THREE.SphereGeometry(0.109, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.4); g.scale(0.97, 1.02, 1.08); g.translate(0, 0.03, -0.008); return g; })(),
+    balaclavaBack: (() => { const g = new THREE.SphereGeometry(0.107, 18, 10, Math.PI * 0.6, Math.PI * 0.8, Math.PI * 0.35, Math.PI * 0.55); g.scale(0.98, 1.05, 1.08); return g; })(),
     hood: (() => { const g = new THREE.SphereGeometry(0.135, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.66); g.scale(1, 1.05, 1.12); g.translate(0, 0.0, -0.035); return g; })(),
     mask: (() => { const g = new THREE.SphereGeometry(0.1, 16, 8, -Math.PI * 0.42, Math.PI * 0.84, Math.PI * 0.52, Math.PI * 0.3); g.scale(1.0, 1.05, 1.08); return g; })(),
     scarf: (() => { const g = new THREE.TorusGeometry(0.075, 0.03, 8, 18); g.rotateX(Math.PI / 2); g.scale(1.05, 1, 1.1); return g; })(),
@@ -343,8 +376,13 @@ function buildSkinned(outfit, kind) {
       }
     }
     if (outfit.mask !== 'none') {
-      const mm = add(H.mask, outfit.mask === 'black' ? fabric(0x0b0b0c) : outfit.mask === 'keffiyeh' ? M.keffiyeh : fabric(0xdfe4e6, 0.9), rig.head, false);
+      const mc = { black: 0x0b0b0c, balaclava: 0x0b0b0c, surgical: 0x9ec9de, white: 0xdfe4e6 }[outfit.mask];
+      const mm = add(H.mask, outfit.mask === 'keffiyeh' ? M.keffiyeh : fabric(mc ?? 0xdfe4e6, mc === 0x0b0b0c ? 0.95 : 0.9), rig.head, false);
       if (female) mm.scale.setScalar(1.08);
+      if (rbBody) mm.position.set(0, female ? -0.05 : -0.045, 0.012); // Rocketbox faces sit lower in the head socket
+      if (outfit.mask === 'surgical') mm.scale.set(0.97, 0.85, 1.02);
+      // balaclava: knitted cover over the crown and back of the head, leaving an eye slot
+      if (outfit.mask === 'balaclava' && !outfit.hood) { for (const geo of [H.balaclava, H.balaclavaBack]) { const b = add(geo, fabric(0x0b0b0c), rig.head); if (female) b.scale.setScalar(1.08); } }
     }
     if (outfit.scarf !== 'none') {
       const sc = add(H.scarf, outfit.scarf === 'keffiyeh' ? M.keffiyeh : fabric(outfit.scarf === 'psg' ? 0x132447 : 0x7a1d1d), rig.chest);
