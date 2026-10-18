@@ -4,7 +4,7 @@
 // recording fails to load or decode, the synthesised version is used instead,
 // so the game never depends on an audio file.
 const SAMPLE_FILES = {
-  crowd: 'crowd_large.wav', stadium: 'stadium.ogg', siren: 'siren_twotone.ogg',
+  crowd: 'crowd_large.wav', siren: 'siren_twotone.ogg',
   fwFar1: 'fireworks_far1.ogg', fwFar3: 'fireworks_far3.ogg', fwStreet: 'fireworks_street.ogg',
   glass: 'glass.wav', whistle: 'whistle.ogg',
 };
@@ -32,7 +32,35 @@ export class Audio {
         this.samples[k] = await this.ctx.decodeAudioData(buf);
       } catch (e) { console.warn('audio sample unavailable, using synthesis:', f, e.message || e); }
     }));
+    await this.loadVoices(base + 'voices/');
     this._startSampleBeds();
+  }
+
+  // French shouts, chants and a mob walla bed rendered offline (tools/voices).
+  // Missing files just leave the synthesised voices in place.
+  async loadVoices(base) {
+    this.voices = { shouts: [], chants: [] };
+    try {
+      const res = await fetch(base + 'manifest.json');
+      if (!res.ok) throw new Error(res.status);
+      const man = await res.json();
+      const load = async (f) => { try { const r = await fetch(base + f); if (!r.ok) return null; return await this.ctx.decodeAudioData(await r.arrayBuffer()); } catch (e) { return null; } };
+      const [mob, shouts, chants] = await Promise.all([man.mob ? load(man.mob) : null, Promise.all((man.shouts || []).map((s) => load(s.file))), Promise.all((man.chants || []).map((s) => load(s.file)))]);
+      if (mob) this.samples.mob = mob;
+      this.voices.shouts = shouts.filter(Boolean);
+      this.voices.chants = chants.filter(Boolean);
+    } catch (e) { console.warn('voice clips unavailable, using synthesis:', e.message || e); }
+  }
+
+  // play a decoded buffer at a world position, optionally later
+  _playBuf(buf, { pos = null, vol = 1, rate = 1, when = 0, ref = 8, max = 160, lowpass = 0 } = {}) {
+    const c = this.ctx;
+    const { node, level } = this._out(pos, vol, ref, max);
+    if (level < 0.003) return null;
+    const src = c.createBufferSource(); src.buffer = buf; src.playbackRate.value = rate;
+    if (lowpass) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = lowpass; src.connect(f).connect(node); } else src.connect(node);
+    src.start(c.currentTime + when);
+    return src;
   }
 
   // one-shot (or looping) sample at a world position
@@ -68,9 +96,12 @@ export class Audio {
       src.start(c.currentTime, Math.random() * buf.duration);
       return g;
     };
-    this.crowdBed = bed('crowd', 0.7);
-    this.crowdBed2 = bed('crowd', 0.35, 1800, 0.93); // second, detuned copy widens the crowd
-    this.roarBed = bed('stadium', 0.22, 2600);
+    // the recorded crowd is darkened and kept low: the angry roar on top is synthesised
+    this.crowdBed = bed('crowd', 0.5, 2400);
+    this.crowdBed2 = bed('crowd', 0.25, 1500, 0.9); // second, detuned copy widens the crowd
+    // rendered mob walla (dozens of overlapping French shouts and curses) replaces the synthetic roar
+    const mob = bed('mob', 0.4, 3200);
+    if (mob) { this.angerBed.gain.value = 0; this.angerBed = mob; }
     this.fwBed1 = bed('fwFar1', 0.35, 3500);
     this.fwBed2 = bed('fwFar3', 0.25, 2500, 0.9);
     // with real crowd recordings in place, pull the synthetic murmur back
@@ -173,16 +204,27 @@ export class Audio {
     const eg = c.createGain(); eg.gain.value = 0.03;
     eng.connect(ef).connect(eg).connect(this.amb); eng.start();
     this.engineGain = eg;
+    // angry mob roar: noise in the shouting-voice band with irregular swells, unlike a stadium's steady roar
+    const ab = c.createBufferSource(); ab.buffer = this.brown; ab.loop = true; ab.playbackRate.value = 1.7;
+    const swell = c.createGain(); swell.gain.value = 0.6;
+    for (const [fq, q, v] of [[620, 1.2, 1], [1150, 1.6, 0.6], [2300, 2, 0.25]]) {
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = fq; bp.Q.value = q;
+      const bg = c.createGain(); bg.gain.value = v;
+      ab.connect(bp).connect(bg).connect(swell);
+    }
+    this.angerBed = c.createGain(); this.angerBed.gain.value = 0.25;
+    swell.connect(this.angerBed).connect(this.amb); ab.start();
+    this.angerSwell = swell; this.swellT = 0;
   }
 
   setCrowdLevel(level) {
     if (!this.enabled) return;
     const t = this.ctx.currentTime;
     this.crowdLevel = level;
+    if (this.angerBed) this.angerBed.gain.setTargetAtTime(0.18 + level * 0.5, t, 0.8);
     if (this.crowdBed) {
-      this.crowdBed.gain.setTargetAtTime(0.5 + level * 0.55, t, 0.8);
-      this.crowdBed2.gain.setTargetAtTime(0.25 + level * 0.3, t, 0.8);
-      if (this.roarBed) this.roarBed.gain.setTargetAtTime(0.12 + level * 0.45, t, 1.2);
+      this.crowdBed.gain.setTargetAtTime(0.35 + level * 0.35, t, 0.8);
+      this.crowdBed2.gain.setTargetAtTime(0.18 + level * 0.2, t, 0.8);
       this.murmur1.gain.setTargetAtTime((0.35 + level * 0.5) * 0.35, t, 0.8);
       this.murmur2.gain.setTargetAtTime((0.12 + level * 0.35) * 0.35, t, 0.8);
       return;
@@ -310,6 +352,9 @@ export class Audio {
       a.g.gain.setTargetAtTime(0.09 * p.g, t, 0.1);
       if (a.pan) a.pan.pan.setTargetAtTime(p.pan, t, 0.1);
     }
+    // irregular swells of anger in the synthetic roar
+    this.swellT -= dt;
+    if (this.angerSwell && this.swellT <= 0) { this.swellT = R(0.3, 1.6); this.angerSwell.gain.setTargetAtTime(R(0.25, 1.0), t, R(0.12, 0.5)); }
     if (this.crackle) this.crackle.gain.setTargetAtTime(info.fireDist !== undefined ? 0.5 * Math.max(0, 1 - info.fireDist / 14) : 0, t, 0.3);
   }
 
@@ -322,6 +367,93 @@ export class Audio {
     loop(() => this.shout(this._randomCrowdPos?.()), 0.6, 2.4);
     loop(() => this.whistle(), 5, 12);
     loop(() => this.distantBang(), 2.5, 8);
+    loop(() => this.shout(this._randomCrowdPos?.()), 0.4, 1.6); // extra layer of individual curses
+    loop(() => this.roar(), 6, 14);
+    loop(() => this.ambientCrash(), 1.0, 3.5);
+    loop(() => this.distantExplosion(), 3, 9);
+  }
+
+  _aroundListener(rMin, rMax) {
+    const L = this.listener, a = Math.random() * 6.28, r = R(rMin, rMax);
+    return { x: Math.max(-14, Math.min(14, L.x + Math.cos(a) * r * 0.25)), z: L.z + Math.sin(a) * r };
+  }
+
+  // the whole crowd yells at once (a charge, a surge, a car going up)
+  roar(pos = null) {
+    if (!this.enabled) return;
+    const c = this.ctx, t = c.currentTime + 0.02;
+    const { node, level } = this._out(pos || this._randomCrowdPos?.() || null, 0.35 * (0.6 + this.crowdLevel), 18, 200);
+    if (level < 0.01) return;
+    const dur = R(1.2, 2.4);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.connect(node);
+    for (let k = 0; k < 14; k++) this._voice(lp, t + Math.random() * 0.35, dur * R(0.6, 1), R(150, 330), Math.random() < 0.6 ? 'a' : 'o', 0.05, R(-0.25, 0.05));
+    if (this.voices?.shouts.length) for (let k = 0; k < 4; k++) this._playBuf(this.voices.shouts[Math.floor(Math.random() * this.voices.shouts.length)], { pos, vol: 0.35, rate: R(0.92, 1.08), when: Math.random() * 0.6, ref: 14, max: 160, lowpass: 3000 });
+  }
+
+  // things being smashed nearby: barriers thrown, bins kicked over, shutters battered, windows
+  ambientCrash() {
+    if (!this.enabled) return;
+    const pos = this._aroundListener(12, 70), r = Math.random();
+    if (r < 0.25 && this.samples.glass) this.glass(pos);
+    else if (r < 0.5) this.shutter(pos);
+    else this.crash(pos, R(0.6, 1.2));
+  }
+
+  // metal crash with a few bounces (crowd barrier, bin, scooter, street furniture)
+  crash(pos, size = 1) {
+    if (!this.enabled) return;
+    const c = this.ctx;
+    const { node, level } = this._out(pos, 0.7 * size, 6, 120);
+    if (level < 0.005) return;
+    const base = R(0.7, 1.4);
+    const modes = [380, 830, 1270, 1960, 2710, 3880].map((f) => f * base * R(0.95, 1.05));
+    let tt = c.currentTime + 0.01;
+    const hits = 2 + Math.floor(Math.random() * 3);
+    for (let h = 0; h < hits; h++) {
+      const amp = h === 0 ? 1 : R(0.25, 0.6);
+      for (const f of modes) {
+        const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = R(18, 40);
+        const g = c.createGain(); this._env(g.gain, tt, 0.002, amp * R(2, 4), R(0.2, 0.8) * size);
+        bp.connect(g).connect(node); this._noise(this.white, bp, tt, 0.03);
+      }
+      // body thud + scrape
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 600;
+      const tg = c.createGain(); this._env(tg.gain, tt, 0.002, amp * 0.9, 0.12);
+      lp.connect(tg).connect(node); this._noise(this.brown, lp, tt, 0.15);
+      tt += R(0.12, 0.35);
+    }
+    const hp = c.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 3200; hp.Q.value = 1;
+    const sg = c.createGain(); sg.gain.setValueAtTime(0.0001, tt); sg.gain.exponentialRampToValueAtTime(0.15 * size, tt + 0.05); sg.gain.exponentialRampToValueAtTime(0.0001, tt + R(0.3, 0.7));
+    hp.connect(sg).connect(node); this._noise(this.white, hp, tt, 0.8);
+  }
+
+  // shop shutter being kicked and battered: rattling corrugated steel
+  shutter(pos) {
+    if (!this.enabled) return;
+    const c = this.ctx, t = c.currentTime + 0.01;
+    const { node, level } = this._out(pos, 0.6, 6, 110);
+    if (level < 0.005) return;
+    const kicks = 1 + Math.floor(Math.random() * 3);
+    for (let k = 0; k < kicks; k++) {
+      const tt = t + k * R(0.35, 0.6);
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = R(700, 1300); bp.Q.value = 2.5;
+      const am = c.createGain(); am.gain.value = 0;
+      const lfo = c.createOscillator(); lfo.type = 'square'; lfo.frequency.value = R(14, 24);
+      const lg = c.createGain(); lg.gain.value = 0.5; lfo.connect(lg).connect(am.gain);
+      const g = c.createGain(); this._env(g.gain, tt, 0.003, 1.6, R(0.4, 0.8));
+      bp.connect(am).connect(g).connect(node);
+      this._noise(this.white, bp, tt, 0.9); lfo.start(tt); lfo.stop(tt + 1);
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 250;
+      const tg = c.createGain(); this._env(tg.gain, tt, 0.002, 1.2, 0.15);
+      lp.connect(tg).connect(node); this._noise(this.brown, lp, tt, 0.2);
+    }
+  }
+
+  // explosions going off around the city (gas canisters, car tanks, mortars)
+  distantExplosion() {
+    if (!this.enabled) return;
+    const L = this.listener, a = Math.random() * 6.28, r = R(45, 170);
+    this.explosion({ x: L.x + Math.cos(a) * r, z: L.z + Math.sin(a) * r }, R(0.5, 1.1));
   }
 
   // ------------------------------------------------------------ voices
@@ -349,15 +481,21 @@ export class Audio {
   chant() {
     if (!this.enabled) return;
     const c = this.ctx, t = c.currentTime + 0.05;
+    const pos = this._randomCrowdPos ? this._randomCrowdPos() : null;
+    // rendered French chants (many voices, pre-mixed), repeated two or three times
+    if (this.voices?.chants.length) {
+      const buf = this.voices.chants[Math.floor(Math.random() * this.voices.chants.length)];
+      const reps = 2 + Math.floor(Math.random() * 2), rate = R(0.96, 1.04);
+      for (let r = 0; r < reps; r++) this._playBuf(buf, { pos, vol: 0.7 * (0.6 + this.crowdLevel), rate, when: r * ((buf.duration - 1.6) / rate + R(0.1, 0.3)), ref: 14, max: 170, lowpass: 3400 });
+      return;
+    }
+    // synthesised fallback rhythms: "Li-bé-rez la Pa-les-tine", "Tout le monde dé-teste la po-lice", "Po-lice, as-sas-sins"
     const patterns = [
-      // "Pa-ris ! Pa-ris !"  /  "Pa-les-tine !"  /  "Li-ber-té !"  / "Ici c'est Pa-ris"
-      [['a', 0.22], ['i', 0.45], [null, 0.3], ['a', 0.22], ['i', 0.45], [null, 0.35], ['a', 0.22], ['i', 0.5]],
-      [['a', 0.2], ['e', 0.2], ['i', 0.55], [null, 0.4], ['a', 0.2], ['e', 0.2], ['i', 0.55]],
-      [['i', 0.2], ['e', 0.2], ['e', 0.55], [null, 0.4], ['i', 0.2], ['e', 0.2], ['e', 0.55]],
-      [['i', 0.18], ['i', 0.18], ['e', 0.2], ['a', 0.2], ['i', 0.5], [null, 0.4], ['i', 0.18], ['i', 0.18], ['e', 0.2], ['a', 0.2], ['i', 0.5]],
+      [['i', 0.18], ['e', 0.18], ['e', 0.2], ['a', 0.18], ['a', 0.18], ['e', 0.18], ['i', 0.5], [null, 0.35]],
+      [['u', 0.16], ['e', 0.16], ['o', 0.2], ['e', 0.18], ['e', 0.18], ['a', 0.16], ['o', 0.18], ['i', 0.45], [null, 0.35]],
+      [['o', 0.2], ['i', 0.45], [null, 0.15], ['a', 0.2], ['a', 0.2], ['a', 0.5], [null, 0.35]],
     ];
     const pat = patterns[Math.floor(Math.random() * patterns.length)];
-    const pos = this._randomCrowdPos ? this._randomCrowdPos() : null;
     const { node, level } = this._out(pos, 0.5 * (0.5 + this.crowdLevel), 14, 160);
     if (level < 0.01) return;
     const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200; lp.connect(node);
@@ -374,6 +512,11 @@ export class Audio {
 
   shout(pos) {
     if (!this.enabled) return;
+    if (this.voices?.shouts.length && Math.random() < 0.85) {
+      const buf = this.voices.shouts[Math.floor(Math.random() * this.voices.shouts.length)];
+      this._playBuf(buf, { pos, vol: R(0.45, 0.75), rate: R(0.94, 1.08), ref: 6, max: 90 });
+      return;
+    }
     const c = this.ctx, t = c.currentTime + 0.02;
     const { node, level } = this._out(pos, 0.35, 5, 70);
     if (level < 0.01) return;
@@ -518,6 +661,8 @@ export class Audio {
     const fb = c.createGain(); fb.gain.value = 0.28;
     g.connect(d); d.connect(fb).connect(node);
     if (size > 0.7) this.glass(pos);
+    // the crowd answers a big bang with a roar
+    if (size > 0.7 && Math.random() < 0.6) setTimeout(() => this.roar(pos), R(250, 800));
     // recorded detonation texture on top of the synthesised blast
     if (this.samples.fwStreet) { const buf = this.samples.fwStreet; this.playSample('fwStreet', { pos, vol: 0.7 * size, offset: R(0, buf.duration - 2), dur: R(0.8, 1.4), ref: 10, max: 200, fadeIn: 0.003, rate: R(0.7, 0.85), filter: 2200 }); }
   }

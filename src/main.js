@@ -1,4 +1,4 @@
-// Paris Riot — bootstrap, game loop and state machine.
+// Paris Burning — bootstrap, game loop and state machine.
 import * as THREE from 'three';
 import { World } from './world.js';
 import { Effects } from './effects.js';

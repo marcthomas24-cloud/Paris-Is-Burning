@@ -1,4 +1,4 @@
-# Paris Riot
+# Paris Burning
 
 A browser-based third-person action game built with Three.js. You play a CRS riot officer on a chaotic Paris boulevard and deal with three dynamic incidents. Characters are rigged glTF humans with motion-capture animation, bundled locally. The city, effects and audio are generated in code.
 
@@ -144,10 +144,11 @@ On an AMD Radeon integrated laptop GPU, the dense crowd areas run at roughly 50 
 
 The soundscape layers openly licensed field recordings with synthesis:
 - **Recorded layers:**
-  - A real crowd bed (two detuned copies) and a distant stadium-style roar.
+  - A real crowd bed (two detuned copies), darkened and kept low under an angry mob walla.
+  - **French voices:** 26 individual shouts and curses (*Va te faire foutre, la police !*, *Putain de flics !*, *Libérez la Palestine !*, *La France va en enfer !*, *Tout le monde déteste la police !* and more), 7 chants sung by 18 voices each, and a 24 s seamless mob loop of about 170 overlapping curses. They are rendered offline with Piper TTS from 44 different speakers (see `tools/voices/render.py`), then pitched up, saturated and given room reverb so they sound shouted.
   - French two-tone *pin-pon* sirens on two to four virtual vehicles that drive past, with distance, panning and doppler.
   - Distant fireworks backdrops, random firecracker and mortar bangs around the city, real glass breaks, and police whistles.
-- **Synthesised layers:** chant rhythms, individual shouts, a police helicopter circling overhead, car alarms when vehicles catch fire, fire crackle near flames, explosions (with a recorded detonation layered on top), footsteps and baton impacts.
+- **Synthesised layers:** an angry roar that swells irregularly, whole-crowd yells after big bangs, metal crashes (barriers and bins thrown, with bounces), shop shutters being kicked, explosions going off around the city every few seconds, chant rhythms and shouts (used only if the voice clips fail to load), a police helicopter circling overhead, car alarms when vehicles catch fire, fire crackle near flames, explosions (with a recorded detonation layered on top), footsteps and baton impacts.
 - **Dynamic mix:** crowd and siren intensity rise with panic, active threats and mission phase.
 
 If a recording can't load or decode (for example, older Safari can't decode Ogg Vorbis), that layer falls back to synthesis automatically.
@@ -158,11 +159,12 @@ If a recording can't load or decode (for example, older Safari can't decode Ogg 
 |---|---|---|---|
 | `siren_twotone.ogg` | Deux-Tons-Pompiers-France.ogg | Manotechnologie | CC BY-SA 4.0 |
 | `crowd_large.wav` (trimmed, mono, 24 kHz loop) | 360703 eguobyte large-crowd-medium-distance-stereo.wav | eguobyte | CC0 |
-| `stadium.ogg` | WWS FootballAustriavs.Sweden.ogg | Work With Sounds / Torsten Nilsson | CC BY 4.0 |
 | `fireworks_far1.ogg`, `fireworks_far3.ogg` | Fireworks in distance 1 / 3.ogg | ezwa | Public domain |
 | `fireworks_street.ogg` | Silvester fireworks from the street 03 end.ogg | stephan | Public domain |
 | `glass.wav` | Glass breaking (Gravity Sound).wav | Gravity Sound | CC BY 4.0 |
 | `whistle.ogg` | Bobbypfeife.ogg | Christoph Waghubinger (Lewenstein) | CC BY-SA 3.0 AT |
+
+`voices/*.wav` are generated with [Piper](https://github.com/rhasspy/piper) and the `fr_FR-mls-medium` voice from rhasspy/piper-voices (CC BY 4.0, trained on Multilingual LibriSpeech). To regenerate them: `pip install piper-tts numpy`, download the voice's `.onnx` and `.onnx.json`, then run `python tools/voices/render.py <voice.onnx> public/assets/audio/voices`. On Windows, keep the venv on a short path, because the onnxruntime install fails on paths longer than 260 characters.
 
 The CC BY and CC BY-SA recordings require attribution. The game credits them on the Controls screen. Under CC BY-SA, the trimmed siren and whistle files (and any edits to them) stay under that licence; the rest of the game is unaffected.
 
