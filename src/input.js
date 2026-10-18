@@ -1,4 +1,5 @@
 // Keyboard / mouse input with pointer lock and per-frame "pressed" edges.
+// Touch controls (touch.js) feed the same keys/buttons plus an analog stick axis.
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
@@ -9,6 +10,8 @@ export class Input {
     this.locked = false;
     this.wasLocked = false;
     this.onLockLost = null;
+    this.axis = { x: 0, y: 0 }; // virtual stick: x right, y down (-1..1)
+    this.touch = matchMedia('(hover: none) and (pointer: coarse)').matches || /[?&]touch/.test(location.search);
     addEventListener('keydown', (e) => {
       if (e.repeat) return;
       this.keys.add(e.code); this.edges.add(e.code);
@@ -30,7 +33,17 @@ export class Input {
     });
   }
 
+  // virtual buttons from the touch controls: 'Mouse0', 'Mouse2', key codes
+  setButton(code, down) {
+    if (code.startsWith('Mouse')) { const b = +code.slice(5); if (down) this.buttons.add(b); else this.buttons.delete(b); }
+    else if (down) this.keys.add(code); else this.keys.delete(code);
+    if (down) this.edges.add(code);
+  }
+
+  look(dx, dy) { this.dx += dx; this.dy += dy; }
+
   lock() {
+    if (this.touch) return; // no pointer lock on touch screens
     try {
       const p = this.canvas.requestPointerLock && this.canvas.requestPointerLock();
       if (p && p.catch) p.catch(() => {});

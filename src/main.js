@@ -12,6 +12,7 @@ import { Input } from './input.js';
 import { loadHumans, makeEnvMap, Humans } from './humans.js';
 import { IncidentScheduler } from './events.js';
 import { Post } from './post.js';
+import { TouchControls } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,6 +55,7 @@ class Game {
     this.hitStopT = 0;
     this.state = 'menu';
     this.input = new Input(canvas);
+    if (this.input.touch) { this.pr = Math.min(this.maxPR, 1.0); this.renderer.setPixelRatio(this.pr); sun.shadow.mapSize.set(1024, 1024); }
     this.audio = new Audio();
     this.ready = false;
     this.boot();
@@ -75,6 +77,7 @@ class Game {
     } catch (e) {
       console.warn('Character models failed to load — using procedural fallback rigs', e);
     }
+    this.audio.prefetch(); // download recordings now; decoding waits for the first click
     loading.textContent = 'Populating the boulevard…';
     await new Promise((r) => setTimeout(r, 30));
     this.player = new Player(this);
@@ -98,7 +101,11 @@ class Game {
         if (this.state === 'playing') this.pause(); else if (this.state === 'paused') this.resume();
       }
       if (e.code === 'KeyH') $('controls-hint').classList.toggle('hidden');
+      if (e.code === 'KeyM') { this.audio.init(); this.audio.toggleMute(); }
     });
+    // leaving the tab or app pauses the game (pointer lock covers this on desktop)
+    document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'playing') this.pause(); });
+    addEventListener('blur', () => { if (this.state === 'playing' && !this.input.locked && this.input.touch) this.pause(); });
     canvas.addEventListener('mousedown', () => {
       if (this.state === 'playing' && !this.input.locked) this.input.lock();
     });
@@ -118,15 +125,30 @@ class Game {
       const a = b.dataset.action;
       if (a === 'play') this.play();
       else if (a === 'controls') { this.prevScreen = this.state === 'paused' ? 'pause-screen' : 'menu'; this._screen('controls-screen'); }
+      else if (a === 'audio') { this.prevScreen = this.state === 'paused' ? 'pause-screen' : 'menu'; this._screen('audio-screen'); }
+      else if (a === 'pause') { if (this.state === 'playing') this.pause(); }
+      else if (a === 'mute') this.audio.toggleMute();
       else if (a === 'back') this._screen(this.prevScreen || 'menu');
       else if (a === 'restart') this.restart();
       else if (a === 'resume') this.resume();
     }));
     $('onboarding').addEventListener('click', () => this._dismissOnboarding());
+    this.touch = new TouchControls(this);
+    // audio settings: sliders on the Audio screen and the HUD mute button
+    const syncAudioUI = (s) => {
+      for (const k of ['master', 'ambience', 'effects']) { const v = Math.round(s[k] * 100); $('vol-' + k).value = v; $('vol-' + k + '-out').textContent = v + '%'; }
+      $('vol-mute').checked = s.muted;
+      $('hud-mute').classList.toggle('muted', s.muted);
+      $('hud-mute').setAttribute('aria-pressed', String(s.muted));
+    };
+    for (const k of ['master', 'ambience', 'effects']) $('vol-' + k).addEventListener('input', (e) => this.audio.setSetting(k, e.target.value / 100));
+    $('vol-mute').addEventListener('change', (e) => { this.audio.init(); this.audio.setSetting('muted', e.target.checked); });
+    this.audio.onSettings = syncAudioUI;
+    syncAudioUI(this.audio.getSettings());
   }
 
   _screen(id) {
-    for (const s of ['menu', 'controls-screen', 'pause-screen', 'end-screen']) $(s).classList.toggle('hidden', s !== id);
+    for (const s of ['menu', 'controls-screen', 'audio-screen', 'pause-screen', 'end-screen']) $(s).classList.toggle('hidden', s !== id);
   }
 
   play() {
@@ -156,6 +178,7 @@ class Game {
   pause() {
     if (this.state !== 'playing') return;
     this.state = 'paused';
+    this.touch.releaseAll();
     this._screen('pause-screen');
     this.audio.setPaused(true);
   }
@@ -225,6 +248,7 @@ class Game {
     else if (this.state === 'playing' && this.onboarding) {
       this.onboardT += dt;
       this._ambientUpdate(dt, true);
+      this._audioMix(dt); // the street is already audible behind the briefing
       if (this.onboardT > 1.0 && (this.input.pressed('Mouse0') || this.input.pressed('KeyW') || this.input.pressed('Space') || this.input.pressed('Enter'))) this._dismissOnboarding();
     } else this._ambientUpdate(dt, this.state === 'menu');
     this.input.endFrame();
@@ -301,6 +325,25 @@ class Game {
     });
   }
 
+  // audio listener + mix
+  _audioMix(dt) {
+    const a = this.audio;
+    if (!a.enabled) return;
+    a.setListener(this.camera.position.x, this.camera.position.z, this.cameraRig.yaw);
+    const close = this.crowd.npcs.filter((n) => n.distToPlayer < 20).length;
+    const panic = this.crowd.npcs.filter((n) => n.state === 'flee' && n.distToPlayer < 30).length;
+    a.setCrowdLevel(Math.min(1, close / 18 + panic / 10));
+    const vanD = Math.min(...this.world.lightBars.map((b) => b.distanceTo(this.player.pos)));
+    a.setEngineProximity(Math.max(0, 1 - vanD / 25));
+    // fires the mixer can place: persistent fires plus burning petrol pools
+    const fires = this._fireList || (this._fireList = []);
+    fires.length = 0;
+    for (const f of this.world.fires) fires.push({ pos: f.pos, k: 0.6 * f.scale * (f.boost || 1) });
+    for (const f of this.effects.flames) fires.push({ pos: f.pos, k: 1.6 * (1 - f.t / f.life) + 0.3 });
+    const threats = this.crowd.threats().length;
+    a.update(dt, { intensity: Math.min(1, panic / 8 + threats / 5 + (this.missions.phase || 0) * 0.2), fires });
+  }
+
   update(rawDt) {
     // hit-stop: brief slow-motion on impacts
     let dt = rawDt;
@@ -325,18 +368,7 @@ class Game {
     this.cameraRig.update(rawDt, this.player, near);
     this._lights();
 
-    // audio listener + mix
-    this.audio.setListener(this.camera.position.x, this.camera.position.z, this.cameraRig.yaw);
-    const close = this.crowd.npcs.filter((n) => n.distToPlayer < 20).length;
-    const panic = this.crowd.npcs.filter((n) => n.state === 'flee' && n.distToPlayer < 30).length;
-    this.audio.setCrowdLevel(Math.min(1, close / 18 + panic / 10));
-    const vanD = Math.min(...this.world.lightBars.map((b) => b.distanceTo(this.player.pos)));
-    this.audio.setEngineProximity(Math.max(0, 1 - vanD / 25));
-    let fireDist = 999;
-    for (const f of this.world.fires) { const d = Math.hypot(f.pos.x - this.camera.position.x, f.pos.z - this.camera.position.z); if (d < fireDist) fireDist = d; }
-    const threats = this.crowd.threats().length;
-    this.audio.update(rawDt, { intensity: Math.min(1, panic / 8 + threats / 5 + (this.missions.phase || 0) * 0.2), fireDist });
-
+    this._audioMix(rawDt);
     this.hud.update(rawDt);
     if (this.pendingEnd) { this.pendingEnd.t -= rawDt; if (this.pendingEnd.t <= 0) this._showEnd(); }
   }

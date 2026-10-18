@@ -119,8 +119,10 @@ export class Player {
       if (input.down('KeyS')) wish.sub(camF);
       if (input.down('KeyD')) wish.add(camR);
       if (input.down('KeyA')) wish.sub(camR);
+      // analog stick (touch): partial deflection walks slower
+      if (input.axis.x || input.axis.y) wish.addScaledVector(camF, -input.axis.y).addScaledVector(camR, input.axis.x);
     }
-    if (wish.lengthSq() > 0) wish.normalize();
+    if (wish.lengthSq() > 1) wish.normalize();
 
     // --- stance & attacks
     this.blocking = !this.dead && input.mouse(2) && !this.attack && this.dodgeT <= 0;
@@ -131,20 +133,22 @@ export class Player {
       this.attackBuffer = 0;
       const target = this._findTarget(camF);
       this.attack = { phase: 'windup', t: 0, target, hit: false };
+      // the whoosh peaks as the baton comes down, just before the impact
+      g.audio.swing(this.pos);
       if (target) this.heading = Math.atan2(target.pos.x - this.pos.x, target.pos.z - this.pos.z);
       else this.heading = Math.atan2(camF.x, camF.z);
     }
     if (this.attack) {
       const a = this.attack;
       a.t += dt;
-      if (a.phase === 'windup' && a.t >= WINDUP) { a.phase = 'strike'; a.t = 0; g.audio.swing(); this._resolveStrike(); }
+      if (a.phase === 'windup' && a.t >= WINDUP) { a.phase = 'strike'; a.t = 0; this._resolveStrike(); }
       else if (a.phase === 'strike' && a.t >= STRIKE) { a.phase = 'recover'; a.t = 0; }
       else if (a.phase === 'recover' && a.t >= RECOVER) this.attack = null;
     }
 
     // --- dodge
     if (!this.dead && input.pressed('Space') && this.dodgeCool <= 0 && this.stamina > 12 && this.staggerT <= 0) {
-      this.dodgeDir.copy(wish.lengthSq() > 0 ? wish : this.forward().negate());
+      this.dodgeDir.copy(wish.lengthSq() > 0 ? wish : this.forward().negate()).normalize();
       this.dodgeT = 0.32; this.dodgeCool = 0.75; this.invuln = 0.28;
       this.stamina -= 18;
       this.attack = null;

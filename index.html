@@ -2,7 +2,9 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Paris Burning</title>
   <link rel="stylesheet" href="/src/style.css" />
 </head>
@@ -48,6 +50,22 @@
       <div id="crosshair"></div>
       <div id="offscreen-arrow"></div>
       <div id="threat-warning" class="hidden">⚠ PETROL BOMB</div>
+
+      <div id="hud-buttons">
+        <button data-action="mute" id="hud-mute" class="hud-btn" aria-label="Mute sound" aria-pressed="false"><span class="ico-on">🔊</span><span class="ico-off">🔇</span></button>
+        <button data-action="pause" class="hud-btn" aria-label="Pause">❚❚</button>
+      </div>
+
+      <!-- Touch controls (shown on touch screens only) -->
+      <div id="touch-ui">
+        <div id="stick-base"><div id="stick-knob"></div></div>
+        <div id="touch-buttons">
+          <button data-k="ShiftLeft" class="tb toggle" id="tb-sprint" aria-label="Sprint (toggle)">SPRINT</button>
+          <button data-k="Space" class="tb" id="tb-dodge" aria-label="Dodge">DODGE</button>
+          <button data-k="Mouse2" class="tb" id="tb-shield" aria-label="Shield (hold)">SHIELD</button>
+          <button data-k="Mouse0" class="tb" id="tb-strike" aria-label="Baton strike">STRIKE</button>
+        </div>
+      </div>
     </div>
 
     <!-- Onboarding -->
@@ -55,7 +73,17 @@
       <div class="ob-title">BRIEFING</div>
       <p>You are a CRS officer on Boulevard de la République. Most demonstrators are peaceful.
          Only act against individuals who are <b class="red">actively aggressive</b> — they are marked with a red ring and red minimap blip.</p>
-      <div class="ob-grid">
+      <div class="ob-grid touch-only">
+        <div><b>Left thumb</b><span>Move</span></div>
+        <div><b>Right drag</b><span>Camera</span></div>
+        <div><b>STRIKE</b><span>Baton</span></div>
+        <div><b>SHIELD</b><span>Hold to block</span></div>
+        <div><b>DODGE</b><span>Quick step</span></div>
+        <div><b>SPRINT</b><span>Toggle</span></div>
+        <div><b>Prompt</b><span>Tap to arrest</span></div>
+        <div><b>❚❚</b><span>Pause</span></div>
+      </div>
+      <div class="ob-grid desk-only">
         <div><b>WASD</b><span>Move</span></div>
         <div><b>Mouse</b><span>Camera</span></div>
         <div><b>Shift</b><span>Sprint</span></div>
@@ -65,8 +93,8 @@
         <div><b>E</b><span>Arrest / respond</span></div>
         <div><b>Esc</b><span>Pause</span></div>
       </div>
-      <p class="dim">Striking peaceful demonstrators costs points. Arrest downed aggressors with E.</p>
-      <div class="dim small">Click to begin</div>
+      <p class="dim">Striking peaceful demonstrators costs points. Arrest downed aggressors <span class="desk-only">with E</span><span class="touch-only">by tapping the prompt</span>.</p>
+      <div class="dim small"><span class="desk-only">Click</span><span class="touch-only">Tap</span> to begin</div>
     </div>
 
     <!-- Menus -->
@@ -77,9 +105,11 @@
         <div class="menu-buttons">
           <button data-action="play" class="primary">PLAY</button>
           <button data-action="controls">CONTROLS</button>
+          <button data-action="audio">AUDIO</button>
           <button data-action="restart">RESTART</button>
         </div>
         <div id="loading" class="dim small">Building the city…</div>
+        <div id="rotate-hint" class="dim small">Best played in landscape — rotate your device.</div>
       </div>
     </div>
 
@@ -95,10 +125,26 @@
           <tr><td>Space</td><td>Dodge / quick step</td></tr>
           <tr><td>E</td><td>Arrest a downed aggressor · respond to incident</td></tr>
           <tr><td>H</td><td>Toggle control hints</td></tr>
+          <tr><td>M</td><td>Mute / unmute sound</td></tr>
           <tr><td>Esc</td><td>Pause</td></tr>
         </table>
+        <p class="dim touch-only">Touch: drag on the left of the screen to move, drag on the right to look. STRIKE, SHIELD (hold), DODGE and SPRINT (toggle) are bottom right; tap the on-screen prompt to arrest or respond.</p>
         <p class="dim">Threats are determined by behaviour, never appearance. Aggressors show a red ring when acting violently.</p>
-        <p class="dim small credits">Sound recordings via Wikimedia Commons: "Deux-Tons-Pompiers-France" by Manotechnologie (CC BY-SA 4.0) · "Glass breaking" by Gravity Sound (CC BY 4.0) · "Bobbypfeife" by Christoph Waghubinger (CC BY-SA 3.0 AT) · crowd by eguobyte (CC0) · fireworks by ezwa and stephan (public domain). Characters: Mixamo (Adobe), Ready Player Me, via the three.js examples.</p>
+        <p class="dim small credits">Sound recordings via Wikimedia Commons: French sirens by Manotechnologie (CC BY-SA 4.0) · protest chanting by Hardouin (CC BY 3.0) · football crowd by Torsten Nilsson and bonfire by Werstas, Work With Sounds (CC BY 4.0) · glass breaking and punches by Gravity Sound (CC BY 4.0) · call to prayer by Fraguando (CC BY-SA 4.0) · metal clanging by Camshaft64 (CC BY-SA 4.0) · "Bobbypfeife" by Christoph Waghubinger (CC BY-SA 3.0 AT) · crowds by eguobyte and unfa, referee whistle by SpliceSound (CC0) · street, fireworks, fire, helicopter, yelling, explosions and grunts by cori, ezwa, stephan, tcpp, Fg2 and stilgar (public domain). Impact sounds by Kenney (CC0). Characters: Mixamo (Adobe), Ready Player Me, Microsoft Rocketbox.</p>
+        <div class="menu-buttons"><button data-action="back" class="primary">BACK</button></div>
+      </div>
+    </div>
+
+    <div id="audio-screen" class="screen hidden">
+      <div class="menu-inner">
+        <h2>AUDIO</h2>
+        <div class="audio-settings">
+          <label for="vol-master">Master</label><input type="range" id="vol-master" min="0" max="100" step="1" /><output id="vol-master-out" for="vol-master"></output>
+          <label for="vol-ambience">Ambience</label><input type="range" id="vol-ambience" min="0" max="100" step="1" /><output id="vol-ambience-out" for="vol-ambience"></output>
+          <label for="vol-effects">Effects</label><input type="range" id="vol-effects" min="0" max="100" step="1" /><output id="vol-effects-out" for="vol-effects"></output>
+          <label for="vol-mute">Mute</label><input type="checkbox" id="vol-mute" /><span class="dim small desk-only">M key</span>
+        </div>
+        <p class="dim small">Settings are saved on this device.</p>
         <div class="menu-buttons"><button data-action="back" class="primary">BACK</button></div>
       </div>
     </div>
@@ -108,6 +154,7 @@
         <h2>PAUSED</h2>
         <div class="menu-buttons">
           <button data-action="resume" class="primary">RESUME</button>
+          <button data-action="audio">AUDIO</button>
           <button data-action="controls">CONTROLS</button>
           <button data-action="restart">RESTART</button>
         </div>

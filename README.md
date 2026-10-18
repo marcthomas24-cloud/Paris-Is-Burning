@@ -1,6 +1,6 @@
 # Paris Burning
 
-A browser-based third-person action game built with Three.js. You play a CRS riot officer on a chaotic Paris boulevard and deal with three dynamic incidents. Characters are rigged glTF humans with motion-capture animation, bundled locally. The city, effects and audio are generated in code.
+A browser-based third-person action game built with Three.js. You play a CRS riot officer on a chaotic Paris boulevard and deal with three dynamic incidents. Characters are rigged glTF humans with motion-capture animation, bundled locally. The city and effects are generated in code; the soundscape mixes openly licensed recordings with some synthesis. It plays on desktop (keyboard and mouse) and on phones and tablets (touch controls).
 
 ## Running
 
@@ -20,7 +20,7 @@ npm run build      # outputs a static site to dist/
 npm run preview    # optional: serve dist/ locally to check it
 ```
 
-`dist/` is a fully static site of about 20 MB (character models 10 MB, audio 9 MB), with relative paths (`base: './'`). It works at a domain root or in a sub-folder. Both were tested: with a plain static server at `/`, and from `/dist/`. There's no server component and nothing needs an API key.
+`dist/` is a fully static site of about 20 MB (character models 15 MB, audio 4.6 MB), with relative paths (`base: './'`). It works at a domain root or in a sub-folder. Both were tested: with a plain static server at `/`, and from `/dist/`. There's no server component and nothing needs an API key.
 
 - **Netlify / Vercel / Cloudflare Pages:** drag and drop the `dist/` folder, or connect the repo with build command `npm run build` and output directory `dist`.
 - **GitHub Pages:** push the contents of `dist/` to a `gh-pages` branch, or use a Pages workflow that runs `npm ci && npm run build` and publishes `dist/`.
@@ -40,7 +40,23 @@ Before publishing commercially, read "Assets and licences" below.
 | Space | Dodge / quick step (brief invulnerability) |
 | E | Arrest a downed aggressor, or extract the officers at the objective |
 | H | Toggle control hints |
+| M | Mute / unmute |
 | Esc | Pause |
+
+**Touch screens (phones and tablets):** touch controls switch on automatically on touch-only devices, or at the first touch on a hybrid laptop. Add `?touch` to the URL to force them on for testing.
+
+| Touch | Action |
+|---|---|
+| Drag on the left of the screen | Floating stick: move (partial push walks slower) |
+| Drag on the right of the screen | Rotate the camera |
+| STRIKE | Baton strike |
+| SHIELD (hold) | Shield stance |
+| DODGE | Dodge |
+| SPRINT | Toggle sprint |
+| Tap the on-screen prompt | Arrest / respond (E) |
+| ❚❚ and 🔊 (top right) | Pause and mute |
+
+On touch screens the HUD is compacted: smaller objective and score panels, the minimap and bars in the top-right corner, at most two alerts at a time, and no keyboard hint panel. Landscape is recommended, but portrait works. Rendering starts at a lower pixel ratio with a smaller shadow map, and the existing dynamic-resolution system adjusts from there.
 
 ## Mission
 
@@ -142,32 +158,28 @@ On an AMD Radeon integrated laptop GPU, the dense crowd areas run at roughly 50 
 
 ## Sound
 
-The soundscape layers openly licensed field recordings with synthesis:
-- **Recorded layers:**
-  - A real crowd bed (two detuned copies), darkened and kept low under a synthesised angry roar.
-  - French two-tone *pin-pon* sirens on two to four virtual vehicles that drive past, with distance, panning and doppler.
-  - Distant fireworks backdrops, random firecracker and mortar bangs around the city, real glass breaks, and police whistles.
-- **Synthesised layers:** an angry roar that swells irregularly, whole-crowd yells after big bangs, metal crashes (barriers and bins thrown, with bounces), shop shutters being kicked, explosions going off around the city every few seconds (and a close, heavy blast every 8–18 s), windows smashing nearby (sometimes several panes in a row), chant rhythms and shouts, a police helicopter circling overhead, car alarms when vehicles catch fire, fire crackle near flames, explosions (with a recorded detonation layered on top), footsteps and baton impacts.
-- **Dynamic mix:** crowd and siren intensity rise with panic, active threats and mission phase.
+The soundscape is built from openly licensed recordings (crowds, protest chanting, French sirens, fire, glass, explosions, impacts, a distant call to prayer). Synthesis fills a few gaps: baton whooshes, low-frequency weight, car alarms and petrol-bomb ignition. Full source list, processing and licence notes: [`tools/audio/SOURCES.md`](tools/audio/SOURCES.md).
 
-If a recording can't load or decode (for example, older Safari can't decode Ogg Vorbis), that layer falls back to synthesis automatically.
+**Mix (`src/audio.js`):** sounds go to an ambience bus or an effects bus, then to a game bus (faded on pause or when the tab is hidden), master volume and mute, makeup gain and a limiter. UI clicks bypass the game bus. A generated street reverb is used as a send for distant sounds.
 
-**Recordings:** none are recordings of current events. They are general-purpose, openly licensed field recordings from Wikimedia Commons, with no identifiable speech.
+**Layers:**
+- **Continuous beds:** two crowd recordings, street traffic and distant fireworks. Each plays random crossfaded windows of its recording, so it never audibly loops. Crowd level and brightness follow how close and agitated the crowd is.
+- **Events, timed from the game loop:** group chants from somewhere in the crowd (12–30 s apart, one at a time), individual distant shouts, whistles, far-off bangs and explosions, smashing and shutter-kicking in the street, a helicopter that comes and goes, and occasionally a distant call to prayer.
+- **Sirens:** French police, gendarmerie and pompiers *deux-tons* on one to three vehicles driving along the cross streets, with distance, panning, air absorption and doppler.
+- **Fire:** three positional voices follow the nearest fires and burning petrol.
+- **Combat:** positional baton whooshes timed to peak at the strike, body, shield and stone impacts, footsteps on the gait, grunts. Explosions layer a recorded blast, a low thump, debris (close by only) and a long rumble. Petrol bombs layer the bottle breaking, ignition, a small burst and then the fire.
 
-| File | Source (Wikimedia Commons) | Author | Licence |
-|---|---|---|---|
-| `siren_twotone.ogg` | Deux-Tons-Pompiers-France.ogg | Manotechnologie | CC BY-SA 4.0 |
-| `crowd_large.wav` (trimmed, mono, 24 kHz loop) | 360703 eguobyte large-crowd-medium-distance-stereo.wav | eguobyte | CC0 |
-| `fireworks_far1.ogg`, `fireworks_far3.ogg` | Fireworks in distance 1 / 3.ogg | ezwa | Public domain |
-| `fireworks_street.ogg` | Silvester fireworks from the street 03 end.ogg | stephan | Public domain |
-| `glass.wav` | Glass breaking (Gravity Sound).wav | Gravity Sound | CC BY 4.0 |
-| `whistle.ogg` | Bobbypfeife.ogg | Christoph Waghubinger (Lewenstein) | CC BY-SA 3.0 AT |
+**Concurrency:** each category has a voice limit (for example 3 explosions, 5 impacts, 2 shouts, 1 chant) and there is a global cap of 22. A new sound only replaces one of lower priority, weighted by audibility and age, so nearby combat and explosions win over distant detail. Distant impacts, breaks and whooshes are thinned out or skipped. Identical blasts at one spot within 0.25 s merge, and so do impacts within 80 ms. Nearby blasts briefly duck the ambience.
 
-The CC BY and CC BY-SA recordings require attribution. The game credits them on the Controls screen. Under CC BY-SA, the trimmed siren and whistle files (and any edits to them) stay under that licence; the rest of the game is unaffected.
+**Controls:** master, ambience and effects volume and mute are on the Audio screen (main menu and pause menu). They are saved in `localStorage`. **M** toggles mute; touch screens have a mute button on the HUD.
+
+**Robustness:** the AudioContext is created by the first click, and repeated clicks reuse it. A suspended or interrupted context resumes on the next interaction. Recordings start downloading while the city loads. A file that fails to load or decode falls back to a synthesised stand-in or is skipped, so the game never waits for or depends on audio. Touch devices run audio at 32 kHz, and the call to prayer is decoded only while it plays, to save memory.
+
+**Development:** with `?dev` in the URL, `__audioProbe(seconds)` reports per-second RMS and peak levels, clipped samples and active voices, and `__audioEvents(seconds)` counts requested and admitted sounds. Rebuild the audio files with `tools/audio/build_audio.py`.
 
 ## Assets and licences
 
-All assets are bundled locally in `public/assets/models/`, and nothing is fetched at runtime. Everything else (city, props, textures, flags, shirts, particles and audio) is generated procedurally in code.
+All assets are bundled locally in `public/assets/models/` and `public/assets/audio/`, and nothing is fetched from other sites at runtime. Audio sources and licences are listed in [`tools/audio/SOURCES.md`](tools/audio/SOURCES.md). Everything else (city, props, textures, flags, shirts and particles) is generated procedurally in code.
 
 | File | Source | Licence / terms |
 |---|---|---|

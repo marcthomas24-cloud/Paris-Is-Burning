@@ -62,7 +62,7 @@ export class IncidentScheduler {
           const ground = pos.clone().setY(g.world.groundHeight(pos.x, pos.z) + 0.1);
           this.gasClouds.push({ pos: ground, t: 0, life: R(12, 16) });
           g.crowd.disturb(ground, 9, 0.8, 'teargas');
-          g.audio.impact(ground, false, true);
+          g.audio.impact(ground, false, false, 'stone');
         }, R(1.1, 1.5));
       }, i * R(250, 600));
     }
@@ -76,7 +76,7 @@ export class IncidentScheduler {
     g.effects.throwProjectile(from, target.clone().setY(0.1), 'petrol', (pos) => {
       const ground = pos.clone().setY(g.world.groundHeight(pos.x, pos.z));
       g.effects.ignite(ground, R(2.2, 3.0), R(5, 8));
-      g.audio.explosion(ground, R(0.6, 0.9));
+      g.audio.molotov(ground, R(0.8, 1.0));
       g.crowd.disturb(ground, 16, 0.9, 'explosion');
       this._shakeFrom(ground, 0.4);
       const d = g.player.pos.distanceTo(ground);
@@ -138,7 +138,7 @@ export class IncidentScheduler {
       const ground = pos.clone().setY(g.world.groundHeight(pos.x, pos.z));
       const s = R(0.6, 1.0);
       g.effects.ignite(ground, 2.2 + s, R(4, 7));
-      g.audio.explosion(ground, s);
+      g.audio.molotov(ground, 0.6 + s * 0.4);
       g.crowd.disturb(ground, 16, 0.9, 'explosion');
       this._shakeFrom(ground, 0.35);
       if (g.player.pos.distanceTo(ground) < 3.5) g.player.takeDamage(14, ground, null);
@@ -171,13 +171,13 @@ export class IncidentScheduler {
         if (g.state !== 'playing') return;
         const type = Math.random() < 0.4 ? 'bottle' : 'stone';
         g.effects.throwProjectile(this._from(z), this._to(z), type, (pos) => {
-          if (type === 'bottle') g.audio.glass(pos); else g.audio.impact(pos, false, Math.random() < 0.5);
+          if (type === 'bottle') g.audio.glass(pos, 0.6); else g.audio.impact(pos, false, false, Math.random() < 0.6 ? 'stone' : 'shield');
           g.effects.dust(pos, 4);
           g.crowd.disturb(pos, 5, 0.3, 'projectile');
         });
       }, i * R(150, 420));
     }
-    if (Math.random() < 0.6) g.audio.shout(z.crowd);
+    if (Math.random() < 0.6) g.audio.shout(z.crowd, true);
   }
 
   flareUp(z) {

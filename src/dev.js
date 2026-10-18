@@ -44,6 +44,46 @@ export function installDev(game) {
     return { ticks: i, log: window.__bot.log, t: +m.t.toFixed(1), stage: m.stage, hp: +game.player.health.toFixed(0), score: m.score, ended: m.ended, state: game.state };
   };
 
+  // Audio probe: taps the mix before and after the limiter and reports, per second,
+  // RMS and peak level (dBFS), clipped samples and the voices playing.
+  window.__audioProbe = (seconds = 10) => new Promise((resolve) => {
+    const a = game.audio, c = a.ctx;
+    if (!c) return resolve({ error: 'audio not initialised' });
+    const tap = (node) => {
+      const sp = c.createScriptProcessor(4096, 2, 1), acc = { sum: 0, n: 0, peak: 0, clip: 0 };
+      sp.onaudioprocess = (e) => {
+        for (let ch = 0; ch < e.inputBuffer.numberOfChannels; ch++) {
+          const d = e.inputBuffer.getChannelData(ch);
+          for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); acc.sum += v * v; acc.n++; if (v > acc.peak) acc.peak = v; if (v >= 0.999) acc.clip++; }
+        }
+      };
+      const mute = c.createGain(); mute.gain.value = 0;
+      node.connect(sp); sp.connect(mute).connect(c.destination);
+      return { sp, acc };
+    };
+    const pre = tap(a.makeup), post = tap(a.limiter);
+    const dB = (v) => (v > 0 ? +(20 * Math.log10(v)).toFixed(1) : -120);
+    const rows = [];
+    let k = 0;
+    const iv = setInterval(() => {
+      const row = { s: ++k, rms: dB(Math.sqrt(post.acc.sum / Math.max(1, post.acc.n))), peak: dB(post.acc.peak), clip: post.acc.clip, prePeak: dB(pre.acc.peak), voices: a.stats().cats, sirens: a.vehicles.length };
+      rows.push(row);
+      for (const t of [pre, post]) Object.assign(t.acc, { sum: 0, n: 0, peak: 0, clip: 0 });
+      if (k >= seconds) { clearInterval(iv); for (const t of [pre, post]) t.sp.disconnect(); resolve(rows); }
+    }, 1000);
+  });
+
+  // count how often each sound is requested and how often the voice limiter admits it
+  window.__audioEvents = (seconds = 30) => new Promise((resolve) => {
+    const a = game.audio, counts = {}, admitted = {};
+    const names = ['explosion', 'molotov', 'glass', 'impact', 'swing', 'shout', 'chant', 'whistle', 'roar', 'crash', 'shutter', 'firework', 'distantBang', 'footstep', 'hurt', 'thump', 'adhan', 'alarm'];
+    const orig = {};
+    for (const n of names) { orig[n] = a[n]; a[n] = function (...args) { counts[n] = (counts[n] || 0) + 1; return orig[n].apply(this, args); }; }
+    const admit = a._admit;
+    a._admit = function (cat, level) { const v = admit.call(this, cat, level); if (v) admitted[cat] = (admitted[cat] || 0) + 1; return v; };
+    setTimeout(() => { for (const n of names) a[n] = orig[n]; a._admit = admit; resolve({ seconds, requested: counts, admitted }); }, seconds * 1000);
+  });
+
   window.__perf = (frames = 60) => {
     const t0 = performance.now();
     for (let i = 0; i < frames; i++) { game.update(1 / 60); game.render(); }

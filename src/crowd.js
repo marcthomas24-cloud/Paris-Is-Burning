@@ -492,7 +492,7 @@ export class Crowd {
             // the line shoves back: attackers get pushed away and must re-engage
             if (this.rng() < 0.45) { n.knock.copy(dir).multiplyScalar(-3.5); this.setState(n, 'stagger', 0.5); n.staggerBack = true; }
           }
-        } else g.audio.swing();
+        } else g.audio.swing(n.pos);
       }
       n.lastAggro = this.time;
     }
@@ -512,13 +512,14 @@ export class Crowd {
       aim.x += (this.rng() - 0.5) * 1.6; aim.z += (this.rng() - 0.5) * 1.6;
       const proj = g.effects.throwProjectile(from, aim, type, (pos, p, hitPlayer) => {
         if (hitPlayer) g.player.takeDamage(10, from, null, true);
-        if (type === 'bottle') g.audio.glass(pos); else g.audio.impact(pos, false);
+        // a stone on the officer is voiced by the hit / block sound in takeDamage
+        if (type === 'bottle') g.audio.glass(pos); else if (!hitPlayer) g.audio.impact(pos, false, false, 'stone');
         g.effects.dust(pos, 5);
         this.disturb(pos, 6, 0.4, 'projectile');
         if (!hitPlayer && tg.cop && pos.distanceTo(tg.cop.pos) < 1.8) { tg.cop.flinch = 0.4; g.onPoliceLineHit(1, tg.cop); }
       });
       proj.check = (pos) => g.player.hitTest(pos);
-      g.audio.swing();
+      g.audio.swing(n.pos);
       n.lastAggro = this.time;
     }
     if (s === 'throw_rel' && n.st > n.dur) { n.cool = 2.5 + this.rng() * 2.5; this.setState(n, 'circle', n.cool); }
@@ -832,7 +833,7 @@ export class Crowd {
       p.heading = angleLerp(p.heading, headingTo(p.pos, tg.pos), 1 - Math.exp(-dt * 10));
       if (p.atk.phase === 'wind' && p.atk.t > 0.28) {
         p.atk.phase = 'strike'; p.atk.t = 0;
-        this.game.audio.swing();
+        this.game.audio.swing(p.pos);
         const dx = tg.pos.x - p.pos.x, dz = tg.pos.z - p.pos.z, d = Math.hypot(dx, dz);
         if (d < 2.2 && tg.state !== 'down') {
           const dir = new THREE.Vector3(dx / d, 0, dz / d);

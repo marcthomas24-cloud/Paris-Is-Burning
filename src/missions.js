@@ -283,14 +283,14 @@ export class Missions {
     const proj = g.effects.throwProjectile(from, aim, 'petrol', (pos) => {
       const ground = pos.clone().setY(g.world.groundHeight(pos.x, pos.z));
       g.effects.ignite(ground, 3.3, 6);
-      g.audio.explosion(ground);
+      g.audio.molotov(ground, 1.2);
       g.crowd.disturb(ground, 20, 1.0, 'explosion');
       const pd = g.player.pos.distanceTo(ground);
       g.cameraRig.shake(Math.max(0, 0.6 - pd * 0.03));
       if (pd < 4.2) g.player.takeDamage(26 * (1 - pd / 5), ground, V(g.player.pos.x - ground.x, 0, g.player.pos.z - ground.z).normalize().multiplyScalar(3));
     }, Math.max(0.8, Math.min(1.5, d / 14)));
     proj.check = (pos) => g.player.hitTest(pos);
-    g.audio.swing();
+    g.audio.swing(n.pos, true);
     g.hud.alert('PETROL BOMB THROWN!', 'bad', 2.5);
   }
 
