@@ -24,6 +24,13 @@ function angleLerp(a, b, k) {
 }
 function headingTo(from, to) { return Math.atan2(to.x - from.x, to.z - from.z); }
 
+// Looting crews work shop fronts along the boulevard: [side, z]. Each crew
+// breaks into a shop, carries goods off, sets it alight and moves on.
+const LOOT_SITES = [[-1, 98], [1, 92], [-1, 40], [1, 12], [-1, -52], [1, -78], [-1, -138], [1, -142]];
+const CREW_SIZE = 4;
+const CIVILIANS = 16;
+const CROSS = LAYOUT.crossStreets;
+
 const ACTIVITIES = [
   ['chant', 0.17], ['flag', 0.19], ['bigflag', 0.09], ['placard', 0.13], ['film', 0.09], ['banner', 0.04], ['shout', 0.07], ['wander', 0.07], ['clap', 0.05], ['watch', 0.06], ['photo', 0.04],
 ];
@@ -40,15 +47,14 @@ export class Crowd {
     this.time = 0;
     this.count = count;
     this.maxSkinned = MAX_SKINNED;
-    for (let i = 0; i < count; i++) {
-      const outfit = randomOutfit(this.rng);
-      const rig = buildCharacter(this.world, outfit, 'civ');
-      this.scene.add(rig.root);
-      this.npcs.push({ id: i, rig, outfit, pos: V(), vel: V(), knock: V(), anchor: V(), target: V(), focus: V(), stimuli: [], colors: Humans.ready ? outfitColors(outfit) : null });
-    }
+    for (let i = 0; i < count; i++) this._spawn(randomOutfit(this.rng));
+    // looting crews, and passers-by caught up in the violence
+    this.crews = LOOT_SITES.map(([side, z], i) => ({ id: i, side, z0: z, home: z, door: V(), rally: V(), members: [] }));
+    for (const c of this.crews) for (let k = 0; k < CREW_SIZE; k++) { const n = this._spawn(randomOutfit(this.rng, 'looter')); n.kind = 'looter'; n.crew = c; c.members.push(n); }
+    for (let k = 0; k < CIVILIANS; k++) this._spawn(randomOutfit(this.rng, 'civilian')).kind = 'civilian';
     // far-distance instanced crowd (distant agents + background population)
     if (Humans.ready) {
-      this.far = new FarCrowd(this.scene, 520);
+      this.far = new FarCrowd(this.scene, 640);
       this._buildBackground();
       if (this.world.impostors) this.world.impostors.mesh.visible = false;
     }
@@ -67,6 +73,14 @@ export class Crowd {
     this.reset();
   }
 
+  _spawn(outfit) {
+    const rig = buildCharacter(this.world, outfit, 'civ');
+    this.scene.add(rig.root);
+    const n = { id: this.npcs.length, rig, outfit, pos: V(), vel: V(), knock: V(), anchor: V(), target: V(), focus: V(), stimuli: [], colors: Humans.ready ? outfitColors(outfit) : null };
+    this.npcs.push(n);
+    return n;
+  }
+
   pickActivity() {
     let r = this.rng(), acc = 0;
     for (const [a, w] of ACTIVITIES) { acc += w; if (r < acc) return a; }
@@ -76,6 +90,8 @@ export class Crowd {
   reset() {
     this.time = 0;
     const gps = this.world.gatherPoints;
+    this.lastScream = -9;
+    for (const c of this.crews) { c.z0 = c.home; this._placeCrew(c); c.burns = 0; c.burnT = 8 + this.rng() * 25; }
     this.npcs.forEach((n, i) => {
       // first third clusters near the police line so the player starts with a crowd in view
       const gp = i < 34 ? gps[i % 3] : gps[3 + (i % (gps.length - 3))];
@@ -103,7 +119,9 @@ export class Crowd {
       n.rig.root.visible = true;
       n.rig.pose = newPose();
       setRingVisible(n.rig, false);
-      this.equip(n);
+      if (n.kind === 'looter') this._resetLooter(n);
+      else if (n.kind === 'civilian') this._resetCivilian(n);
+      else this.equip(n);
     });
     for (const p of this.police) { p.flinch = 0; p.hp = 1; p.rig.root.position.copy(p.pos); p.rig.root.rotation.y = p.heading; }
     this._makeMarches();
@@ -119,6 +137,259 @@ export class Crowd {
     if (map[n.role]) giveItem(n.rig, map[n.role], this.rng, variant);
     else if (n.role === 'chant' && this.rng() < 0.25) { n.role = 'flag'; giveItem(n.rig, 'flag', this.rng, variant); }
     else clearItem(n.rig);
+  }
+
+  // ------------------------------------------------------------------ looters
+  // Find a reachable spot in front of a shop near the crew's z, plus a rally
+  // point on the pavement where the crew gathers between break-ins.
+  _placeCrew(c) {
+    const inStreet = (z) => CROSS.some((s) => Math.abs(z - s.z) < s.half + 3);
+    c.z0 = Math.max(-150, Math.min(108, c.z0));
+    for (let i = 0; i < 6 && inStreet(c.z0); i++) c.z0 += c.z0 > c.home ? 6 : -6;
+    c.damage = 0; c.broken = false;
+    for (let dz = 0; dz < 14; dz += 1.5) for (const sg of [1, -1]) {
+      const z = c.z0 + dz * sg;
+      if (inStreet(z)) continue;
+      for (let x = 14.6; x > 11; x -= 0.4) {
+        if (this.world.blocked(c.side * x, z, 0.35)) continue;
+        c.door.set(c.side * x, 0, z);
+        const rz = z + (this.rng() < 0.5 ? -3 : 3);
+        c.rally.set(c.side * 11.2, 0, this.world.blocked(c.side * 11.2, rz, 0.4) ? z : rz);
+        return;
+      }
+    }
+    c.door.set(c.side * 12, 0, c.z0); c.rally.set(c.side * 10.5, 0, c.z0);
+  }
+
+  _rallySpot(n) {
+    const c = n.crew;
+    n.anchor.set(c.rally.x + (this.rng() - 0.5) * 2.4, 0, c.rally.z + (this.rng() - 0.5) * 3);
+    if (this.world.blocked(n.anchor.x, n.anchor.z, 0.4)) n.anchor.copy(c.rally);
+  }
+
+  _resetLooter(n) {
+    clearItem(n.rig);
+    n.temperament = 'looter';
+    n.role = this.rng() < 0.5 ? 'shout' : 'watch';
+    n.courage = 0.8 + this.rng() * 0.2;
+    n.speedMul = 0.95 + this.rng() * 0.2;
+    this._rallySpot(n);
+    n.pos.copy(n.anchor);
+    n.focus.copy(n.crew.door);
+    this.setState(n, 'act', 0); n.dur = this.rng() * 6;
+  }
+
+  _lootMove(n, step, speed) {
+    const c = n.crew;
+    n.lootStep = step; n.lootSpeed = speed;
+    if (step === 'door') n.target.set(c.door.x, 0, c.door.z + (this.rng() - 0.5) * 2.4);
+    else if (step === 'rally') n.target.copy(n.anchor);
+    this.setState(n, 'loot_move');
+  }
+
+  _thinkLooter(n, player) {
+    const s = n.state;
+    if (DISABLED.has(s) || s === 'flee' || s === 'surrender' || s.startsWith('arson')) return;
+    // scatter when the officer comes close, then regroup
+    if (n.distToPlayer < 6.5) {
+      clearItem(n.rig);
+      n.fleeFrom = player.pos.clone();
+      this.setState(n, 'flee', 3 + this.rng() * 3);
+      if (this.rng() < 0.3) this.game.audio.shout(n.pos);
+      return;
+    }
+    if (s === 'calm' || s === 'walk') { clearItem(n.rig); this._rallySpot(n); this._lootMove(n, 'rally', 2.2); return; }
+    if (s === 'act') {
+      n.focus.copy(n.crew.door);
+      if (n.st > n.dur) this._lootMove(n, 'door', 2.4);
+    }
+  }
+
+  _startArson(n) {
+    const c = n.crew;
+    giveItem(n.rig, 'bottle');
+    n.target.set(c.side * 10.5, 0, c.door.z + (this.rng() - 0.5) * 4);
+    if (this.world.blocked(n.target.x, n.target.z, 0.4)) n.target.copy(c.rally);
+    n.lootStep = 'arson'; n.lootSpeed = 2.6;
+    this.setState(n, 'loot_move');
+  }
+
+  _updateCrews(dt) {
+    for (const c of this.crews) {
+      c.burnT -= dt;
+      if (c.burnT > 0) continue;
+      c.burnT = 28 + this.rng() * 30;
+      if (c.burns >= 3) continue;
+      const m = c.members.find((o) => o.temperament === 'looter' && o.state === 'act');
+      if (m) this._startArson(m);
+    }
+  }
+
+  _looterTransitions(n, dt) {
+    const c = n.crew, s = n.state, g = this.game;
+    if (s === 'loot_move') {
+      if (Math.hypot(n.target.x - n.pos.x, n.target.z - n.pos.z) > 0.6 && n.st < 14) return;
+      if (n.lootStep === 'door') {
+        n.focus.set(c.side * 30, 0, n.pos.z); // face the shop front
+        if (c.broken) this.setState(n, 'loot_grab', 1.2 + this.rng() * 1.4);
+        else { this.setState(n, 'loot_smash', 2.5 + this.rng() * 2.5); n.hitCyc = Math.floor(n.id * 0.3 - 0.25); }
+      } else if (n.lootStep === 'stash') { clearItem(n.rig); this._lootMove(n, 'rally', 2.0); }
+      else if (n.lootStep === 'arson') { n.focus.copy(c.door); this.setState(n, 'arson_light', 1.3 + this.rng() * 0.8); g.audio.lighter(n.pos); }
+      else { this.setState(n, 'act', 0); n.dur = 2 + this.rng() * 7; }
+    } else if (s === 'loot_smash') {
+      // blows land at the peak of each kick / swing in the animation
+      const cyc = Math.floor(n.st * 1.6 + n.id * 0.3 - 0.25);
+      if (cyc !== n.hitCyc) {
+        n.hitCyc = cyc;
+        const at = n.pos.clone().setY(n.pos.y + 1.0); at.x += c.side * 0.6;
+        c.damage++;
+        if (!c.broken && c.damage >= 6) {
+          c.broken = true;
+          g.audio.glass(at, 1.0); g.audio.shutter(at);
+          g.effects.dust(at, 10);
+          this.disturb(at, 12, 0.6, 'violence', n);
+        } else if (this.rng() < 0.55) g.audio.shutter(at);
+        else g.audio.glass(at, 0.5);
+        g.effects.dust(at, 3);
+      }
+      if (n.st > n.dur) {
+        if (c.broken) this.setState(n, 'loot_grab', 1.2 + this.rng());
+        else { this._rallySpot(n); this._lootMove(n, 'rally', 2.0); }
+      }
+    } else if (s === 'loot_grab' && n.st > n.dur) {
+      giveItem(n.rig, 'loot', this.rng);
+      // carry it off along the pavement
+      const dir = this.rng() < 0.5 ? 1 : -1;
+      n.target.set(c.side * (10.5 + this.rng() * 2), 0, c.door.z + dir * (12 + this.rng() * 8));
+      if (this.world.blocked(n.target.x, n.target.z, 0.4)) n.target.copy(n.anchor);
+      n.lootStep = 'stash'; n.lootSpeed = 1.9;
+      this.setState(n, 'loot_move');
+    } else if (s === 'arson_light' || s === 'arson_wind') {
+      if (n.rig.wick && (s === 'arson_wind' || n.st > 0.5)) {
+        const p = V(); n.rig.wick.getWorldPosition(p);
+        if (Math.random() < 0.7) g.effects.fire.spawn({ pos: p, vel: V().set(0, 0.8, 0), size: 0.16 + Math.random() * 0.1, life: 0.25, alpha: 1, color: new THREE.Color(1, 0.75, 0.3), color2: new THREE.Color(0.9, 0.2, 0), drag: 1 });
+      }
+      if (n.st > n.dur) { if (s === 'arson_light') this.setState(n, 'arson_wind', 0.55); else { this.setState(n, 'arson_throw', 0.4); this._arsonThrow(n); } }
+    } else if (s === 'arson_throw' && n.st > n.dur) {
+      this._rallySpot(n); this._lootMove(n, 'rally', 3.8);
+    }
+  }
+
+  // petrol bomb into the shop: a burst of flame at the door, then the shop
+  // burns. The crew moves on to another shop further along.
+  _arsonThrow(n) {
+    const c = n.crew, g = this.game;
+    clearItem(n.rig);
+    const door = c.door.clone();
+    const from = n.pos.clone().setY(n.pos.y + 1.9);
+    g.audio.swing(n.pos);
+    g.effects.throwProjectile(from, V().set(door.x + c.side * 0.4, 0.8, door.z), 'petrol', () => {
+      const ground = door.clone().setY(this.world.groundHeight(door.x, door.z));
+      g.effects.ignite(ground, 2.4, 7 + this.rng() * 4);
+      g.effects.addFire(V().set(door.x + c.side * 1.1, 1.0, door.z), 1.3, 2.2);
+      g.audio.molotov(ground, 0.9);
+      g.audio.glass(ground, 0.7);
+      this.disturb(ground, 18, 0.95, 'explosion');
+      const d = g.player.pos.distanceTo(ground);
+      if (d < 3.2) g.player.takeDamage(14, ground, null);
+      if (d < 60) g.hud.alert('Rioters have set a shop on fire', 'warn', 2.2, 'shopfire');
+    });
+    c.burns++;
+    c.z0 += (this.rng() < 0.5 ? -1 : 1) * (14 + this.rng() * 8);
+    this._placeCrew(c);
+    for (const m of c.members) if (m !== n && m.state === 'act') { this._rallySpot(m); this._lootMove(m, 'rally', 2.4); }
+  }
+
+  // ------------------------------------------------------------------ civilians
+  _resetCivilian(n) {
+    clearItem(n.rig);
+    n.temperament = 'civilian';
+    n.courage = 0.05 + this.rng() * 0.2;
+    n.speedMul = 0.9 + this.rng() * 0.2;
+    this._placeCivilian(n, null);
+  }
+
+  // put a passer-by near one of the looting crews, already running from it
+  _placeCivilian(n, player) {
+    const p = player && player.pos;
+    let cands = this.crews.filter((c) => { if (!p) return true; const d = c.door.distanceTo(p); return d > 36 && d < 80; });
+    if (!cands.length) cands = this.crews;
+    const c = cands[Math.floor(this.rng() * cands.length)];
+    n.pos.copy(c.rally);
+    for (let k = 0; k < 8; k++) {
+      const x = c.side * (9.8 + this.rng() * 3.5), z = c.door.z + (this.rng() < 0.5 ? -1 : 1) * (3 + this.rng() * 7);
+      if (!this.world.blocked(x, z, 0.4)) { n.pos.set(x, 0, z); break; }
+    }
+    n.anchor.copy(n.pos); n.vel.set(0, 0, 0); n.knock.set(0, 0, 0);
+    n.role = 'cower';
+    n.fleeFrom = c.door.clone();
+    this.setState(n, 'flee', 3 + this.rng() * 3);
+  }
+
+  // closest looter, aggressor or fire to a civilian
+  _nearestDanger(n) {
+    let best = null, bd = 16 * 16;
+    for (const c of this.crews) for (const m of c.members) {
+      if (m.temperament !== 'looter' || m.arrested) continue;
+      const d = (m.pos.x - n.pos.x) ** 2 + (m.pos.z - n.pos.z) ** 2;
+      if (d < bd) { bd = d; best = m.pos; }
+    }
+    for (const o of this.query(n.pos.x, n.pos.z, 12, [])) {
+      if (o.id === undefined || !this.isThreat(o)) continue;
+      const d = (o.pos.x - n.pos.x) ** 2 + (o.pos.z - n.pos.z) ** 2;
+      if (d < bd) { bd = d; best = o.pos; }
+    }
+    for (const f of this.world.fires) {
+      const d = (f.pos.x - n.pos.x) ** 2 + (f.pos.z - n.pos.z) ** 2;
+      if (d < 7 * 7 && d < bd) { bd = d; best = f.pos; }
+    }
+    return best;
+  }
+
+  _scream(n) {
+    if (this.time - this.lastScream < 0.7 || n.distToPlayer > 45) return;
+    this.lastScream = this.time;
+    this.game.audio.scream(n.pos, n.outfit.gender === 'f');
+  }
+
+  _thinkCivilian(n, player, dt) {
+    const s = n.state;
+    if (DISABLED.has(s) || s === 'surrender') return;
+    const danger = this._nearestDanger(n);
+    if (s === 'flee') {
+      if (danger) n.fleeFrom.set(danger.x, 0, danger.z);
+      if (this.rng() < dt * 0.35) this._scream(n);
+      return;
+    }
+    if (danger) {
+      n.fleeFrom = V().set(danger.x, 0, danger.z);
+      this.setState(n, 'flee', 3 + this.rng() * 3);
+      this._scream(n);
+      return;
+    }
+    // well out of sight: rejoin the scene near another crew
+    if (n.distToPlayer > 50 && (s === 'calm' || s === 'act')) { this._placeCivilian(n, player); return; }
+    if (s === 'calm') {
+      // stop and look back at what they ran from
+      n.role = 'cower';
+      this.setState(n, 'act', 0); n.dur = 1.5 + this.rng() * 2.5;
+    }
+    if (n.state === 'act') {
+      if (n.fleeFrom) n.focus.copy(n.fleeFrom);
+      if (n.st > n.dur) {
+        // hurry on, away from the trouble
+        const from = n.fleeFrom || player.pos;
+        tmp.set(n.pos.x - from.x, 0, n.pos.z - from.z);
+        if (tmp.lengthSq() < 0.01) tmp.set(0, 0, 1);
+        tmp.normalize();
+        for (let k = 0; k < 6; k++) {
+          const a = (this.rng() - 0.5) * 1.4, r = 8 + this.rng() * 6;
+          const x = n.pos.x + (tmp.x * Math.cos(a) - tmp.z * Math.sin(a)) * r, z = n.pos.z + (tmp.x * Math.sin(a) + tmp.z * Math.cos(a)) * r;
+          if (!this.world.blocked(x, z, 0.4)) { n.target.set(x, 0, z); break; }
+        }
+        this.setState(n, 'walk');
+      }
+    }
   }
 
   // Groups of demonstrators that move together along the boulevard.
@@ -221,7 +492,7 @@ export class Crowd {
   // Called by the player's baton when a strike connects with this agent.
   onBatonHit(n, dir, attackerPos) {
     const g = this.game;
-    const wasThreat = this.isThreat(n) || (n.script && n.script.active);
+    const wasThreat = this.isThreat(n) || (n.script && n.script.active) || n.temperament === 'looter';
     const fwd = tmp.set(Math.sin(n.heading), 0, Math.cos(n.heading));
     const fromBehind = fwd.dot(dir) > 0.2; // strike travelling in the same direction they face
     n.hitCount++;
@@ -258,6 +529,7 @@ export class Crowd {
     const t = this.time;
     this._rebuildGrid();
     this._updateMarches(dt);
+    this._updateCrews(dt);
     const ppos = player.pos;
     for (const n of this.npcs) {
       if (n.state === 'gone') continue;
@@ -314,7 +586,9 @@ export class Crowd {
       const shadow = n.distToPlayer < 14;
       if (shadow !== n.shadow) { n.shadow = shadow; for (const m of n.rig.meshes) m.castShadow = shadow && !m.userData.detail; }
       const threat = this.isThreat(n) || (n.script && n.script.marked);
-      setRingVisible(n.rig, !!threat && !DISABLED.has(n.state), n.script && n.script.amber ? 'amber' : 'red');
+      // looters caught in the act are marked amber
+      const looting = n.temperament === 'looter' && (n.state === 'loot_smash' || n.state === 'loot_grab' || n.state.startsWith('arson') || n.rig.itemType === 'loot');
+      setRingVisible(n.rig, (!!threat || looting) && !DISABLED.has(n.state), looting || (n.script && n.script.amber) ? 'amber' : 'red');
     }
     if (this.far) { this._drawBackground(t); this.far.end(); }
     this._updatePolice(dt, t, player);
@@ -343,10 +617,21 @@ export class Crowd {
       for (let i = 0; i < n; i++) spots.push([Math.max(-14, Math.min(14, cx + R(-4, 4))), cz + R(-4, 4)]);
     }
     for (let i = 0; i < 14; i++) spots.push([R(-12, 12), R(186, 200)]);
-    this.bg = spots.slice(0, 560).map(([x, z]) => {
-      const o = randomOutfit(rng);
+    // black-clad looting gangs along the shop fronts of the side streets and at the far barricade
+    const gangs = [];
+    for (const s of LAYOUT.crossStreets) for (const xs of [-1, 1]) for (let gI = 0; gI < 3; gI++) {
+      const sz = rng() < 0.5 ? -1 : 1, cx = xs * R(66, 112), cz = s.z + sz * (s.half - 1.4), n = 5 + Math.floor(rng() * 6);
+      for (let i = 0; i < n; i++) gangs.push([cx + R(-2.5, 2.5), cz - sz * R(0, 1.6)]);
+    }
+    for (let gI = 0; gI < 4; gI++) {
+      const cx = R(-12, 12), cz = R(-210, -175), n = 6 + Math.floor(rng() * 6);
+      for (let i = 0; i < n; i++) gangs.push([Math.max(-14, Math.min(14, cx + R(-3, 3))), cz + R(-3, 3)]);
+    }
+    const mk = (x, z, style) => {
+      const o = randomOutfit(rng, style);
       return { x, z, h: rng() * 6.28, ph: rng() * 6.28, kind: o.base || (o.gender === 'f' ? 'michelle' : 'male'), scale: o.height, colors: outfitColors(o), pat: o.shellPattern === 1, walk: rng() < 0.15 };
-    });
+    };
+    this.bg = spots.slice(0, 560).map(([x, z]) => mk(x, z)).concat(gangs.map(([x, z]) => mk(x, z, 'looter')));
   }
 
   _drawBackground(t) {
@@ -360,6 +645,13 @@ export class Crowd {
 
   _react(n, s) {
     if (DISABLED.has(n.state) || n.arrested || n.state === 'surrender') return;
+    if (n.temperament === 'looter') {
+      // only tear gas breaks up a looting crew
+      if (s.type === 'teargas' && s.k > 0.35 && !n.state.startsWith('arson') && n.state !== 'flee') {
+        clearItem(n.rig); n.fleeFrom = s.pos.clone(); this.setState(n, 'flee', 4 + this.rng() * 2);
+      }
+      return;
+    }
     if (n.temperament === 'hostile' && !n.neutralized) {
       // aggressors are hard to scare; explosions they caused don't matter to them
       if (s.type === 'explosion' && s.k > 0.9 && n.attackStyle !== 'bomber') n.fear += 0.3;
@@ -373,6 +665,7 @@ export class Crowd {
       const already = n.state === 'flee';
       n.fleeFrom = s.pos.clone();
       this.setState(n, 'flee', 3 + this.rng() * 3 + s.k * 2);
+      if (!already && n.temperament === 'civilian') this._scream(n);
       if (n.surge) n.surge = null;
       // panic is contagious, but weakens as it spreads
       if (!already && s.k > 0.3 && this.rng() < 0.65) this.disturb(n.pos, 6, s.k * 0.55, 'panic', n);
@@ -386,6 +679,8 @@ export class Crowd {
   // Decisions made at the think rate
   _think(n, player, dt) {
     const g = this.game;
+    if (n.temperament === 'looter') return this._thinkLooter(n, player);
+    if (n.temperament === 'civilian') return this._thinkCivilian(n, player, dt);
     if (n.march && n.temperament === 'peaceful' && !n.surge && (n.state === 'act' || n.state === 'walk' || n.state === 'calm')) {
       // marching group: keep station around the moving group centre
       const g = n.march;
@@ -524,6 +819,7 @@ export class Crowd {
     }
     if (s === 'throw_rel' && n.st > n.dur) { n.cool = 2.5 + this.rng() * 2.5; this.setState(n, 'circle', n.cool); }
     if (n.script && n.script.tick) n.script.tick(n, player, dt);
+    if (n.temperament === 'looter') this._looterTransitions(n, dt);
   }
 
   // Steering, avoidance and integration
@@ -531,7 +827,8 @@ export class Crowd {
     const s = n.state;
     let speed = 0, dest = null;
     const desired = tmp.set(0, 0, 0);
-    if (s === 'walk') { dest = n.target; speed = (n.role === 'wander' ? 1.35 : 1.1) * n.speedMul; }
+    if (s === 'walk') { dest = n.target; speed = (n.role === 'wander' ? 1.35 : n.temperament === 'civilian' ? 1.9 : 1.1) * n.speedMul; }
+    else if (s === 'loot_move') { dest = n.target; speed = n.lootSpeed * n.speedMul; }
     else if (s === 'flee') {
       desired.set(n.pos.x - n.fleeFrom.x, 0, n.pos.z - n.fleeFrom.z);
       if (desired.lengthSq() < 0.01) desired.set(this.rng() - 0.5, 0, this.rng() - 0.5);
@@ -588,7 +885,7 @@ export class Crowd {
         if (!found) speed *= 0.2;
       }
     }
-    if (DISABLED.has(s) || s === 'surrender' || s.startsWith('atk') || s.startsWith('throw') || s.startsWith('bomb')) speed = s === 'atk_strike' ? 1.5 : 0;
+    if (DISABLED.has(s) || s === 'surrender' || s.startsWith('atk') || s.startsWith('throw') || s.startsWith('bomb') || s === 'loot_smash' || s === 'loot_grab' || s.startsWith('arson')) speed = s === 'atk_strike' ? 1.5 : 0;
     if (s === 'atk_strike' && n.targetRef) desired.set(n.targetRef.pos.x - n.pos.x, 0, n.targetRef.pos.z - n.pos.z).normalize();
     // integrate with acceleration limits
     const accel = s === 'flee' ? 9 : 6;
@@ -609,7 +906,7 @@ export class Crowd {
     if (s === 'down' || s === 'recover' || s === 'arrested') want = n.heading;
     else if ((s.startsWith('atk') || s.startsWith('throw') || s === 'circle' || s === 'bomb_wind' || s === 'bomb_throw') && n.targetRef) want = headingTo(n.pos, n.targetRef.pos);
     else if (sp > 0.35 && s !== 'stagger' && !(s === 'act' && n.yield > 0)) want = Math.atan2(n.vel.x, n.vel.z);
-    else if (s === 'act' || s === 'surrender') want = headingTo(n.pos, n.focus);
+    else if (s === 'act' || s === 'surrender' || s === 'loot_smash' || s === 'loot_grab' || s.startsWith('arson')) want = headingTo(n.pos, n.focus);
     n.heading = angleLerp(n.heading, want, 1 - Math.exp(-dt * (s === 'flee' ? 10 : 5)));
   }
 
@@ -691,12 +988,22 @@ export class Crowd {
       } else if (role === 'photo') {
         // photographer: camera held up to the face, both hands
         P.shRX = -1.25; P.elR = -1.75; P.shRZ = 0.32; P.shLX = -1.25; P.elL = -1.75; P.shLZ = -0.32; P.hdX = 0.05;
+      } else if (role === 'cower') {
+        // frightened passer-by: hands to the face or head, hunched, glancing about
+        const v = n.id % 3;
+        if (v === 0) { P.shRX = P.shLX = -1.35; P.elR = P.elL = -2.3; P.shRZ = 0.35; P.shLZ = -0.35; }
+        else if (v === 1) { P.shRX = P.shLX = -2.4; P.elR = P.elL = -2.0; P.shRZ = 0.25; P.shLZ = -0.25; }
+        else { P.shRX = -1.3; P.elR = -2.3; P.shRZ = 0.35; P.shLX = -0.5; P.elL = -1.6; P.shLZ = -0.5; }
+        P.spX += 0.12; P.hdY = Math.sin(t * 2.2 + n.id) * 0.45;
       } else if (role === 'clap') {
         const b = Math.sin(t * 9 + n.id);
         P.shRX = P.shLX = -1.1; P.elR = P.elL = -1.0; P.shLZ = -0.35 + b * 0.2; P.shRZ = 0.35 - b * 0.2;
       }
     } else if (s === 'flee') {
-      if (n.id % 4 === 0) { P.shLX = -2.6; P.elL = -2.2; } // arm shielding head
+      if (n.temperament === 'civilian') {
+        if (n.id % 2) { P.shLX = P.shRX = -2.5; P.elL = P.elR = -2.2; } // both hands over the head
+        P.hdY = Math.sin(t * 2.6 + n.id) * 0.5; // looking back over the shoulder
+      } else if (n.id % 4 === 0) { P.shLX = -2.6; P.elL = -2.2; } // arm shielding head
       P.spX = 0.3;
       if (n.rig.itemType === 'bigflag' || n.rig.itemType === 'banner') { P.shRX = -1.2; }
     } else if (s === 'pursue' || s === 'circle') {
@@ -742,6 +1049,32 @@ export class Crowd {
       rate = 6;
       P.hpLX = P.hpRX = 0.0; P.knL = P.knR = 1.55; P.y = -0.42;
       P.shLX = P.shRX = 0.55; P.elL = P.elR = -1.2; P.shLZ = -0.15; P.shRZ = 0.15; P.hdX = 0.35; P.spX = 0.15;
+    } else if (s === 'loot_move') {
+      if (rig.itemType === 'loot') { P.shRX = P.shLX = -0.75; P.elR = P.elL = -1.25; P.shLZ = -0.25; P.shRZ = 0.25; }
+      else if (rig.itemType === 'bottle') { P.shRX = -0.3; P.elR = -0.8; }
+    } else if (s === 'loot_smash') {
+      rate = 16;
+      const ph2 = (n.st * 1.6 + n.id * 0.3) % 1, k = Math.sin(ph2 * Math.PI * 2);
+      if (n.id % 2 === 0) {
+        // front kicks at the shutter
+        const kk = Math.max(0, k);
+        P.hpRX = -1.3 * kk; P.knR = 0.9 * (1 - kk) + 0.2; P.spX = -0.15 * kk; P.shLX = -0.6; P.shRX = -0.4; P.elL = P.elR = -1.2;
+      } else {
+        // overhand blows at the glass
+        P.shRX = -1.9 - k * 0.9; P.elR = -0.6 - Math.max(0, k) * 0.8; P.spY = -0.25 * k; P.spX = 0.1 + 0.15 * Math.max(0, -k); P.shLX = -0.9; P.elL = -1.2;
+      }
+    } else if (s === 'loot_grab') {
+      crouch(P, 0.75); P.shRX = P.shLX = -1.1; P.elR = P.elL = -0.4; P.hdX = 0.3;
+    } else if (s === 'arson_light') {
+      P.shRX = -0.9; P.elR = -1.5; P.shLX = -0.95; P.elL = -1.5; P.shLZ = -0.35; P.shRZ = 0.35; P.hdX = 0.35;
+    } else if (s === 'arson_wind') {
+      rate = 10;
+      P.shRX = -2.8; P.shRZ = -0.3; P.elR = -1.8; P.spY = -0.65; P.spX = -0.2; P.shLX = -1.35; P.shLZ = 0.1; P.elL = -0.2;
+      P.hpLX = -0.45; P.knL = 0.25; P.hpRX = 0.3;
+    } else if (s === 'arson_throw') {
+      rate = 26;
+      P.shRX = -0.5; P.shRZ = 0.25; P.elR = -0.05; P.spY = 0.6; P.spX = 0.45; P.shLX = -0.2;
+      P.hpLX = -0.6; P.knL = 0.5; P.hpRX = 0.35;
     } else if (s === 'bomb_retrieve') {
       crouch(P, k01(n.st / 0.4) * 0.9); P.shRX = -0.8; P.elR = -0.4; P.shLX = -0.7; P.elL = -0.6; P.hdX = 0.4;
     } else if (s === 'bomb_light') {
@@ -763,12 +1096,13 @@ export class Crowd {
       const jit = 0.5 + 0.5 * Math.sin(t * 13 + n.id * 1.7) * Math.sin(t * 7.3 + n.id);
       if (s === 'act' || s === 'walk' || s === 'surge' || s === 'calm') {
         const r = n.role;
-        if (r === 'chant' || r === 'flag' || r === 'bigflag' || r === 'placard' || r === 'banner' || s === 'surge') { P.mouth = beat * 0.85; P.smile = n.temperament === 'peaceful' ? 0.25 : 0; P.brow = n.temperament === 'peaceful' ? 0 : 0.4; }
+        if (r === 'cower') { P.mouth = 0.3 + jit * 0.45; P.brow = -1; P.smile = 0; }
+        else if (r === 'chant' || r === 'flag' || r === 'bigflag' || r === 'placard' || r === 'banner' || s === 'surge') { P.mouth = beat * 0.85; P.smile = n.temperament === 'peaceful' ? 0.25 : 0; P.brow = n.temperament === 'peaceful' ? 0 : 0.4; }
         else if (r === 'shout') { P.mouth = 0.45 + jit * 0.5; P.brow = 0.7; }
         else if (r === 'clap') { P.mouth = beat * 0.5; P.smile = 0.6; }
         else { P.mouth = jit > 0.75 ? (jit - 0.75) * 1.6 : 0; P.smile = (n.id % 3 === 0) ? 0.35 : 0.1; } // chatting
-      } else if (s === 'flee') { P.mouth = 0.45 + jit * 0.35; P.brow = -1; }
-      else if (s === 'pursue' || s === 'circle' || s.startsWith('atk') || s.startsWith('throw') || s.startsWith('bomb')) { P.mouth = 0.35 + jit * 0.6; P.brow = 1; }
+      } else if (s === 'flee') { P.mouth = n.temperament === 'civilian' ? 0.6 + jit * 0.4 : 0.45 + jit * 0.35; P.brow = -1; }
+      else if (s === 'pursue' || s === 'circle' || s.startsWith('atk') || s.startsWith('throw') || s.startsWith('bomb') || s === 'loot_smash' || s.startsWith('arson')) { P.mouth = 0.35 + jit * 0.6; P.brow = 1; }
       else if (s === 'stagger') { P.mouth = 0.85; P.brow = -1; }
       else if (s === 'down' || s === 'recover') { P.mouth = 0.3 + jit * 0.2; P.brow = -0.8; }
       else if (s === 'surrender') { P.mouth = 0.15; P.brow = -0.6; }

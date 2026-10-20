@@ -34,7 +34,7 @@ const SLOT = { whistle: 3, glass: 2.5, boom: 3, punch: 0.6, shield: 0.8, metal: 
 // replaces a playing one of lower (audibility-weighted, age-decayed) priority.
 const CATS = {
   boom: [3, 10], impact: [5, 8], swing: [2, 6], step: [2, 3], glass: [3, 5], crash: [2, 4],
-  shout: [2, 2], whistle: [1, 2], chant: [1, 3], roar: [1, 4], fw: [3, 3], alarm: [2, 2], misc: [4, 3],
+  shout: [2, 2], scream: [3, 4], whistle: [1, 2], chant: [1, 3], roar: [1, 4], fw: [3, 3], alarm: [2, 2], misc: [4, 3],
 };
 const MAX_VOICES = 22;
 
@@ -933,6 +933,44 @@ export class Audio {
       const g = this.ctx.createGain(); this._env(g.gain, t, 0.002, 1, 0.6); g.connect(f); v.nodes.push(g);
       this._noise(v, g, this.white, t, 0.8);
       return 0.8;
+    });
+  }
+
+  // a frightened scream: a voiced source whose pitch jumps up and then sags,
+  // with vibrato, shaped by open-vowel formants, a little rasp and breath noise
+  scream(pos, female = true) {
+    if (!this.enabled) return;
+    this._shot('scream', pos, 0.42, { ref: 6, max: 90, far: 40, farKeep: 0.4 }, (out, t, p, v) => {
+      const c = this.ctx, dur = R(0.55, 1.25);
+      const f0 = female ? R(620, 920) : R(320, 480);
+      const osc = c.createOscillator(); osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(f0 * 0.75, t);
+      osc.frequency.linearRampToValueAtTime(f0 * R(1.05, 1.2), t + dur * 0.22);
+      osc.frequency.linearRampToValueAtTime(f0 * R(0.72, 0.88), t + dur);
+      const vib = c.createOscillator(); vib.frequency.value = R(5.5, 9);
+      const vg = c.createGain(); vg.gain.value = f0 * R(0.02, 0.045);
+      vib.connect(vg).connect(osc.frequency);
+      const env = c.createGain();
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.exponentialRampToValueAtTime(1, t + 0.05);
+      env.gain.setValueAtTime(1, t + dur * 0.6);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      const rasp = c.createWaveShaper();
+      const curve = new Float32Array(256);
+      for (let i = 0; i < 256; i++) { const x = i / 127.5 - 1; curve[i] = Math.tanh(x * 2.5); }
+      rasp.curve = curve;
+      osc.connect(rasp).connect(env);
+      const scale = female ? 1.15 : 1;
+      for (const [f, q, g] of [[R(850, 1050) * scale, 6, 1], [R(1350, 1700) * scale, 8, 0.6], [2900 * scale, 10, 0.25]]) {
+        const bp = this._filter(v, out, 'bandpass', f, q);
+        const gg = c.createGain(); gg.gain.value = g * 2.2; env.connect(gg).connect(bp); v.nodes.push(gg);
+      }
+      const breath = this._gain(v, this._filter(v, out, 'highpass', 2200), 0.06);
+      const bg = c.createGain(); this._env(bg.gain, t, 0.05, 1, dur); bg.connect(breath); v.nodes.push(bg);
+      this._noise(v, bg, this.white, t, dur);
+      osc.start(t); vib.start(t); osc.stop(t + dur + 0.05); vib.stop(t + dur + 0.05);
+      v.srcs.push(osc, vib); v.nodes.push(osc, vib, vg, env, rasp);
+      return dur;
     });
   }
 

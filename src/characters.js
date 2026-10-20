@@ -52,6 +52,9 @@ function initShared(world) {
     ring: (() => { const g = new THREE.PlaneGeometry(1.4, 1.4); g.rotateX(-Math.PI / 2); g.translate(0, 0.03, 0); return g; })(),
     bottle: (() => { const g = new THREE.CylinderGeometry(0.035, 0.04, 0.22, 8); g.translate(0, 0.0, 0); return g; })(),
     rag: (() => { const g = new THREE.BoxGeometry(0.03, 0.08, 0.03); g.translate(0, 0.14, 0); return g; })(),
+    // goods carried out of looted shops: carton, boxed television, shoe boxes, bag
+    loot: [[0.42, 0.32, 0.32, 0xa07a4a], [0.62, 0.42, 0.1, 0x151515], [0.36, 0.16, 0.26, 0xe0601a], [0.3, 0.38, 0.18, 0xd8d8dc]]
+      .map(([w, h, d, c]) => ({ geo: new THREE.BoxGeometry(w, h, d), color: c })),
   };
   M = {
     psg: [T.psgShirtTexture(0), T.psgShirtTexture(1)].map((t) => new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 })),
@@ -90,10 +93,15 @@ function initShared(world) {
 const SKINS = [0xf1c9a5, 0xe0ac86, 0xc68c64, 0xa86f4c, 0x8a5636, 0x6b4029, 0x4e2e1c, 0xd8b090];
 const HAIR = [0x1a1410, 0x2b1d14, 0x0d0d0d, 0x5a3b22, 0x7a5a3a, 0x222222];
 const DARKS = [0x101010, 0x161616, 0x1c1c1e, 0x23252a, 0x2a2d33];
+const HOODIES = [0x8e1418, 0x4a4c50, 0x22324a, 0x4a5a3a, 0x7a6a50, 0x5a2a3a, 0x8a8f94, 0x2a4a6a];
+const TRACKS = [0x1b2a6a, 0x5a1a2a, 0x2f4a3a, 0x4a4c50, 0x6a6a70, 0x0e3a5a];
+const STRIPES = [0xe0601a, 0xf2f2f2, 0xf2f2f2, 0xc8102e, 0xf2c230, 0x2c6ef2, 0x16a34a];
 const CASUAL = [0x3a4a5e, 0x5a2a2a, 0x2f4a3a, 0x7a6a50, 0x8a8f94, 0xc0bab0, 0x6a4a6a, 0x9a4a2a, 0x2a3a6a, 0xd8d4c8, 0x4a5a3a];
 const PANTS = [0x1a1c22, 0x23262c, 0x2a3346, 0x3b3f46, 0x4a4a42, 0x1b2a40, 0x111111, 0x5a5348];
 
-export function randomOutfit(rng) {
+// style: undefined for the demonstrators, 'looter' for the black-clad looting
+// crews, 'civilian' for passers-by caught up in the violence
+export function randomOutfit(rng, style) {
   const r = rng();
   const o = {
     skin: SKINS[Math.floor(rng() * SKINS.length)],
@@ -110,10 +118,10 @@ export function randomOutfit(rng) {
   if (r < 0.14) { o.top = 'psg'; o.psg = rng() < 0.5 ? 0 : 1; o.topColor = 0x132447; o.longSleeve = rng() < 0.3; }
   else if (r < 0.54) {
     o.top = 'hoodie'; const hc = rng();
-    o.topColor = hc < 0.8 ? DARKS[Math.floor(rng() * DARKS.length)] : hc < 0.9 ? 0x8e1418 : 0x4a4c50;
+    o.topColor = hc < 0.65 ? DARKS[Math.floor(rng() * DARKS.length)] : HOODIES[Math.floor(rng() * HOODIES.length)];
     o.longSleeve = true; o.hood = rng() < 0.55;
   }
-  else if (r < 0.68) { o.top = 'track'; o.topColor = DARKS[Math.floor(rng() * 3)]; o.stripe = [0xe0601a, 0xf2f2f2, 0xf2f2f2, 0xc8102e][Math.floor(rng() * 4)]; o.longSleeve = true; }
+  else if (r < 0.68) { o.top = 'track'; o.topColor = rng() < 0.6 ? DARKS[Math.floor(rng() * 3)] : TRACKS[Math.floor(rng() * TRACKS.length)]; o.stripe = STRIPES[Math.floor(rng() * STRIPES.length)]; o.longSleeve = true; }
   else if (r < 0.84) { o.top = 'jacket'; o.topColor = rng() < 0.8 ? DARKS[Math.floor(rng() * DARKS.length)] : CASUAL[Math.floor(rng() * CASUAL.length)]; o.longSleeve = true; }
   else { o.top = 'tee'; o.topColor = rng() < 0.5 ? DARKS[Math.floor(rng() * DARKS.length)] : CASUAL[Math.floor(rng() * CASUAL.length)]; o.longSleeve = false; }
   if (o.top === 'psg' && rng() < 0.3) o.pants = 0x132447;
@@ -126,15 +134,52 @@ export function randomOutfit(rng) {
   if (o.mask === 'balaclava') o.hat = 'none';
   const sr = rng();
   o.scarf = sr < 0.24 ? 'keffiyeh' : sr < 0.31 ? 'psg' : sr < 0.34 ? 'red' : 'none';
-  skinnedOutfit(o, rng);
+  skinnedOutfit(o, rng, style);
+  if (style === 'looter') looterClothes(o, rng);
+  else if (style === 'civilian') civilianClothes(o, rng);
   // gilets jaunes: a hi-vis vest worn over whatever garment they have on
-  if (rng() < 0.14) {
+  else if (rng() < 0.14) {
     o.vest = true;
     if (!o.garment) { o.garment = 'shirt'; o.shellColor = o.topColor ?? 0x222222; o.keepTop = false; }
     o.shellPattern = 7; o.pa = 0xd8ec1a; o.pb = 0xb8bec4;
     if (o.mask === 'black' && rng() < 0.6) o.mask = 'none';
   }
   return o;
+}
+
+// All in black: hoodies and puffers, hoods up, balaclavas or face masks.
+function looterClothes(o, rng) {
+  const pick = (a) => a[Math.floor(rng() * a.length)];
+  const dark = pick(DARKS);
+  o.top = 'hoodie'; o.topColor = dark; o.longSleeve = true; o.pattern = 0; o.topBase = 0x000000;
+  o.garment = rng() < 0.7 ? 'hoodie' : 'puffer'; o.shellColor = dark; o.shellPattern = 0;
+  o.hood = rng() < 0.7;
+  o.hat = o.hood ? 'none' : rng() < 0.5 ? 'beanie' : 'cap'; o.hatColor = 0x111111;
+  o.mask = rng() < 0.55 ? 'balaclava' : rng() < 0.8 ? 'black' : 'none';
+  if (o.mask === 'balaclava') o.hat = 'none';
+  o.scarf = 'none';
+  o.pants = pick([0x111111, 0x141416, 0x1b1b1b, 0x23252a]);
+  o.shoes = rng() < 0.6 ? 0x151515 : 0xf0f0f0;
+  o.backpack = rng() < 0.5; o.packColor = 0x111111;
+  o.keepTop = o.keepBottom = o.keepShoes = false;
+  if (o.base === 'rb_male_a') { o.hood = false; o.hat = 'none'; if (o.mask === 'balaclava') o.mask = 'black'; }
+}
+
+// Ordinary people out for the evening or on their way home: wool coats and
+// pressed shirts, trousers, leather shoes; no masks, flags or hoods.
+function civilianClothes(o, rng) {
+  const pick = (a) => a[Math.floor(rng() * a.length)];
+  const coat = rng() < 0.65;
+  o.top = 'jacket'; o.longSleeve = true; o.pattern = 0; o.shellPattern = 0;
+  o.garment = coat ? 'coat' : 'shirt';
+  o.shellColor = coat ? pick([0x8a6a48, 0x22324a, 0x2a2a2e, 0x5a5a5e, 0xb8a587, 0x3a2a22, 0x6a1d2a]) : pick([0xf2f2f0, 0xb8cce0, 0xe8d8d0, 0xd8dccf, 0x9fb4c8]);
+  o.topColor = o.topBase = o.shellColor;
+  o.pants = pick([0x2a2a30, 0x3a3f4a, 0x8a7a5a, 0x22324a, 0x4a4a48, 0x1b1b20]);
+  o.shoes = pick([0x4a2e1c, 0x151515, 0x3a2418, 0x222222]);
+  o.mask = 'none'; o.hood = false; o.hat = 'none';
+  o.scarf = rng() < 0.25 ? 'red' : 'none';
+  o.backpack = false; o.vest = false;
+  o.keepTop = o.keepBottom = o.keepShoes = false;
 }
 
 // Extra parameters used by the skinned (glTF) characters.
@@ -153,6 +198,7 @@ const SHOES = [0xf0f0f0, 0xe8e8e8, 0x151515, 0x222222, 0x8a2a2a, 0x3a4a6a, 0xc8c
 const FOOTBALL = [
   // [pattern, a, b, c]  pattern: 2 vertical stripes, 3 hoops, 4 two-tone, 0 solid
   [2, 0x0b0b0b, 0xf2f2f2], [3, 0x0a7a35, 0xf2f2f2], [0, 0x1f3fa0], [4, 0xf2f2f2, 0x0a7a35], [0, 0xc8102e], [2, 0x7a1d3a, 0x1b2a6a], [0, 0xf2c230], [4, 0x0b0b0b, 0xd4202f],
+  [3, 0x1b2a6a, 0xf2c230], [2, 0xd4202f, 0xf2f2f2], [0, 0x6aa8e0], [4, 0x7a1d3a, 0x6aa8e0], [3, 0x111111, 0xe0601a], [0, 0xf2f2f2], [2, 0x0a7a35, 0x111111], [4, 0xe0601a, 0x111111],
 ];
 // Rocketbox bodies keep their own face/skin texture (only a slight tint) and can
 // keep their original clothes; these are the colours used for far impostors then.
@@ -161,9 +207,9 @@ const RB_BASE = {
   rb_male_a: { top: 0x1e1f21, pants: 0x4a4332, shoes: 0xd8d8dc, hair: 0x0e0b09 },
   rb_male_b: { top: 0x3c4f6e, pants: 0x6f87a6, shoes: 0xe8e8e8, hair: 0x0e0b09 },
 };
-function skinnedOutfit(o, rng) {
+function skinnedOutfit(o, rng, style) {
   const pick = (a) => a[Math.floor(rng() * a.length)];
-  o.gender = rng() < SHARE.female ? 'f' : 'm';
+  o.gender = style === 'looter' ? 'm' : rng() < (style === 'civilian' ? 0.5 : SHARE.female) ? 'f' : 'm';
   const er = rng();
   o.ethnicity = er < SHARE.eu ? 'eu' : er < SHARE.eu + SHARE.af ? 'af' : 'na';
   // hard cap: white Europeans never exceed 10% of the people generated so far
@@ -184,7 +230,7 @@ function skinnedOutfit(o, rng) {
   o.shoes = pick(SHOES);
   o.pattern = 0;
   if (o.top === 'psg') { o.pattern = 1; o.topColor = 0x132447; o.pa = 0x132447; o.pb = 0xd4202f; o.pc = 0xf2f2f2; o.topBase = 0x132447; }
-  else if (o.top === 'tee' && rng() < 0.45) {
+  else if (o.top === 'tee' && rng() < 0.55) {
     const f = pick(FOOTBALL); o.pattern = f[0]; o.topColor = f[1]; o.pa = f[1]; o.pb = f[2] ?? f[1]; o.topBase = f[1];
   } else o.topBase = o.top === 'hoodie' ? 0x000000 : o.topColor;
   o.accent = pick([0xd4202f, 0x2c6ef2, 0xf2f2f2, 0x16a34a, 0xf2c230, 0x111111]);
@@ -489,15 +535,21 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
     cam.position.set(-0.04, -0.06, 0.06);
     g.add(cam);
     rig.handR.add(g);
+  } else if (type === 'loot') {
+    // held in both arms against the chest
+    const it = G.loot[Math.floor(rng() * G.loot.length)];
+    g.add(new THREE.Mesh(it.geo, colMat(it.color, { roughness: 0.7 })));
+    g.position.set(0, rig.skinned ? 0.27 : 0.25, rig.skinned ? 0.28 : 0.28);
+    rig.spine.add(g);
   } else if (type === 'stone') {
     const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.06), colMat(0x6a6660));
     st.position.set(0, -0.1, 0.03); g.add(st);
     rig.handR.add(g);
   }
   rig.item = g;
-  rig.gripR = !!rig.baton || ['flag', 'frflag', 'bigflag', 'placard', 'phone', 'bottle', 'stone', 'camera'].includes(type);
-  rig.gripL = type === 'bigflag';
-  g.traverse((o) => { if (o.isMesh) o.castShadow = type === 'banner' || type === 'placard' || type === 'bigflag'; });
+  rig.gripR = !!rig.baton || ['flag', 'frflag', 'bigflag', 'placard', 'phone', 'bottle', 'stone', 'camera', 'loot'].includes(type);
+  rig.gripL = type === 'bigflag' || type === 'loot';
+  g.traverse((o) => { if (o.isMesh) o.castShadow = type === 'banner' || type === 'placard' || type === 'bigflag' || type === 'loot'; });
   return g;
 }
 

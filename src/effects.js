@@ -270,7 +270,7 @@ export class Effects {
     const smoke = { pos: pos.clone().setY(pos.y + 1), rate: smokeRate, scale: 1 + scale * 0.4 };
     this.world.fires.push(fire); this.world.smokes.push(smoke);
     this.dynamicFires.push({ fire, smoke });
-    if (this.dynamicFires.length > 6) {
+    if (this.dynamicFires.length > 9) {
       const old = this.dynamicFires.shift();
       this.world.fires.splice(this.world.fires.indexOf(old.fire), 1);
       this.world.smokes.splice(this.world.smokes.indexOf(old.smoke), 1);
