@@ -1,7 +1,7 @@
 // Crowd simulation: per-agent state machines, perception with reaction delays,
 // panic contagion, steering/avoidance, spatial hashing and distance-based LOD.
 import * as THREE from 'three';
-import { buildCharacter, randomOutfit, policeOutfit, giveItem, clearItem, newPose, baseLayer, applyPose, crouch, lying, setRingVisible, addPoliceGear, updateShield } from './characters.js';
+import { SHIELD_POSE, buildCharacter, randomOutfit, policeOutfit, giveItem, clearItem, newPose, baseLayer, applyPose, crouch, lying, setRingVisible, addPoliceGear, updateShield } from './characters.js';
 import { mulberry } from './textures.js';
 import { LAYOUT } from './world.js';
 import { Humans } from './humans.js';
@@ -30,6 +30,17 @@ const LOOT_SITES = [[-1, 98], [1, 92], [-1, 40], [1, 12], [-1, -52], [1, -78], [
 const CREW_SIZE = 4;
 const CIVILIANS = 16;
 const CROSS = LAYOUT.crossStreets;
+// Shield-carrier (Level 2): an improvised shield blocks baton strikes from the front.
+// Openings: the recovery after its shield bash, or getting round its side.
+export const SHIELD = {
+  guardCos: 0.42,   // blocks strikes arriving within ~65 degrees of where it faces
+  turnRate: 2.6,    // rad/s while guarding: a sprinting officer can get round it
+  speed: 2.8,       // advance speed (m/s)
+  bashWind: 0.75,   // telegraph: shield drawn back, amber ring (s)
+  bashRec: 1.1,     // shield lowered after the bash: the opening (s)
+  bashDamage: 10, bashPush: 5,
+  hp: 3,
+};
 
 const ACTIVITIES = [
   ['chant', 0.17], ['flag', 0.19], ['bigflag', 0.09], ['placard', 0.13], ['film', 0.09], ['banner', 0.04], ['shout', 0.07], ['wander', 0.07], ['clap', 0.05], ['watch', 0.06], ['photo', 0.04],
@@ -93,6 +104,7 @@ export class Crowd {
     this.lastScream = -9;
     for (const c of this.crews) { c.z0 = c.home; this._placeCrew(c); c.burns = 0; c.burnT = 8 + this.rng() * 25; }
     this.npcs.forEach((n, i) => {
+      if (n.special) { this.retire(n); return; } // scripted characters are placed by their level
       // first third clusters near the police line so the player starts with a crowd in view
       const gp = i < 34 ? gps[i % 3] : gps[3 + (i % (gps.length - 3))];
       n.anchor.set(gp.x + (this.rng() - 0.5) * (i < 34 ? 16 : 9), 0, gp.z + (this.rng() - 0.5) * (i < 34 ? 12 : 9));
@@ -443,7 +455,7 @@ export class Crowd {
       let l = this.grid.get(k); if (!l) { l = []; this.grid.set(k, l); } l.push(o);
     };
     for (const n of this.npcs) if (n.state !== 'gone') put(n, n.pos.x, n.pos.z);
-    for (const p of this.police) put(p, p.pos.x, p.pos.z);
+    for (const p of this.police) if (!p.off) put(p, p.pos.x, p.pos.z);
   }
 
   query(x, z, r, out = []) {
@@ -476,7 +488,8 @@ export class Crowd {
     n.temperament = 'hostile';
     n.attackStyle = style;
     n.targetMode = targetMode;
-    n.hp = style === 'melee' ? 2 + (this.rng() < 0.4 ? 1 : 0) : 2;
+    n.hp = style === 'melee' ? 2 + (this.rng() < 0.4 ? 1 : 0) : style === 'shield' ? SHIELD.hp : 2;
+    n.guardBlocks = 0;
     n.neutralized = false;
     n.cool = this.rng() * 1.5;
     // Props are only dropped when the attack needs the hands: a melee aggressor keeps a
@@ -485,6 +498,7 @@ export class Crowd {
     const keep = style === 'bomber' || (style === 'melee' && (n.rig.itemType === 'flag' || n.rig.itemType === 'frflag'));
     if (n.rig.itemType !== 'none' && !keep) clearItem(n.rig);
     if (style === 'thrower') giveItem(n.rig, 'stone');
+    if (style === 'shield') giveItem(n.rig, 'impshield', this.rng, ['board', 'sign', 'lid'][n.id % 3]); // picks up a shield: both hands busy
     this.setState(n, style === 'thrower' ? 'pursue' : 'pursue');
     n.lastAggro = this.time;
   }
@@ -494,8 +508,30 @@ export class Crowd {
   }
 
   // Called by the player's baton when a strike connects with this agent.
+  // True when a shield-carrier's guard stops a strike coming from attackerPos.
+  guards(n, attackerPos) {
+    if (n.attackStyle !== 'shield' || n.neutralized || n.rig.itemType !== 'impshield') return false;
+    if (!['pursue', 'circle', 'atk_wind', 'act', 'walk'].includes(n.state)) return false; // lowered: recovery, stagger, down
+    const fx = Math.sin(n.heading), fz = Math.cos(n.heading);
+    const dx = attackerPos.x - n.pos.x, dz = attackerPos.z - n.pos.z, d = Math.hypot(dx, dz) || 1;
+    return (fx * dx + fz * dz) / d > SHIELD.guardCos;
+  }
+
   onBatonHit(n, dir, attackerPos) {
     const g = this.game;
+    if (this.guards(n, attackerPos)) {
+      // blocked: no damage; both sides are pushed apart and the officer recoils
+      n.guardBlocks++;
+      if (g.missions.stats.blocked !== undefined) g.missions.stats.blocked++;
+      n.knock.copy(dir).multiplyScalar(1.2);
+      g.player.knock.addScaledVector(dir, -3.2);
+      g.player.staggerT = Math.max(g.player.staggerT, 0.22);
+      g.audio.impact(n.pos, false, true);
+      g.effects.impact(n.pos.clone().setY(n.pos.y + 1.2));
+      g.cameraRig.shake(0.12);
+      g.hud.alert('Shield — bait the bash, or get round the side', 'warn', 2.2, 'shieldhint');
+      return 'blocked';
+    }
     const wasThreat = this.isThreat(n) || (n.script && n.script.active) || n.temperament === 'looter';
     const fwd = tmp.set(Math.sin(n.heading), 0, Math.cos(n.heading));
     const fromBehind = fwd.dot(dir) > 0.2; // strike travelling in the same direction they face
@@ -575,7 +611,8 @@ export class Crowd {
         const qx = cam.x + sx * u - n.pos.x, qz = cam.z + sz * u - n.pos.z;
         blocking = qx * qx + qz * qz < 0.5 * 0.5;
       }
-      const lod = !this.far ? 0 : n.distToPlayer > LOD_FAR || n.rank >= this.maxSkinned ? 2 : n.distToPlayer > LOD_MID ? 1 : 0;
+      // scripted characters (the Leader) keep their full rig while in view, whatever the cap
+      const lod = !this.far ? 0 : n.special ? (n.distToPlayer > 90 ? 2 : n.distToPlayer > LOD_MID ? 1 : 0) : n.distToPlayer > LOD_FAR || n.rank >= this.maxSkinned ? 2 : n.distToPlayer > LOD_MID ? 1 : 0;
       n.lod = lod;
       if (lod === 2) {
         r.visible = false;
@@ -592,7 +629,8 @@ export class Crowd {
       const threat = this.isThreat(n) || (n.script && n.script.marked);
       // looters caught in the act are marked amber
       const looting = n.temperament === 'looter' && (n.state === 'loot_smash' || n.state === 'loot_grab' || n.state.startsWith('arson') || n.rig.itemType === 'loot');
-      setRingVisible(n.rig, (!!threat || looting) && !DISABLED.has(n.state), looting || (n.script && n.script.amber) ? 'amber' : 'red');
+      const telegraph = n.attackKind === 'bash' && n.state === 'atk_wind';
+      setRingVisible(n.rig, (!!threat || looting) && !DISABLED.has(n.state), looting || telegraph || (n.script && n.script.amber) ? 'amber' : 'red');
     }
     if (this.far) { this._drawBackground(t); this.far.end(); }
     this._updatePolice(dt, t, player);
@@ -730,7 +768,7 @@ export class Crowd {
     const pd = n.distToPlayer;
     if (n.targetMode === 'officers' && pd > 3.5) {
       let best = null, bd = Infinity;
-      for (const p of this.police) if (p.role === 'guard' || p.role === 'injured') { const d = p.pos.distanceToSquared(n.pos); if (d < bd) { bd = d; best = p; } }
+      for (const p of this.police) if (!p.off && (p.role === 'guard' || p.role === 'injured')) { const d = p.pos.distanceToSquared(n.pos); if (d < bd) { bd = d; best = p; } }
       if (best) return { pos: best.pos, isPlayer: false, cop: best };
     }
     if (n.targetMode === 'player' || n.targetMode === 'officers' || pd < 10 || !this.police.some((p) => p.role === 'line')) return { pos: player.pos, isPlayer: true };
@@ -753,6 +791,12 @@ export class Crowd {
       }
     } else if (n.attackStyle === 'thrower') {
       if ((n.state === 'pursue' || n.state === 'circle') && d < 16 && d > 5 && n.cool <= 0) this.setState(n, 'throw_prep', 0.8);
+    } else if (n.attackStyle === 'shield') {
+      if ((n.state === 'pursue' || n.state === 'circle') && d < 1.9 && n.cool <= 0) {
+        n.attackKind = 'bash';
+        this.setState(n, 'atk_wind', SHIELD.bashWind);
+        if (this.rng() < 0.6) this.game.audio.shout(n.pos);
+      }
     }
   }
 
@@ -783,9 +827,10 @@ export class Crowd {
       const tg = n.targetRef;
       if (tg) {
         const d = Math.hypot(tg.pos.x - n.pos.x, tg.pos.z - n.pos.z);
-        if (d < 1.75) {
+        if (d < (n.attackKind === 'bash' ? 2.1 : 1.75)) {
           const dir = tmp2.set(tg.pos.x - n.pos.x, 0, tg.pos.z - n.pos.z).normalize();
-          if (tg.isPlayer) g.player.takeDamage(n.attackKind === 'shove' ? 6 : 9, n.pos, dir.clone().multiplyScalar(n.attackKind === 'shove' ? 4.5 : 2));
+          if (tg.isPlayer && n.attackKind === 'bash') g.player.takeDamage(SHIELD.bashDamage, n.pos, dir.clone().multiplyScalar(SHIELD.bashPush));
+          else if (tg.isPlayer) g.player.takeDamage(n.attackKind === 'shove' ? 6 : 9, n.pos, dir.clone().multiplyScalar(n.attackKind === 'shove' ? 4.5 : 2));
           else if (tg.cop) {
             tg.cop.flinch = 0.4; g.onPoliceLineHit(n.attackKind === 'shove' ? 1 : 1.3, tg.cop); g.audio.impact(tg.cop.pos, false, true);
             // the line shoves back: attackers get pushed away and must re-engage
@@ -795,7 +840,7 @@ export class Crowd {
       }
       n.lastAggro = this.time;
     }
-    if (s === 'atk_strike' && n.st > n.dur) this.setState(n, 'atk_rec', 0.45);
+    if (s === 'atk_strike' && n.st > n.dur) this.setState(n, 'atk_rec', n.attackKind === 'bash' ? SHIELD.bashRec : 0.45);
     if (s === 'atk_rec' && n.st > n.dur) { n.cool = 0.9 + this.rng() * 1.6; this.setState(n, 'circle', n.cool); }
     if (s === 'circle' && n.st > n.dur) this.setState(n, 'pursue');
     // throwing
@@ -846,6 +891,7 @@ export class Crowd {
       const d = Math.hypot(dest.x - n.pos.x, dest.z - n.pos.z);
       if (n.attackStyle === 'thrower' && d < 9) { speed = 1.6; dest = null; desired.set(n.pos.x - n.targetRef.pos.x, 0, n.pos.z - n.targetRef.pos.z).normalize(); }
       else if (n.attackStyle === 'melee' && d < 1.1) { speed = 0; dest = null; }
+      else if (n.attackStyle === 'shield') { speed = d < 1.5 ? 0 : SHIELD.speed * n.speedMul; if (d < 1.5) dest = null; }
     } else if (s === 'circle' && n.targetRef) {
       // back off / strafe around the target
       const away = tmp2.set(n.pos.x - n.targetRef.pos.x, 0, n.pos.z - n.targetRef.pos.z);
@@ -911,7 +957,13 @@ export class Crowd {
     else if ((s.startsWith('atk') || s.startsWith('throw') || s === 'circle' || s === 'bomb_wind' || s === 'bomb_throw') && n.targetRef) want = headingTo(n.pos, n.targetRef.pos);
     else if (sp > 0.35 && s !== 'stagger' && !(s === 'act' && n.yield > 0)) want = Math.atan2(n.vel.x, n.vel.z);
     else if (s === 'act' || s === 'surrender' || s === 'loot_smash' || s === 'loot_grab' || s.startsWith('arson')) want = headingTo(n.pos, n.focus);
-    n.heading = angleLerp(n.heading, want, 1 - Math.exp(-dt * (s === 'flee' ? 10 : 5)));
+    if (n.attackStyle === 'shield' && n.targetRef && (s === 'pursue' || s === 'circle' || s === 'atk_wind')) {
+      want = headingTo(n.pos, n.targetRef.pos);
+      let dh = want - n.heading;
+      while (dh > Math.PI) dh -= Math.PI * 2;
+      while (dh < -Math.PI) dh += Math.PI * 2;
+      n.heading += Math.max(-SHIELD.turnRate * dt, Math.min(SHIELD.turnRate * dt, dh));
+    } else n.heading = angleLerp(n.heading, want, 1 - Math.exp(-dt * (s === 'flee' ? 10 : 5)));
   }
 
   // Soft agent-agent and agent-player separation using the spatial hash.
@@ -947,6 +999,7 @@ export class Crowd {
     }
     // police are static obstacles for the player too
     for (const p of this.police) {
+      if (p.off) continue;
       const dx = player.pos.x - p.pos.x, dz = player.pos.z - p.pos.z;
       const d2 = dx * dx + dz * dz;
       if (d2 < 0.7 * 0.7 && d2 > 1e-6) { const d = Math.sqrt(d2), o = (0.7 - d) / d; player.pos.x += dx * o; player.pos.z += dz * o; }
@@ -1010,6 +1063,19 @@ export class Crowd {
       } else if (n.id % 4 === 0) { P.shLX = -2.6; P.elL = -2.2; } // arm shielding head
       P.spX = 0.3;
       if (n.rig.itemType === 'bigflag' || n.rig.itemType === 'banner') { P.shRX = -1.2; }
+    } else if (n.attackStyle === 'shield' && rig.itemType === 'impshield' && (s === 'pursue' || s === 'circle' || s === 'atk_wind' || s === 'atk_strike' || s === 'atk_rec')) {
+      // shield carried across the body; the bash drives it forward, the recovery drops it
+      let sp = SHIELD_POSE.guard, sk = 10;
+      if (s === 'atk_wind') { rate = 10; sp = SHIELD_POSE.wind; P.shLX = -1.1; P.elL = -1.9; P.spY = 0.45; P.spX = -0.12; P.knL = P.knR = 0.4; P.y = -0.06; }
+      else if (s === 'atk_strike') { rate = 30; sp = SHIELD_POSE.strike; sk = 30; P.shLX = -1.5; P.elL = -0.6; P.spY = -0.35; P.spX = 0.35; P.hpLX = -0.6; P.knL = 0.45; }
+      else if (s === 'atk_rec') { rate = 7; sp = SHIELD_POSE.open; sk = 12; P.shLX = -0.3; P.elL = -0.4; P.spX = 0.25; P.hdX = 0.3; } // dropped: the opening
+      else { P.shLX = -1.25; P.elL = -1.8; P.shLZ = 0.35; P.spX = 0.12; P.knL = P.knR = 0.22; P.y = -0.03; }
+      P.shRX = -0.5; P.elR = -1.5; P.shRZ = -0.2;
+      if (rig.item) {
+        const k = 1 - Math.exp(-dt * sk);
+        rig.item.position.lerp(sp[0], k);
+        rig.item.rotation.set(rig.item.rotation.x + (sp[1].x - rig.item.rotation.x) * k, rig.item.rotation.y + (sp[1].y - rig.item.rotation.y) * k, rig.item.rotation.z + (sp[1].z - rig.item.rotation.z) * k);
+      }
     } else if (s === 'pursue' || s === 'circle') {
       P.elR = P.elL = -1.6; P.shRX = P.shLX = -0.5; P.shLZ = 0.2; P.shRZ = -0.2;
       if (n.attackStyle === 'thrower' && rig.itemType !== 'none') { P.shRX = -0.2; P.elR = -0.4; }
@@ -1116,9 +1182,37 @@ export class Crowd {
     rig.root.position.y = n.pos.y + (s === 'down' ? 0.12 : s === 'recover' ? 0.12 * Math.max(0, 1 - n.st / (n.dur * 0.5)) : 0);
   }
 
+  // Officers not present in the current level (e.g. Level 2 has no cut-off group at Oberkampf).
+  setPoliceOff(roles = []) {
+    for (const p of this.police) { p.off = roles.includes(p.role); p.rig.root.visible = !p.off; }
+  }
+
+  // Take a character out of the simulation (hidden, untouchable) until a script places it.
+  retire(n) {
+    this.setState(n, 'gone');
+    n.rig.root.visible = false;
+    setRingVisible(n.rig, false);
+    n.script = null; n.temperament = 'scripted'; n.threat = false; n.neutralized = false; n.arrested = false;
+    n.vel.set(0, 0, 0); n.knock.set(0, 0, 0); n.stimuli.length = 0;
+    if (this.far) n.lod = 2;
+  }
+
+  // A scripted character with a fixed outfit (Level 2's Leader). Kept out of every
+  // crowd pool: its temperament is never 'peaceful', 'looter' or 'civilian'.
+  spawnSpecial(outfit) {
+    const n = this._spawn(outfit);
+    n.special = true; n.kind = 'special';
+    n.hp = 99; n.radius = 0.34; n.mass = 1.3; n.speedMul = 1; n.courage = 1; n.fear = 0;
+    n.stimuli.length = 0; n.hitCount = 0; n.surge = null; n.march = null; n.thinkT = 0; n.animAcc = 0; n.cool = 0;
+    n.rig.pose = newPose();
+    this.retire(n);
+    return n;
+  }
+
   _updatePolice(dt, t, player) {
     const hostileNear = this.npcs.some((n) => this.isThreat(n) && n.pos.z > 115);
     for (const p of this.police) {
+      if (p.off) continue;
       const rig = p.rig;
       const P = newPose();
       baseLayer(P, rig, 0, t + p.pos.x, dt, true);

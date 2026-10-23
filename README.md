@@ -90,7 +90,21 @@ A complete run takes about 2–3 minutes. A fast, efficient run is around 1:45; 
 
 **Level 1** is the mission described above. Completing it unlocks **Level 2 · Nuit** on that device (saved in `localStorage`; a CONTINUE button appears on the results screen and a LEVEL 2 button on the main menu).
 
-**Level 2** takes place on the same boulevard later that night, pushing back down it from Rue Oberkampf towards the CRS staging area. In this build it is a foundation only: night lighting, five route sections (Deployment, Escalation, the Enforcer at Rue de Malte, Second push, the Leader at Rue Jean-Pierre Timbaud) shown as waypoints, and its own HUD phases and results screen. Encounters and the two bosses come in later builds.
+**Level 2** takes place on the same boulevard later that night, pushing back down it from Rue Oberkampf towards the CRS staging area, through the looting crews of the man they call *le Patron* (the Leader). It has five sections:
+
+1. **Deployment.** Three crew groups introduce the standard enemies. After the first, the Leader is glimpsed directing his crews with a lit road flare, then leaves into Rue de Malte. He cannot be targeted or chased.
+2. **Escalation.** Shield-carriers, a petrol-bomb suspect, a rush from a side street, a mixed group at Place de Malte and its reinforcements from both sides. Petrol bombs land on the boulevard ahead.
+3. **The Enforcer** at the Rue de Malte junction (placeholder in this build).
+4. **Second push.** An ambush from the shop fronts, throwers behind the barricade, a shop break-out, shields holding the street, and the crew's reserve from Rue Jean-Pierre Timbaud.
+5. **The Leader** at the Rue Jean-Pierre Timbaud junction (placeholder in this build).
+
+**Shield-carriers** carry an improvised shield (a plywood board, a torn-down road sign or a bin lid) that blocks baton strikes from the front: the strike bounces off and the officer recoils. They advance slowly, keep the shield towards you and bash: the shield is drawn back with an **amber ring** (0.75 s) before the bash, which can be blocked with your own shield. After it, the shield drops for about a second: strike then. A sprinting officer can also get round the side. No new controls are needed.
+
+**Encounters** (`src/encounters.js`) are data: who comes (melee, thrower, shield), from where, and what triggers them (passing a point on the boulevard, or the previous group being dealt with). Members are drawn from the looting crews, then from anyone free on the street, at random; appearance is never read. A section is complete when its groups are dealt with and you reach its end point.
+
+**Checkpoints.** If you fail in Level 2, **RETRY SECTION** restarts the current section with the score you had when it began.
+
+The Leader's character (a heavy-set man in an olive puffer jacket with a keffiyeh scarf) and his motive are placeholders for later increments; his complexion and build come from the shared generator.
 
 **Lighting presets** (`src/levels.js`): `dusk` (Level 1) and `night` (Level 2). A preset only changes light colours and intensities, fog, sky uniforms, lamp glow and exposure. It never adds or removes lights, so switching does not compile new shaders.
 
@@ -232,7 +246,8 @@ src/
   player.js, camera.js, missions.js, hud.js, audio.js, input.js, textures.js
   levels.js      Level definitions (mission script, lighting preset, player start), lighting presets,
                  progression / unlocks
-  level2.js      Level 2 mission script (foundation: route sections as waypoints)
+  level2.js      Level 2 mission script: sections, encounters, the Leader's first appearance, checkpoints
+  encounters.js  Data-driven encounter runner (triggers, selection, resolution)
   seed.js        ?seed=N: seeded Math.random for reproducible runs
   dev.js         Test helpers, loaded only with ?dev in the URL
 ```
@@ -249,11 +264,11 @@ Add `?dev` to the URL to load the test helpers (`src/dev.js`):
 | `__perf(frames)` | Average simulation and render cost per frame, draw calls and triangles summed over all post-processing passes, and the number of compiled shader programs |
 | `__level(id, stage)` / `__jump(i)` | Switch level (ignores unlocks) / jump to a Level 2 section |
 | `__unlock(id)` / `__resetProgress()` | Unlock a level / clear saved progress |
-| `__auditAppearance({ seeds })` | Appearance audit (below) |
+| `__auditAppearance({ seeds, level })` | Appearance audit for Level 1 or 2 (below) |
 
-URL shortcuts: `?dev&level=2` starts in Level 2, and `?dev&level=2&stage=3` starts at its fourth section. `?seed=N` seeds `Math.random`; with `__start({ audio: false })` and `__step`, a run replays identically.
+URL shortcuts: `?dev&level=2` starts in Level 2, and `?dev&level=2&stage=3` starts at its fourth section. `?seed=N` makes a run reproducible: with `__start({ audio: false })` and `__step` / `__botRun`, a whole playthrough replays identically. To make that hold, the simulation never runs on wall-clock time: staggered effects use game-time timers, the menu's background simulation is frozen in seeded runs, and the dynamic-resolution system leaves crowd detail alone while the harness steps the game.
 
-**Appearance audit.** For each seed the crowd gets freshly generated appearances from the real generator. The real Level 1 selection code then runs (aggressors, surges, bombers, the Rue de Malte ambush, ambient threats and the final wave), and each selected character is compared with the pool it was drawn from. The markers are keffiyehs, Algeria and PSG shirts, headscarves, face coverings, balaclavas, hi-vis vests, smart clothes, carried flags, gender and complexion. A marker is flagged when its rate among selected characters differs from the pool's by more than chance allows (z-test, Bonferroni-corrected over all markers, familywise alpha 0.05). A pass means no skew larger than the reported minimum detectable difference was found; it is a screening check, not a proof of independence. A built-in self-test runs the same statistic on a deliberately biased selector to show that it detects skew. The audit also compares marker rates across roles and confirms that no outfit changes when someone turns hostile.
+**Appearance audit.** For each seed the crowd gets freshly generated appearances from the real generator. The real selection code then runs: in Level 1 the aggressors, surges, bombers, the Rue de Malte ambush, ambient threats and the final wave; in Level 2 every street encounter through the encounter runner. Each selected character is compared with the pool it was drawn from. The markers are keffiyehs, Algeria and PSG shirts, headscarves, face coverings, balaclavas, hi-vis vests, smart clothes, carried flags, gender and complexion. A marker is flagged when its rate among selected characters differs from the pool's by more than chance allows (z-test, Bonferroni-corrected over all markers, familywise alpha 0.05). A pass means no skew larger than the reported minimum detectable difference was found; it is a screening check, not a proof of independence. Appearance markers decide the verdict. Carried flags are reported separately as props of the demonstrating activity: Level 2 deliberately sends the looting crews, who carry no flags, so flag carriers are under-represented among its attackers (about 2% against 15% in the pool). A built-in self-test runs the same statistic on a deliberately biased selector to show that it detects skew. The audit also compares marker rates across roles and confirms that no outfit changes when someone turns hostile.
 
 Baseline results for Level 1 from before the Level 2 work are kept in `tools/baseline/`.
 

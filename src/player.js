@@ -93,7 +93,7 @@ export class Player {
     const list = crowd.query(this.pos.x, this.pos.z, 3.4, []);
     let best = null, bs = Infinity;
     for (const n of list) {
-      if (n.id === undefined || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue;
+      if (n.id === undefined || n.special || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue;
       const dx = n.pos.x - this.pos.x, dz = n.pos.z - this.pos.z;
       const d = Math.hypot(dx, dz);
       const ang = Math.acos(Math.max(-1, Math.min(1, (dx * dirHint.x + dz * dirHint.z) / (d || 1))));
@@ -214,7 +214,7 @@ export class Player {
     const list = g.crowd.query(this.pos.x, this.pos.z, 2.6, []);
     let best = null, bs = Infinity;
     for (const n of list) {
-      if (n.id === undefined || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue;
+      if (n.id === undefined || n.special || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue; // scripted characters are not targets
       const dx = n.pos.x - this.pos.x, dz = n.pos.z - this.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > 2.05 + n.radius * 0.5) continue;
@@ -226,7 +226,7 @@ export class Player {
     if (best) {
       const dir = new THREE.Vector3(best.pos.x - this.pos.x, 0, best.pos.z - this.pos.z).normalize();
       this.attack.hit = true;
-      g.crowd.onBatonHit(best, dir, this.pos);
+      if (g.crowd.onBatonHit(best, dir, this.pos) === 'blocked') return; // a shield took it; the crowd plays the block
       g.audio.impact(best.pos, false);
       g.effects.impact(best.pos.clone().setY(best.pos.y + 1.3));
       g.hitStop(0.07);

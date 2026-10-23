@@ -464,6 +464,15 @@ export function updateShield(rig, k) {
   s.rotation.set(0.05 * (1 - k), (Math.PI / 2 - 0.15) * (1 - k) + 0.12 * k, 0);
 }
 
+// Improvised-shield placement in the spine frame (+z forward, +x the character's left):
+// [position, rotation]. Large, clear differences so the open state reads at a glance.
+export const SHIELD_POSE = {
+  guard: [new THREE.Vector3(0.1, 0.28, 0.36), new THREE.Euler(0, 0, 0)],
+  wind: [new THREE.Vector3(0.22, 0.34, 0.18), new THREE.Euler(0, 0.6, 0)],
+  strike: [new THREE.Vector3(0.04, 0.34, 0.62), new THREE.Euler(-0.1, 0, 0)],
+  open: [new THREE.Vector3(0.36, -0.08, 0.2), new THREE.Euler(1.0, 0.5, 0.5)],
+};
+
 export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
   initShared();
   clearItem(rig);
@@ -526,22 +535,74 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
     g.add(new THREE.Mesh(it.geo, colMat(it.color, { roughness: 0.7 })));
     g.position.set(0, rig.skinned ? 0.27 : 0.25, rig.skinned ? 0.28 : 0.28);
     rig.spine.add(g);
+  } else if (type === 'flare') {
+    // lit road flare: red emissive tip (picked up by the bloom); sparks are spawned by the holder's script
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.3, 8), colMat(0x8a1010, { roughness: 0.6 }));
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshStandardMaterial({ color: 0xff5040, emissive: 0xff2a10, emissiveIntensity: 9 }));
+    tip.position.y = -0.17;
+    g.add(stick, tip);
+    g.position.set(0, -0.06, 0.03);
+    rig.handR.add(g);
+    rig.flareTip = tip;
+  } else if (type === 'impshield') {
+    // improvised shield on the left hand: a plywood board, a torn-down road sign or a bin lid
+    const s = new THREE.Group();
+    if (variant === 'sign') {
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.02, 24), colMat(0xc8161d, { roughness: 0.5, metalness: 0.3 }));
+      disc.rotation.x = Math.PI / 2;
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.025), colMat(0xf2f2f2, { roughness: 0.5 }));
+      bar.position.z = 0.004;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), colMat(0x8a8f94, { roughness: 0.4, metalness: 0.6 }));
+      pole.position.set(0, -0.55, -0.02);
+      s.add(disc, bar, pole);
+    } else if (variant === 'lid') {
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.78, 0.05), colMat(0xd8b52a, { roughness: 0.7 }));
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.06, 0.09), colMat(0xc8a520, { roughness: 0.7 }));
+      lip.position.set(0, 0.39, 0.02);
+      s.add(lid, lip);
+    } else {
+      const board = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.86, 0.025), colMat(0xa8835a, { roughness: 0.95 }));
+      const slat = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.08, 0.04), colMat(0x6a5038, { roughness: 0.95 }));
+      slat.position.set(0, 0.2, 0.02);
+      const slat2 = slat.clone(); slat2.position.y = -0.22;
+      s.add(board, slat, slat2);
+    }
+    // carried across the body in front of the torso; the crowd moves it per state
+    // (raised guard, drawn back, driven forward, dropped during the recovery)
+    g.add(s);
+    g.position.copy(SHIELD_POSE.guard[0]);
+    rig.spine.add(g);
   } else if (type === 'stone') {
     const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.06), colMat(0x6a6660));
     st.position.set(0, -0.1, 0.03); g.add(st);
     rig.handR.add(g);
   }
   rig.item = g;
-  rig.gripR = !!rig.baton || ['flag', 'frflag', 'bigflag', 'placard', 'phone', 'bottle', 'stone', 'camera', 'loot'].includes(type);
-  rig.gripL = type === 'bigflag' || type === 'loot';
-  g.traverse((o) => { if (o.isMesh) o.castShadow = type === 'banner' || type === 'placard' || type === 'bigflag' || type === 'loot'; });
+  rig.gripR = !!rig.baton || ['flag', 'frflag', 'bigflag', 'placard', 'phone', 'bottle', 'stone', 'camera', 'loot', 'flare'].includes(type);
+  rig.gripL = type === 'bigflag' || type === 'loot' || type === 'impshield';
+  g.traverse((o) => { if (o.isMesh) o.castShadow = type === 'banner' || type === 'placard' || type === 'bigflag' || type === 'loot' || type === 'impshield'; });
   return g;
+}
+
+// Compile the shaders of props that first appear mid-level (Level 2's shields and flare)
+// while the level loads, so their first appearance does not stall a frame.
+export function prewarmItems(renderer, scene, camera, types) {
+  const holder = new THREE.Group();
+  holder.position.copy(camera.position).add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(3));
+  for (const [type, variant] of types) {
+    const rig = { spine: new THREE.Group(), handL: new THREE.Group(), handR: new THREE.Group() };
+    holder.add(rig.spine, rig.handL, rig.handR);
+    giveItem(rig, type, Math.random, variant);
+  }
+  scene.add(holder);
+  renderer.compile(scene, camera);
+  scene.remove(holder);
 }
 
 export function clearItem(rig) {
   if (rig.item) { rig.item.parent && rig.item.parent.remove(rig.item); rig.item = null; }
   rig.gripR = !!rig.baton; rig.gripL = false;
-  rig.itemType = 'none'; rig.itemVariant = null;
+  rig.itemType = 'none'; rig.itemVariant = null; rig.flareTip = null;
   rig.wick = null;
 }
 

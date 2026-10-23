@@ -30,6 +30,7 @@ export function installDev(game) {
       reseed(seed);
       game.crowd.rng = mulberry(seed + 4242);
       game.time = 0;
+      game.crowd.maxSkinned = 20;
       game.effects.emitAcc = 0; game.effects.smoke.clear();
       game.restart();
     }
@@ -64,7 +65,10 @@ export function installDev(game) {
     if (goal) {
       const dx = goal.x - p.x, dz = goal.z - p.z, d = Math.hypot(dx, dz);
       g.cameraRig.yaw = Math.atan2(-dx, -dz) + (B.stuckT > 0.6 ? B.side * 0.9 : 0);
-      if (fight && d < 1.8) I.edges.add('Mouse0'); else { I.keys.add('KeyW'); if (d > 6) I.keys.add('ShiftLeft'); if (B.strafeT > 0) { B.strafeT -= 0.1; I.keys.add(B.side > 0 ? 'KeyD' : 'KeyA'); I.keys.delete('KeyW'); } }
+      // shields: raise the shield, close in and wait for the bash; strike once it is lowered
+      const guarded = fight && threat.attackStyle === 'shield' && g.crowd.guards(threat, p);
+      if (guarded && d < 3.5) { I.buttons.add(2); if (d > 1.7) I.keys.add('KeyW'); }
+      else if (fight && d < 1.8) I.edges.add('Mouse0'); else { I.keys.add('KeyW'); if (d > 6) I.keys.add('ShiftLeft'); if (B.strafeT > 0) { B.strafeT -= 0.1; I.keys.add(B.side > 0 ? 'KeyD' : 'KeyA'); I.keys.delete('KeyW'); } }
       const before = p.clone();
       window.__step(0.1);
       if (p.distanceTo(before) < 0.05 && !(fight && d < 1.8)) { B.stuckT += 0.1; if (B.stuckT > 1.2) { B.stuckT = 0; B.side *= -1; B.strafeT = 1.6; } } else B.stuckT = Math.max(0, B.stuckT - 0.05);
@@ -216,55 +220,80 @@ export function installDev(game) {
     return { zCrit: +zCrit.toFixed(2), rows };
   };
 
-  window.__auditAppearance = async ({ seeds = 20, selfTestMarker = 'keffiyeh' } = {}) => {
-    const g = game, crowd = g.crowd;
-    if (g.level.id !== 1) { g.setLevel(1); }
+  window.__auditAppearance = async ({ seeds = 20, selfTestMarker = 'keffiyeh', level = 1 } = {}) => {
+    const g = game, crowd = g.crowd, prevLevel = g.level.id;
+    g.setLevel(level);
+    const m = g.missions;
     const saved = crowd.npcs.map((n) => n.outfit);
     const savedSeedRandom = Math.random;
     const events = [];
     const roleCounts = { demonstrator: {}, looter: {}, civilian: {} };
     const roleN = { demonstrator: 0, looter: 0, civilian: 0 };
     let outfitChanged = 0, flagCarriersSelected = 0, flagsKeptAfter = 0;
-    const origMake = crowd.makeHostile.bind(crowd), origBomber = g.missions._setupBomber.bind(g.missions);
+    const origMake = crowd.makeHostile.bind(crowd), origBomber = m._setupBomber.bind(m);
+    // Level 1 draws from peaceful demonstrators; Level 2's encounter runner draws from
+    // its own eligible pool (looting crews first, then anyone free), recorded at the pick
     const record = (n) => {
       const pool = crowd.npcs.filter((o) => o === n || (o.temperament === 'peaceful' && !o.script && !o.arrested && o.state !== 'down' && o.state !== 'gone'));
       events.push({ pool: pool.map(maskOf), chosen: pool.indexOf(n) });
     };
+    let origPick = null;
+    if (m.enc) {
+      origPick = m.enc._pick.bind(m.enc);
+      m.enc._pick = (count) => {
+        const pool = crowd.npcs.filter((o) => m.enc.eligible(o));
+        const chosen = origPick(count);
+        for (const c of chosen) events.push({ pool: pool.map(maskOf), chosen: pool.indexOf(c) });
+        return chosen;
+      };
+    }
     crowd.makeHostile = (n, style, mode) => {
-      record(n);
+      if (!m.enc) record(n);
       const before = JSON.stringify(n.outfit), flag = n.rig.itemType === 'flag' || n.rig.itemType === 'frflag';
       origMake(n, style, mode);
       if (JSON.stringify(n.outfit) !== before) outfitChanged++;
       if (flag && style === 'melee') { flagCarriersSelected++; if (n.rig.itemType === 'flag' || n.rig.itemType === 'frflag') flagsKeptAfter++; }
     };
-    g.missions._setupBomber = (n, ...rest) => { if (n) record(n); return origBomber(n, ...rest); };
+    m._setupBomber = (n, ...rest) => { if (n && !m.enc) record(n); return origBomber(n, ...rest); };
     const step = (s) => window.__step(s);
     const wasAudio = g.audio.enabled;
     try {
       for (let s = 0; s < seeds; s++) {
         reseed(1000 + s);
-        if (s > 0) { const rng = mulberry(7919 * s + 17); for (const n of crowd.npcs) n.outfit = randomOutfit(rng); }
+        if (s > 0) { const rng = mulberry(7919 * s + 17); for (const n of crowd.npcs) if (!n.special) n.outfit = randomOutfit(rng); }
         for (const n of crowd.npcs) {
+          if (n.special) continue;
           const role = n.kind === 'looter' ? 'looter' : n.kind === 'civilian' ? 'civilian' : 'demonstrator';
           roleN[role]++;
           for (const k of KEYS.slice(0, 12)) if (MARKERS[k](n)) roleCounts[role][k] = (roleCounts[role][k] || 0) + 1;
         }
-        g.restart(); g.missions.stage = 'audit';
-        step(1.0);
-        const m = g.missions;
-        m._startP1(); m.stage = 'audit'; step(0.5);
-        m._startP2(); m.stage = 'audit'; step(0.5);
-        m._startP3(); step(0.3);
-        g.player.pos.set(0, 0, -10); m.stage = 'p3'; step(0.2); // real ambush trigger
-        m.stage = 'audit';
-        for (let k = 0; k < 3; k++) { m.ambient = null; m._ambientThreat(); step(0.3); }
-        m._startFinal(); m.stage = 'audit';
+        g.restart();
+        if (level === 1) {
+          m.stage = 'audit';
+          step(1.0);
+          m._startP1(); m.stage = 'audit'; step(0.5);
+          m._startP2(); m.stage = 'audit'; step(0.5);
+          m._startP3(); step(0.3);
+          g.player.pos.set(0, 0, -10); m.stage = 'p3'; step(0.2); // real ambush trigger
+          m.stage = 'audit';
+          for (let k = 0; k < 3; k++) { m.ambient = null; m._ambientThreat(); step(0.3); }
+          m._startFinal(); m.stage = 'audit';
+        } else {
+          // every street encounter of Level 2, section by section, through the real runner
+          step(0.5);
+          for (const i of [0, 1, 3]) {
+            m.resume({ section: i }); step(0.3);
+            for (const e of m.enc.list) if (m.enc.state[e.id].status === 'waiting') { m.enc.start(e); step(0.3); }
+          }
+        }
         await new Promise((r) => setTimeout(r, 0)); // keep the page responsive
       }
     } finally {
-      crowd.makeHostile = origMake; g.missions._setupBomber = origBomber;
+      crowd.makeHostile = origMake; m._setupBomber = origBomber;
+      if (origPick) m.enc._pick = origPick;
       crowd.npcs.forEach((n, i) => { n.outfit = saved[i]; });
       Math.random = savedSeedRandom;
+      g.setLevel(prevLevel);
       g.restart();
     }
     // role comparison: demonstrators vs everyone else (looters + civilians)
@@ -286,10 +315,17 @@ export function installDev(game) {
     };
     const real = score(events);
     const st = score(events, biased).rows[selfTestMarker];
-    const flagged = Object.entries(real.rows).filter(([, r]) => r.verdict === 'SKEW DETECTED').map(([k]) => k);
+    // Appearance (clothing, complexion, gender) decides the verdict. Carried flags are props of
+    // the demonstrating activity, not of the person: a selector that prefers a role (Level 2
+    // sends the looting crews, who carry no flags) shows up here and is reported separately.
+    const PROPS = ['palestinianFlag', 'algerianFlag', 'frenchFlag'];
+    const skewed = Object.entries(real.rows).filter(([, r]) => r.verdict === 'SKEW DETECTED').map(([k]) => k);
+    const flagged = skewed.filter((k) => !PROPS.includes(k));
+    const propSkew = skewed.filter((k) => PROPS.includes(k));
     const result = {
-      seeds, selections: events.length, familywiseAlpha: 0.05, zCritical: real.zCrit,
-      verdict: flagged.length ? `skew detected in: ${flagged.join(', ')}` : 'no material skew detected (screening check; see minDetectablePts)',
+      level, seeds, selections: events.length, familywiseAlpha: 0.05, zCritical: real.zCrit,
+      verdict: flagged.length ? `appearance skew detected in: ${flagged.join(', ')}` : 'no material appearance skew detected (screening check; see minDetectablePts)',
+      carriedProps: propSkew.length ? `role-linked: ${propSkew.map((k) => `${k} ${real.rows[k].selectedPct}% selected vs ${real.rows[k].poolPct}% in pool`).join('; ')}` : 'no skew',
       markers: real.rows,
       roles: { note: 'marker rates by role across all generated populations; z compares demonstrators with looters + civilians', n: roleN, rows: roles },
       hostility: { outfitsChangedByMakeHostile: outfitChanged, meleeFlagCarriersSelected: flagCarriersSelected, flagsKept: flagsKeptAfter },

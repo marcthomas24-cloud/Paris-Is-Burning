@@ -1,0 +1,48 @@
+{
+  "description": "Level 2 increment 2: street encounters and progression - test results",
+  "date": "2026-10-23",
+  "branch": "level2 (on top of 9eb4724, increment 1)",
+  "level2Bot": {
+    "method": "?dev&level=2&seed=N, __start({audio:false}), __botRun slices to the end; the bot uses normal controls (shields: raise shield, wait for the bash, strike during the recovery)",
+    "runs": [
+      { "seed": 21, "time_s": 126.2, "sectionsStart_s": [1.7, 30, 61.7, 63.7, 125.2], "neutralised": 38, "minHp": 51, "bombsStopped": "1/1", "peacefulStruck": 2, "result": "LEVEL 2 COMPLETE", "note": "final code" },
+      { "seed": 21, "time_s": 116.4, "neutralised": 38, "minHp": 38, "result": "LEVEL 2 COMPLETE", "note": "before determinism fixes" },
+      { "seed": 5, "time_s": 133.8, "neutralised": 38, "minHp": 44, "result": "LEVEL 2 COMPLETE", "note": "before determinism fixes" },
+      { "seed": 9, "time_s": 127.8, "neutralised": 38, "minHp": 50, "peacefulStruck": 5, "result": "LEVEL 2 COMPLETE", "note": "before determinism fixes" }
+    ],
+    "leaderGlimpse": "fired in every run; untargetable; leaves into Rue de Malte",
+    "consoleErrors": 0
+  },
+  "shieldMechanics": "instrumented run: bashes telegraphed (amber ring), strikes into the guard blocked (officer recoils, no damage), kills landed in the recovery window; bot completed every shield encounter with normal controls",
+  "checkpoint": "die in section 4 -> MISSION FAILED with RETRY SECTION (no CONTINUE) -> resumes section 4, earlier sections complete, score restored to the section start, encounters reloaded",
+  "level1Regression": {
+    "seed3": { "time_s": 84.4, "score": 7352, "result": "MISSION COMPLETE", "consoleErrors": 0 },
+    "note": "Level 1 constructs no Level 2 code. Its seeded result differs from increment 1's (101.3 s) because two wall-clock dependencies were removed (below), which changes the random sequence; Level 1 logic is unchanged."
+  },
+  "reproducibility": {
+    "correction": "Increment 1 reported that seeded runs replay exactly. That was verified only for 30 s of play; full runs still diverged.",
+    "causes": [
+      "events.js fired staggered tear-gas, mortar and volley shots with setTimeout (wall clock)",
+      "the dynamic-resolution system changed crowd detail (maxSkinned) from real frame times, which changed which characters animate and draw random numbers"
+    ],
+    "fix": "game-time timers in the incident scheduler; crowd detail fixed while the harness steps the simulation (normal play unchanged)",
+    "verification": "two complete seeded Level 1 runs in separate page loads, with different slice sizes, gaps and menu idle time: identical time, score, stats, stage log, health and crowd positions"
+  },
+  "appearanceAudit": {
+    "level2_30seeds": {
+      "selections": 1140,
+      "appearanceVerdict": "no material appearance skew",
+      "carriedProps": "role-linked: Palestinian flag 1.9% selected vs 15.1% in pool (z -12.4), Algerian 1.2% vs 6.4%, French 1.1% vs 5.9%. Cause: encounters draw the looting crews first, and crews carry no flags (flags belong to the demonstrating activity).",
+      "minDetectablePts": "1.5-4.2",
+      "selfTestZ": 12.06,
+      "outfitsChangedByMakeHostile": 0
+    },
+    "level1_20seeds": { "selections": 347, "verdict": "no material skew", "maxAbsZ": 1.26, "selfTestZ": 6.97, "outfitsChangedByMakeHostile": 0, "meleeFlagCarriersKeptFlag": "60/60" }
+  },
+  "performance": {
+    "heaviestLevel2": "section 4 final push + reserve, 14 active hostiles, car fire: update 8.5 ms, render 21-28 ms, 162 draw calls",
+    "level1DenseSameSession": "update 8.1-8.8 ms, render 20-21 ms, 170 draw calls",
+    "shaderCompiles": "new props (three shield variants, flare) and the Leader rig are compiled when Level 2 loads; no programs compile when shields or the Leader first appear (72 -> 72)"
+  },
+  "mobile": "375x812 touch emulation: Level 2 combat HUD (ENGAGED chip, crew counter, 5 pips) and touch controls fit; two radio lines shortened after the check"
+}

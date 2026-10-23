@@ -35,7 +35,8 @@ export const LEVELS = {
   },
   2: {
     id: 2, name: 'NUIT', tag: 'Boulevard de la République · 01h12',
-    Missions: Level2, phases: L2_PHASES, lighting: 'night',
+    Missions: Level2, phases: L2_PHASES, lighting: 'night', hazardDir: 1,
+    policeOff: ['injured', 'guard'], // the cut-off officers were extracted at the end of Level 1
     start: { x: -1.5, z: -100, heading: 0 },
   },
 };

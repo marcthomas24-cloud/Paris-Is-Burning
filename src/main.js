@@ -140,6 +140,7 @@ class Game {
       else if (a === 'back') this._screen(this.prevScreen || 'menu');
       else if (a === 'restart') this.restart();
       else if (a === 'resume') this.resume();
+      else if (a === 'retry') { const cp = this.missions.cp; this.restart(); if (cp && this.missions.resume) this.missions.resume(cp); }
       else if (a === 'continue' || a === 'level') this.startLevel(a === 'continue' ? this.level.id + 1 : +b.dataset.level);
     }));
     $('onboarding').addEventListener('click', () => this._dismissOnboarding());
@@ -169,6 +170,8 @@ class Game {
       this.missions = new def.Missions(this);
     }
     this.player.start = def.start;
+    this.crowd.setPoliceOff(def.policeOff || []);
+    this.events.hazardDir = def.hazardDir || -1;
     this.player.reset();
     this.cameraRig.reset(this.player);
     this.applyLighting(def.lighting);
@@ -288,6 +291,7 @@ class Game {
     this.hud.showEnd(win, reason, this.missions);
     const next = LEVELS[this.level.id + 1];
     $('btn-continue').classList.toggle('hidden', !(win && next && Progress.unlocked(next.id)));
+    $('btn-retry').classList.toggle('hidden', !(!win && this.missions.cp)); // section checkpoint (Level 2)
     this._screen('end-screen');
     this.input.unlock();
     this.audio.ui(win ? 'good' : 'bad');
@@ -338,7 +342,9 @@ class Game {
     p.acc = 0; p.frames = 0;
     if (document.hidden) return;
     let pr = this.pr;
-    const c = this.crowd;
+    // crowd detail changes which characters animate (and draw random numbers), so it stays
+    // fixed while the test harness steps the simulation; pixel ratio only affects rendering
+    const c = this.manualStep ? null : this.crowd;
     if (ms > 21 && pr > 0.85) pr = Math.max(0.85, pr - 0.1);
     else if (ms > 21 && c && c.maxSkinned > 12) c.maxSkinned -= 2; // then trade crowd detail
     else if (ms < 15 && c && c.maxSkinned < 20) c.maxSkinned += 2;

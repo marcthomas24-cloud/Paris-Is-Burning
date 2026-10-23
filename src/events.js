@@ -28,7 +28,12 @@ export class IncidentScheduler {
     this.reset();
   }
 
-  reset() { this.t = 4; this.carT = 22 + Math.random() * 15; this.lastZone = null; this.queue = []; this.hazards = false; this.hazT = 4; this.gasT = 30 + Math.random() * 20; this.gasClouds = []; }
+  // hazardDir: the direction the officer advances along the boulevard (Level 1 -z, Level 2 +z)
+  reset() { this.hazardDir = (this.game.level && this.game.level.hazardDir) || -1; this.t = 4; this.carT = 22 + Math.random() * 15; this.lastZone = null; this.queue = []; this.hazards = false; this.hazT = 4; this.gasT = 30 + Math.random() * 20; this.gasClouds = []; this.timers = []; }
+
+  // run fn after `sec` seconds of game time (staggered shots; replaces wall-clock
+  // timers so the simulation stays reproducible and nothing fires while paused)
+  later(sec, fn) { this.timers.push({ t: sec, fn }); }
 
   // queue a named event after a delay (phase scripting)
   schedule(type, delay, pos) { this.queue.push({ type, t: delay, pos }); }
@@ -53,8 +58,7 @@ export class IncidentScheduler {
     const g = this.game;
     const n = 2 + Math.floor(Math.random() * 3);
     for (let i = 0; i < n; i++) {
-      setTimeout(() => {
-        if (g.state !== 'playing') return;
+      this.later(i * R(250, 600) / 1000, () => {
         const from = V(R(-8, 8), 2.2, 125);
         const to = V(R(-9, 9), 0.1, R(86, 108));
         g.audio.thump(from);
@@ -64,7 +68,7 @@ export class IncidentScheduler {
           g.crowd.disturb(ground, 9, 0.8, 'teargas');
           g.audio.impact(ground, false, false, 'stone');
         }, R(1.1, 1.5));
-      }, i * R(250, 600));
+      });
     }
   }
 
@@ -84,11 +88,11 @@ export class IncidentScheduler {
     }, R(1.0, 1.3));
   }
 
-  // phase-3 hazards: petrol bombs land on the boulevard ahead of the officer
+  // hazard phases: petrol bombs land on the boulevard ahead of the officer
   _hazard() {
     const g = this.game, p = g.player.pos;
     const sideOff = (Math.random() < 0.5 ? -1 : 1) * R(2.5, 6);
-    const ahead = V(Math.max(-12, Math.min(12, p.x + sideOff)), 0, p.z - R(14, 24));
+    const ahead = V(Math.max(-12, Math.min(12, p.x + sideOff)), 0, p.z + this.hazardDir * R(14, 24));
     if (ahead.z < -120 || ahead.z > 170) return;
     g.hud.alert('Incoming petrol bomb!', 'warn', 1.4, 'incoming');
     this.molotovAt(ahead);
@@ -97,6 +101,7 @@ export class IncidentScheduler {
   update(dt) {
     const g = this.game;
     this.t -= dt; this.carT -= dt;
+    for (let i = this.timers.length - 1; i >= 0; i--) { const tm = this.timers[i]; tm.t -= dt; if (tm.t <= 0) { this.timers.splice(i, 1); tm.fn(); } }
     for (let i = this.queue.length - 1; i >= 0; i--) { const q = this.queue[i]; q.t -= dt; if (q.t <= 0) { this.queue.splice(i, 1); this._run(q.type, q.pos); } }
     if (this.hazards) { this.hazT -= dt; if (this.hazT <= 0) { this.hazT = R(8, 13); this._hazard(); } }
     // police tear gas at intervals while the crowd is near the line
@@ -149,8 +154,7 @@ export class IncidentScheduler {
     const g = this.game;
     const n = 1 + Math.floor(Math.random() * 3);
     for (let i = 0; i < n; i++) {
-      setTimeout(() => {
-        if (g.state !== 'playing') return;
+      this.later(i * R(350, 900) / 1000, () => {
         const from = z.crowd.clone().add(V(R(-3, 3), 0.3, R(-3, 3)));
         const to = z.police.clone().add(V(R(-6, 6), R(6, 14), R(-6, 6)));
         g.audio.thump(from);
@@ -159,7 +163,7 @@ export class IncidentScheduler {
           g.crowd.disturb(pos.clone().setY(0), 14, 0.6, 'explosion');
           this._shakeFrom(pos, 0.15);
         });
-      }, i * R(350, 900));
+      });
     }
   }
 
@@ -167,15 +171,14 @@ export class IncidentScheduler {
     const g = this.game;
     const n = 3 + Math.floor(Math.random() * 5);
     for (let i = 0; i < n; i++) {
-      setTimeout(() => {
-        if (g.state !== 'playing') return;
+      this.later(i * R(150, 420) / 1000, () => {
         const type = Math.random() < 0.4 ? 'bottle' : 'stone';
         g.effects.throwProjectile(this._from(z), this._to(z), type, (pos) => {
           if (type === 'bottle') g.audio.glass(pos, 0.6); else g.audio.impact(pos, false, false, Math.random() < 0.6 ? 'stone' : 'shield');
           g.effects.dust(pos, 4);
           g.crowd.disturb(pos, 5, 0.3, 'projectile');
         });
-      }, i * R(150, 420));
+      });
     }
     if (Math.random() < 0.6) g.audio.shout(z.crowd, true);
   }
