@@ -1,0 +1,39 @@
+{
+  "description": "Level 1 baseline recorded before Level 2 increment 1 changes",
+  "date": "2026-10-23",
+  "commit": "d2ea7d49e2c875d3acf612c6f43a5ee3d3bc277f",
+  "workingTree": "clean (src/missions.js 'modified' flag was a CRLF/LF stat artefact; its changes are committed in d2ea7d4)",
+  "environment": {
+    "browser": "Claude desktop built-in browser, Chromium 152, Windows 11",
+    "gpu": "ANGLE (AMD Radeon integrated, D3D11)",
+    "viewport": "1280x720, pixel ratio 1.0",
+    "note": "Browser pane was hidden during the run, so absolute timings are pessimistic; compare only against runs taken the same way."
+  },
+  "botRun": {
+    "method": "?dev, __start(), then __botRun(1500) in slices until missions.ended; one auto-pause (blur) resumed by the harness",
+    "outcome": "MISSION COMPLETE",
+    "missionTime_s": 113,
+    "stageLog": [["p1", 3.1], ["gap1", 11], ["p2", 14], ["gap2", 30.1], ["p3", 33.2], ["final", 96.8]],
+    "score": 6371,
+    "stats": { "neutralized": 17, "arrests": 9, "bombsStopped": 2, "bombsThrown": 0, "peaceful": 2 },
+    "playerHpAtEnd": 100,
+    "consoleErrors": 0,
+    "consoleWarnings": "277 WebGL 'framebuffer incomplete: zero size' warnings, caused by the canvas being 0x0 while the pane was hidden (not a game error)",
+    "historicalReference": "README reports a 1:48 bot run"
+  },
+  "restart": "restart() after the end screen returned to state 'playing', stage 'p1', no errors",
+  "perf": {
+    "method": "__perf2(60): fixed-step update + full post-processed render with gl.finish(); renderer.info accumulated across passes",
+    "start_z141": { "updateMs": 13.95, "renderMs": 38.9, "calls": 291, "tris": 1170021 },
+    "dense_z108": { "updateMs": 18.16, "renderMs": 32.85, "calls": 183, "tris": 1145208 },
+    "mid_z-60": { "updateMs": 15.67, "renderMs": 32.48, "calls": 201, "tris": 1805770 },
+    "junction_z-112": { "updateMs": 12.98, "renderMs": 30.91, "calls": 144, "tris": 1364642 },
+    "shaderPrograms": 50,
+    "existingPerfTool": "__perf() reports calls:1 / tris:1 because the composer resets renderer.info on every pass; its msPerFrame was 49-54 ms in the hidden pane"
+  },
+  "knownPreExistingIssues": [
+    "The bot does not survive an automatic pause (window blur / visibility change / pointer-lock loss): __step only advances while state is 'playing'",
+    "The real animation loop also calls update() while the bot steps, so bot runs are not deterministic",
+    "Phase 2 HUD shows the bomber escape countdown from 22 s although the escape window is now 30 s (missions.js hudInfo)"
+  ]
+}

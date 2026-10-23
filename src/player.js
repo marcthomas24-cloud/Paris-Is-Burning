@@ -24,9 +24,10 @@ export class Player {
   }
 
   reset() {
-    this.pos.set(0.5, 0, 141);
+    const s = this.start || { x: 0.5, z: 141, heading: Math.PI }; // set per level; Level 1 faces north (-z)
+    this.pos.set(s.x, 0, s.z);
     this.vel.set(0, 0, 0);
-    this.heading = Math.PI; // facing north (-z)
+    this.heading = s.heading;
     this.health = 100;
     this.stamina = 100;
     this.attack = null;      // {phase, t, target, hit}

@@ -86,16 +86,24 @@ A complete run takes about 2–3 minutes. A fast, efficient run is around 1:45; 
 - No peaceful demonstrators struck: +500
 - Striking a demonstrator who isn't a threat: −150
 
+## Levels
+
+**Level 1** is the mission described above. Completing it unlocks **Level 2 · Nuit** on that device (saved in `localStorage`; a CONTINUE button appears on the results screen and a LEVEL 2 button on the main menu).
+
+**Level 2** takes place on the same boulevard later that night, pushing back down it from Rue Oberkampf towards the CRS staging area. In this build it is a foundation only: night lighting, five route sections (Deployment, Escalation, the Enforcer at Rue de Malte, Second push, the Leader at Rue Jean-Pierre Timbaud) shown as waypoints, and its own HUD phases and results screen. Encounters and the two bosses come in later builds.
+
+**Lighting presets** (`src/levels.js`): `dusk` (Level 1) and `night` (Level 2). A preset only changes light colours and intensities, fog, sky uniforms, lamp glow and exposure. It never adds or removes lights, so switching does not compile new shaders.
+
 ## Fairness rule
 
-Who becomes aggressive is chosen at random from the crowd, independently of clothing, flags or appearance. Threats are identified **only by behaviour**. While someone is acting violently (pursuing, punching, shoving, throwing, preparing a device), they show a red ground ring and a red minimap blip. Peaceful demonstrators keep chanting, filming and waving flags unless something credible happens near them, such as a strike, an explosion or a projectile.
+Who becomes aggressive is chosen at random from the crowd, independently of clothing, flags or appearance. Everyone on the street (demonstrators, looting crews and passers-by) is dressed from one shared clothing pool, so nothing a character wears says anything about their role, and becoming hostile never changes how someone looks. Threats are identified **only by behaviour**. While someone is acting violently (pursuing, punching, shoving, throwing, preparing a device), they show a red ground ring and a red minimap blip. Peaceful demonstrators keep chanting, filming and waving flags unless something credible happens near them, such as a strike, an explosion or a projectile.
 
 ## Characters, crowd and effects
 
 **Base bodies.** Civilians use five realistic base bodies: the Mixamo female (Michelle), the Ready Player Me male, and three [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) people (a woman in a tee and jeans, a young man in a hoodie, a man in a denim jacket). The Rocketbox bodies are converted offline by `tools/rocketbox/` (see its `convert.js`): Biped bones renamed to Mixamo names, one skinned mesh with a texture atlas, a per-vertex garment part and six ARKit facial blendshapes kept. Their faces keep their own textures, tinted darker and warmer towards each person's complexion, and they keep their original clothes or get recoloured ones.
 
 **Building on the base models.** The base bodies are extended in code:
-- **Garment layers:** skinned clothing shells are generated from each body's own mesh and pushed out along its normals. There are football shirts (PSG-style band, stripes, hoops, Algeria-style green and white), hoodies, quilted puffer jackets and long coats, so outfits change silhouette, not just colour. About 14% of demonstrators wear a hi-vis *gilet jaune* over their garment, with reflective hoops and shoulder straps.
+- **Garment layers:** skinned clothing shells are generated from each body's own mesh and pushed out along its normals. There are football shirts (PSG-style band, stripes, hoops, Algeria-style green and white), hoodies, quilted puffer jackets, long coats and pressed shirts, so outfits change silhouette, not just colour. About 10% of people wear a hi-vis *gilet jaune* over their garment, with reflective hoops and shoulder straps.
 - **Body variation:** generated *belly* and *chest* blendshapes give varied builds, plus shoulder-width and head-size variation.
 - **Accessories:** headscarves, caps, beanies, hoods, masks, keffiyehs, scarves and backpacks.
 
@@ -108,7 +116,7 @@ Who becomes aggressive is chosen at random from the crowd, independently of clot
 
 **Banners and placards:** cost-of-living, public-services, union and student slogans (*LYCÉENS EN COLÈRE*, *FACS EN GRÈVE*, *JEUNESSE EN LUTTE*, *LA VIE CHÈRE ÇA SUFFIT*) alongside the original ones, plus two more large banners hung on the façades.
 
-**Police:** CRS officers in the line, squads and at the objective step out towards nearby aggressors, wind up and strike with the baton. That staggers and drives attackers back; repeated hits occasionally put someone down, which earns a small *Officer assist* score.
+**Police:** CRS officers vary in height and build (and in complexion on the procedural fallback rig; the armoured model's visor hides the face). Officers in the line, squads and at the objective step out towards nearby aggressors, wind up and strike with the baton. That staggers and drives attackers back; repeated hits occasionally put someone down, which earns a small *Officer assist* score.
 
 **Characters.** Everyone in the game is a rigged, skinned glTF human driven by motion-capture clips, as follows:
 
@@ -121,12 +129,13 @@ Who becomes aggressive is chosen at random from the crowd, independently of clot
 - **Retargeting.** The Mixamo clips (idle, walk, run, nod, head-shake, and a second walk/run style) are retargeted at load in world space against a shared T-pose reference. This copes with A-pose binds, different bone roll and Y-up/Z-up armatures.
 - **Actions.** Strikes, throws, chants, flag waving, shoves, crouches and knockdowns are additive bone rotations applied in character space on top of the mocap.
 - **Items.** Flags, placards, phones, bottles, the baton and the shield attach to sockets derived from the bind pose, so they follow the hands.
-- **Crowd mix.** Modelled on reference photos of the Paris protests:
-  - About 88% men and 12% women.
-  - Mostly North African / Middle Eastern (about 54%) and Black (about 38%) complexions. White Europeans are hard-capped at 10% of everyone generated.
-  - Clothing is mostly all-black streetwear: hoodies (some red or grey), puffers, and black tracksuit tops with orange, white or red sleeve stripes. Also PSG and Algeria shirts, keffiyehs, white caps and some gilets jaunes.
-  - About half wear face coverings: balaclavas with an eye slot, black face masks, blue surgical masks and keffiyeh masks.
-  - Appearance is never used to pick who turns violent; that is decided by behaviour (see above).
+- **Crowd mix.** One shared pool for demonstrators, looting crews and passers-by, with ordinary weights (no caps or quotas):
+  - About 70% men and 30% women.
+  - Complexions drawn about 34% European, 36% North African / Middle Eastern and 30% Black.
+  - Clothing is mostly dark streetwear: hoodies (some red or grey), puffers, and black tracksuit tops with orange, white or red sleeve stripes. Also PSG and Algeria shirts, keffiyehs (about a quarter of people), white caps, gilets jaunes, and the wool coats and shirts of people out for the evening.
+  - About a third wear face coverings: balaclavas with an eye slot, black face masks, blue surgical masks and keffiyeh masks.
+  - Appearance is never used to pick who turns violent; that is decided by behaviour and mission state (see above). `__auditAppearance()` checks this (see Development and testing).
+  - Props are only dropped when an attack needs the hands: a melee aggressor keeps a one-handed flag, throwers swap theirs for a stone.
 - **Variety.** Each person is unique: skin tone, height, PSG / other football shirt / hoodie / jacket colours, trousers, shoes, beards, procedural hair, caps, beanies, hoods, masks, keffiyehs, scarves and backpacks.
 
 **Crowd LOD.**
@@ -175,7 +184,7 @@ The soundscape is built from openly licensed recordings (crowds, protest chantin
 
 **Robustness:** the AudioContext is created by the first click, and repeated clicks reuse it. A suspended or interrupted context resumes on the next interaction. Recordings start downloading while the city loads. A file that fails to load or decode falls back to a synthesised stand-in or is skipped, so the game never waits for or depends on audio. Touch devices run audio at 32 kHz, and the call to prayer is decoded only while it plays, to save memory.
 
-**Development:** with `?dev` in the URL, `__audioProbe(seconds)` reports per-second RMS and peak levels, clipped samples and active voices, and `__audioEvents(seconds)` counts requested and admitted sounds. Rebuild the audio files with `tools/audio/build_audio.py`.
+**Audio development:** with `?dev` in the URL, `__audioProbe(seconds)` reports per-second RMS and peak levels, clipped samples and active voices, and `__audioEvents(seconds)` counts requested and admitted sounds. Rebuild the audio files with `tools/audio/build_audio.py`.
 
 ## Assets and licences
 
@@ -221,8 +230,32 @@ src/
   world.js       Procedural Paris: buildings, streets, props, vehicles (CRS, pompiers, SAMU),
                  barricades, fires, puddles, colliders
   player.js, camera.js, missions.js, hud.js, audio.js, input.js, textures.js
+  levels.js      Level definitions (mission script, lighting preset, player start), lighting presets,
+                 progression / unlocks
+  level2.js      Level 2 mission script (foundation: route sections as waypoints)
+  seed.js        ?seed=N: seeded Math.random for reproducible runs
   dev.js         Test helpers, loaded only with ?dev in the URL
 ```
+
+## Development and testing
+
+Add `?dev` to the URL to load the test helpers (`src/dev.js`):
+
+| Helper | What it does |
+|---|---|
+| `__start({ audio })` | Start playing (pass `{ audio: false }` for silent, reproducible runs) |
+| `__step(seconds)` | Advance the simulation in fixed 1/60 s steps. From the first call the real-time loop only renders; `__live()` hands the simulation back |
+| `__botRun(ms)` | Scripted bot that plays with the normal controls for up to `ms` of wall time; call repeatedly until `ended` |
+| `__perf(frames)` | Average simulation and render cost per frame, draw calls and triangles summed over all post-processing passes, and the number of compiled shader programs |
+| `__level(id, stage)` / `__jump(i)` | Switch level (ignores unlocks) / jump to a Level 2 section |
+| `__unlock(id)` / `__resetProgress()` | Unlock a level / clear saved progress |
+| `__auditAppearance({ seeds })` | Appearance audit (below) |
+
+URL shortcuts: `?dev&level=2` starts in Level 2, and `?dev&level=2&stage=3` starts at its fourth section. `?seed=N` seeds `Math.random`; with `__start({ audio: false })` and `__step`, a run replays identically.
+
+**Appearance audit.** For each seed the crowd gets freshly generated appearances from the real generator. The real Level 1 selection code then runs (aggressors, surges, bombers, the Rue de Malte ambush, ambient threats and the final wave), and each selected character is compared with the pool it was drawn from. The markers are keffiyehs, Algeria and PSG shirts, headscarves, face coverings, balaclavas, hi-vis vests, smart clothes, carried flags, gender and complexion. A marker is flagged when its rate among selected characters differs from the pool's by more than chance allows (z-test, Bonferroni-corrected over all markers, familywise alpha 0.05). A pass means no skew larger than the reported minimum detectable difference was found; it is a screening check, not a proof of independence. A built-in self-test runs the same statistic on a deliberately biased selector to show that it detects skew. The audit also compares marker rates across roles and confirms that no outfit changes when someone turns hostile.
+
+Baseline results for Level 1 from before the Level 2 work are kept in `tools/baseline/`.
 
 ## Known limitations
 

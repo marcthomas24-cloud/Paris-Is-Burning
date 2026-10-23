@@ -1,4 +1,5 @@
 // Paris Burning — bootstrap, game loop and state machine.
+import { SEED } from './seed.js'; // first: seeds Math.random when ?seed=N is given
 import * as THREE from 'three';
 import { World } from './world.js';
 import { Effects } from './effects.js';
@@ -6,7 +7,7 @@ import { Audio } from './audio.js';
 import { Crowd } from './crowd.js';
 import { Player } from './player.js';
 import { CameraRig } from './camera.js';
-import { Missions } from './missions.js';
+import { LEVELS, LIGHTING, Progress } from './levels.js';
 import { HUD } from './hud.js';
 import { Input } from './input.js';
 import { loadHumans, makeEnvMap, Humans } from './humans.js';
@@ -38,7 +39,8 @@ class Game {
     this.camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 600);
 
     // overcast late-afternoon light: soft sky fill + low warm sun through haze
-    this.scene.add(new THREE.HemisphereLight(0xc4c6ca, 0x5a5044, 1.7));
+    this.hemi = new THREE.HemisphereLight(0xc4c6ca, 0x5a5044, 1.7);
+    this.scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xffd6a8, 2.4);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -82,13 +84,17 @@ class Game {
     await new Promise((r) => setTimeout(r, 30));
     this.player = new Player(this);
     this.crowd = new Crowd(this, 150);
-    this.missions = new Missions(this);
     this.events = new IncidentScheduler(this);
     // wet, reflective street surfaces
     for (const k of ['road', 'roadPlain', 'cobble']) { const m = this.world.materials[k]; m.envMap = Humans.envMap; m.envMapIntensity = 0.32; m.roughness = 0.66; m.metalness = 0.05; }
     this.world.addPuddles(Humans.envMap);
+    // level: Level 1 by default; ?dev&level=N jumps straight to a level for testing
+    const q = new URLSearchParams(location.search);
+    const devLevel = q.has('dev') && LEVELS[q.get('level')] ? +q.get('level') : 1;
+    this.setLevel(devLevel);
+    this.devStage = q.has('dev') && q.has('stage') ? +q.get('stage') : null;
+    this._syncLevelMenu();
     this.post = new Post(this.renderer, this.scene, this.camera);
-    this.baseFog = 0.0088;
     this.audio._randomCrowdPos = () => this.crowd.randomCrowdPos();
     this.cameraRig.reset(this.player);
     this.firstPlay = true;
@@ -115,6 +121,9 @@ class Game {
     document.querySelectorAll('.menu-buttons button').forEach((b) => (b.disabled = false));
     this.ready = true;
     if (location.search.includes('dev')) import('./dev.js').then((m) => m.installDev(this));
+    // seeded runs: the simulation (menu background included) only advances through the
+    // developer helpers, so nothing consumes random numbers before the run starts
+    if (SEED !== null) this.manualStep = true;
     this.renderer.setAnimationLoop(() => this.frame());
   }
 
@@ -131,6 +140,7 @@ class Game {
       else if (a === 'back') this._screen(this.prevScreen || 'menu');
       else if (a === 'restart') this.restart();
       else if (a === 'resume') this.resume();
+      else if (a === 'continue' || a === 'level') this.startLevel(a === 'continue' ? this.level.id + 1 : +b.dataset.level);
     }));
     $('onboarding').addEventListener('click', () => this._dismissOnboarding());
     this.touch = new TouchControls(this);
@@ -147,6 +157,53 @@ class Game {
     syncAudioUI(this.audio.getSettings());
   }
 
+  // ------------------------------------------------------------- levels
+  // Switch the active level: mission script, lighting and player start. The
+  // world, crowd and effects are shared; restart() puts them back to a clean state.
+  setLevel(id) {
+    const def = LEVELS[id];
+    if (!def) return;
+    if (!this.level || this.level.id !== id) {
+      if (this.missions) this.missions.dispose();
+      this.level = def;
+      this.missions = new def.Missions(this);
+    }
+    this.player.start = def.start;
+    this.player.reset();
+    this.cameraRig.reset(this.player);
+    this.applyLighting(def.lighting);
+  }
+
+  // Start (or restart) a level from a menu or the end screen. Locked levels are refused.
+  startLevel(id) {
+    if (!LEVELS[id] || !Progress.unlocked(id)) return;
+    this.setLevel(id);
+    if (this.state === 'menu') this.play(); else this.restart();
+  }
+
+  // Colours, intensities, fog and sky uniforms only: the light count never changes,
+  // so the existing shader programs stay valid (no recompilation on switch).
+  applyLighting(name) {
+    const L = LIGHTING[name] || LIGHTING.dusk;
+    this.lighting = L;
+    this.hemi.color.set(L.hemiSky); this.hemi.groundColor.set(L.hemiGround); this.hemi.intensity = L.hemiI;
+    this.sun.color.set(L.sunColor); this.sun.intensity = L.sunI; this.sunOffset.set(...L.sunOffset);
+    this.renderer.toneMappingExposure = L.exposure;
+    this.baseFog = L.baseFog;
+    this._fogA = new THREE.Color(L.fogA); this._fogB = new THREE.Color(L.fogB);
+    this.scene.fog.color.copy(this._fogA); this.scene.fog.density = L.baseFog;
+    this.scene.background.copy(this._fogA);
+    this.world.setSky(L.sky);
+    this.world.materials.lamp.emissiveIntensity = L.lamp;
+    for (const k of ['road', 'roadPlain', 'cobble']) this.world.materials[k].envMapIntensity = L.puddleEnv;
+    this.effects.fireLightMul = L.fireLight;
+    this.effects.smoke.mat.uniforms.uTint.value.setRGB(...L.smokeTint);
+  }
+
+  _syncLevelMenu() {
+    document.querySelectorAll('[data-action="level"]').forEach((b) => b.classList.toggle('hidden', !Progress.unlocked(+b.dataset.level)));
+  }
+
   _screen(id) {
     for (const s of ['menu', 'controls-screen', 'audio-screen', 'pause-screen', 'end-screen']) $(s).classList.toggle('hidden', s !== id);
   }
@@ -160,6 +217,7 @@ class Game {
     this.audio.setPaused(false);
     this.cameraRig.reset(this.player);
     this.cameraRig.intro(3.2);
+    this._applyDevStage();
     if (this.firstPlay) {
       this.firstPlay = false;
       this.onboarding = true;
@@ -208,11 +266,19 @@ class Game {
     this.onboarding = false;
     $('onboarding').classList.add('hidden');
     this.audio.setPaused(false);
+    this._applyDevStage();
     this.input.lock();
+  }
+
+  // ?dev&stage=N: start the current level at section N (levels that support it)
+  _applyDevStage() {
+    if (this.devStage !== null && this.missions.jumpTo) this.missions.jumpTo(this.devStage);
   }
 
   endGame(win, reason) {
     this.pendingEnd = { win, reason, t: win ? 1.2 : 2.2 };
+    // completing a level unlocks the next one on this device
+    if (win && LEVELS[this.level.id + 1]) { Progress.unlock(this.level.id + 1); this._syncLevelMenu(); }
   }
 
   _showEnd() {
@@ -220,6 +286,8 @@ class Game {
     this.pendingEnd = null;
     this.state = 'ended';
     this.hud.showEnd(win, reason, this.missions);
+    const next = LEVELS[this.level.id + 1];
+    $('btn-continue').classList.toggle('hidden', !(win && next && Progress.unlocked(next.id)));
     this._screen('end-screen');
     this.input.unlock();
     this.audio.ui(win ? 'good' : 'bad');
@@ -244,7 +312,10 @@ class Game {
     const raw = this.clock.getDelta();
     let dt = Math.min(0.05, raw);
     this._adaptResolution(raw);
-    if (this.state === 'playing' && !this.onboarding) this.update(dt);
+    // manualStep (developer helpers): the test harness advances the simulation itself
+    // with fixed steps, so the real-time loop only renders and runs stay reproducible
+    if (this.manualStep) { /* stepped by dev.js */ }
+    else if (this.state === 'playing' && !this.onboarding) this.update(dt);
     else if (this.state === 'playing' && this.onboarding) {
       this.onboardT += dt;
       this._ambientUpdate(dt, true);
@@ -321,7 +392,7 @@ class Game {
       const b = bars[i];
       if (!b) return;
       l.position.copy(b[0]);
-      l.intensity = (i % 2 === 0) === on ? 14 : 2;
+      l.intensity = (i % 2 === 0) === on ? this.lighting.beaconOn : this.lighting.beaconOff;
     });
   }
 

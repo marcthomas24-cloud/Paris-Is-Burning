@@ -1,0 +1,53 @@
+{
+  "description": "Level 2 increment 1: Level 1 regression and new-feature test results, compared with level1-baseline.json",
+  "date": "2026-10-23",
+  "baselineCommit": "d2ea7d49e2c875d3acf612c6f43a5ee3d3bc277f",
+  "method": "Both versions built with vite build and served from the same dev server (dist/baseline from a git worktree of the baseline commit, dist/current from the working tree). Same bot harness: __start(), then __botRun(1500) slices until ended, auto-resuming on page pauses, audio on, unseeded.",
+  "level1Bot": {
+    "baseline": {
+      "runs_s": [113, 94.2, 86.9, 89.2, 72.3, 86.7, 89.3, 92.3, 89.5],
+      "note": "113 s is the first dev-server run, which stalled once on an auto-pause; scores/stats were captured for 6 of the 9 runs",
+      "completed": "9 / 9 MISSION COMPLETE",
+      "bombsThrownPerRun": [0, 1, 0, 0, 1],
+      "consoleErrors": 0
+    },
+    "current": {
+      "runs_s": [71.7, 86.5, 120.8, 109.2, 101.6],
+      "seededRun_seed3_s": 101.3,
+      "completed": "6 / 6 MISSION COMPLETE, CONTINUE shown and Level 2 unlocked every time",
+      "scores": [7108, 6359, 5529, 4981, 4670, 6684],
+      "bombsThrownPerRun": [1, 1, 2, 2, 2, 1],
+      "consoleErrors": 0
+    },
+    "assessment": "Level 1 completes reliably. Median time is higher (about 102 s vs 89 s) and the bot lets more petrol bombs through. No changed code path touches combat, mission or AI logic (a held flag is not read by any combat code). The most likely cause is the crowd layout: the new outfit generator consumes the crowd's fixed random stream differently, so anchors, roles, courage and speeds differ from the baseline build. Not proven; needs seeded multi-layout comparison and a hands-on pass."
+  },
+  "restartAndEndScreens": "restart from end screen, pause menu flow, MISSION FAILED path (no CONTINUE), Level 2 results (no CONTINUE), Level 1 -> CONTINUE -> Level 2 all verified",
+  "perfInterleaved": {
+    "method": "__perf(40) at z=141/108/-60, alternating baseline and current tabs for 3 rounds; GPU shared with other sessions' pages so render times are noisy",
+    "updateMs": { "baseline": "7.1-11.8", "current": "6.1-10.2" },
+    "renderMs": { "baseline": "24.4-67.8", "current": "16.4-75.7" },
+    "drawCalls": { "baseline": "146-303", "current": "158-255" },
+    "conclusion": "no measurable regression"
+  },
+  "nightLighting": {
+    "shaderProgramsBeforeAfter10PresetSwitches": [45, 45],
+    "switchFrameMs": [23.7, 24.3, 24.8, 17.8, 25.9, 25.8, 22.2, 17.4, 25.3, 23.1],
+    "conclusion": "preset switches compile no shaders and cause no frame spikes"
+  },
+  "seededReproducibility": "?dev&seed=7, __start({audio:false}), 300 bot ticks, two separate page loads (one idling 6 s on the menu first): identical mission time, score, stats, player position, crowd position sums, hostile ids and stage log",
+  "appearanceAudit": {
+    "seeds20": { "selections": 344, "verdict": "no material skew", "selfTestZ": 7.3 },
+    "seeds60": {
+      "selections": 1033,
+      "zCritical": 2.94,
+      "verdict": "no material skew detected",
+      "maxAbsZ": 1.71,
+      "minDetectablePts": "1.6-4.4",
+      "selfTestZ": 13.34,
+      "outfitsChangedByMakeHostile": 0,
+      "meleeFlagCarriersKeptFlag": "149 / 149",
+      "roleComparisonMaxAbsZ": 2.2
+    }
+  },
+  "mobile": "375x812 touch emulation: menu with LEVEL 2 button, Level 2 HUD (5 pips, compact panels), touch stick and buttons render; no console errors"
+}

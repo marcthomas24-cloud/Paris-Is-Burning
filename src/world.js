@@ -231,22 +231,28 @@ export class World {
     const geo = new THREE.SphereGeometry(900, 32, 16);
     const mat = new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: {},
+      // colours are uniforms so a lighting preset can change them without a recompile
+      uniforms: {
+        uHorizon: { value: new THREE.Vector3(0.62, 0.56, 0.50) },
+        uLow: { value: new THREE.Vector3(0.50, 0.47, 0.45) },
+        uTop: { value: new THREE.Vector3(0.24, 0.27, 0.31) },
+        uGlow: { value: new THREE.Vector3(0.9, 0.55, 0.28) },
+        uGlowK: { value: 0.45 },
+        uHaze: { value: new THREE.Vector3(0.38, 0.33, 0.30) },
+      },
       vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
       fragmentShader: `varying vec3 vP;
+        uniform vec3 uHorizon, uLow, uTop, uGlow, uHaze; uniform float uGlowK;
         void main(){
           float h = vP.y;
-          vec3 horizon = vec3(0.62,0.56,0.50);
-          vec3 low = vec3(0.50,0.47,0.45);
-          vec3 top = vec3(0.24,0.27,0.31);
-          vec3 c = mix(horizon, low, smoothstep(0.0, 0.12, h));
-          c = mix(c, top, smoothstep(0.12, 0.7, h));
-          // sun glow behind the clouds (west)
+          vec3 c = mix(uHorizon, uLow, smoothstep(0.0, 0.12, h));
+          c = mix(c, uTop, smoothstep(0.12, 0.7, h));
+          // sun glow behind the clouds (west); a fire-lit glow at night
           vec3 sd = normalize(vec3(-0.6, 0.18, -0.55));
           float s = max(dot(vP, sd), 0.0);
-          c += vec3(0.9,0.55,0.28) * pow(s, 10.0) * 0.45;
+          c += uGlow * pow(s, 10.0) * uGlowK;
           // smoke-stained haze near the horizon
-          c = mix(c, vec3(0.38,0.33,0.30), smoothstep(0.25, 0.0, abs(h-0.02)) * 0.25);
+          c = mix(c, uHaze, smoothstep(0.25, 0.0, abs(h-0.02)) * 0.25);
           gl_FragColor = vec4(c, 1.0);
         }`,
     });
@@ -254,6 +260,12 @@ export class World {
     sky.renderOrder = -1;
     this.sky = sky;
     this.scene.add(sky);
+  }
+
+  setSky(s) {
+    const u = this.sky.material.uniforms;
+    u.uHorizon.value.set(...s.horizon); u.uLow.value.set(...s.low); u.uTop.value.set(...s.top);
+    u.uGlow.value.set(...s.glow); u.uGlowK.value = s.glowK; u.uHaze.value.set(...s.haze);
   }
 
   // ---------------------------------------------------------------- ground

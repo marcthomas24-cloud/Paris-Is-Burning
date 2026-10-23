@@ -79,7 +79,7 @@ class ParticleSystem {
     geo.instanceCount = 0;
     this.geo = geo;
     const mat = new THREE.ShaderMaterial({
-      uniforms: { map: { value: tex }, fogColor: { value: new THREE.Color() }, fogDensity: { value: 0 }, sunDir: { value: new THREE.Vector3(-0.4, 0.8, -0.4) } },
+      uniforms: { map: { value: tex }, fogColor: { value: new THREE.Color() }, fogDensity: { value: 0 }, sunDir: { value: new THREE.Vector3(-0.4, 0.8, -0.4) }, uTint: { value: new THREE.Color(1, 1, 1) } },
       vertexShader: `
         attribute vec3 iOff; attribute vec4 iCol; attribute vec3 iSz;
         varying vec2 vUv; varying vec4 vCol; varying float vFog; varying float vNear;
@@ -99,7 +99,7 @@ class ParticleSystem {
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
-        uniform sampler2D map; uniform vec3 fogColor;
+        uniform sampler2D map; uniform vec3 fogColor; uniform vec3 uTint;
         varying vec2 vUv; varying vec4 vCol; varying float vFog; varying float vNear;
         void main(){
           vec4 t = texture2D(map, vUv);
@@ -108,7 +108,7 @@ class ParticleSystem {
           c.rgb *= c.a * 1.6; c.rgb *= (1.0 - vFog * 0.7);`
     : `// fake self-shadowing: puffs are lit from above, darker underneath
           float lit = mix(0.72, 1.12, fract(vUv.y * 2.0));
-          vec4 c = vec4(vCol.rgb * lit, vCol.a * t.a * vNear);
+          vec4 c = vec4(vCol.rgb * lit * uTint, vCol.a * t.a * vNear); // uTint: ambient level of the lighting preset
           c.rgb = mix(c.rgb, fogColor, vFog * 0.6);`}
           if (c.a < 0.003) discard;
           gl_FragColor = c;
@@ -357,7 +357,7 @@ export class Effects {
       if (!e || e[1] > 70 * 70) { light.intensity = 0; return; }
       const f = e[0];
       light.position.copy(f.pos).setY(f.pos.y + 1.0);
-      light.intensity = (7 + Math.sin(t * 17 + i) * 1.8 + Math.sin(t * 29 + i * 2) * 1.4) * f.scale * (f.boost || 1);
+      light.intensity = (7 + Math.sin(t * 17 + i) * 1.8 + Math.sin(t * 29 + i * 2) * 1.4) * f.scale * (f.boost || 1) * (this.fireLightMul || 1);
     });
     // smokiness around the camera (drives fog/haze in main)
     let sm = 0;

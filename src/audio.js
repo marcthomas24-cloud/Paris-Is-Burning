@@ -512,7 +512,9 @@ export class Audio {
     if (T.bang <= 0) { T.bang = R(4, 10); this.distantBang(); }
     if (T.boom <= 0) { T.boom = R(10, 22); this.distantBoom(); }
     if (T.crash <= 0) { T.crash = R(5, 12); this.ambientCrash(); }
-    if (T.adhan <= 0) { T.adhan = R(240, 420); this.adhan(); }
+    // the distant call to prayer belongs to the city's background, not to the fighting:
+    // when its turn comes during a violent moment it waits for things to calm down
+    if (T.adhan <= 0) { if (this.intensity > 0.45) T.adhan = R(20, 40); else { T.adhan = R(240, 420); this.adhan(); } }
     if (this.samples.adhan && this.adhanVoice && now > this.adhanVoice.end) { this.samples.adhan = null; this.adhanVoice = null; }
     this._updateSirens(dt, now);
     this._updateAlarms(now);

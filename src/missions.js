@@ -29,6 +29,9 @@ export class Missions {
     this.reset();
   }
 
+  // called when the game switches to another level's mission script
+  dispose() { this.game.scene.remove(this.marker); }
+
   reset() {
     this.stage = 'intro';
     this.phase = 0;
@@ -404,6 +407,12 @@ export class Missions {
       g.hud.prompt('E', 'Arrest suspect');
       if (g.input.pressed('KeyE')) { crowd.arrest(a); this.onArrest(a); }
     }
+    this._updateMarker(dt);
+  }
+
+  // objective beam over markerPos (shared by every level's mission script)
+  _updateMarker(dt) {
+    const g = this.game;
     const md = this.markerPos ? Math.hypot(this.markerPos.x - g.player.pos.x, this.markerPos.z - g.player.pos.z) : 0;
     if (this.markerPos && md > 9) {
       this.marker.visible = true;

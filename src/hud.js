@@ -90,11 +90,15 @@ export class HUD {
     chip.textContent = info.chip;
     chip.className = 'chip ' + ({ calm: 'calm', active: '', danger: 'danger', done: 'done' }[info.status] || '');
     $('incident-detail').textContent = info.detail;
-    $('mission-progress').textContent = `${Math.min(3, info.index + 1)} / 3`;
+    // phase count comes from the level (3 in Level 1, 5 in Level 2)
+    const np = info.completed.length;
+    $('mission-progress').textContent = `${Math.min(np, info.index + 1)} / ${np}`;
     const pn = `PHASE ${info.index + 1} · ${info.phaseName}`;
     if (this._pn !== pn) { this._pn = pn; $('phase-name').textContent = pn; }
-    const pips = $('progress-pips').children;
-    for (let i = 0; i < 3; i++) pips[i].className = info.completed[i] ? 'done' : i === info.index ? 'active' : '';
+    const pipBox = $('progress-pips');
+    if (pipBox.children.length !== np) pipBox.innerHTML = '<span></span>'.repeat(np);
+    const pips = pipBox.children;
+    for (let i = 0; i < np; i++) pips[i].className = info.completed[i] ? 'done' : i === info.index ? 'active' : '';
     const bar = $('incident-bar');
     bar.style.visibility = info.bar === null ? 'hidden' : 'visible';
     if (info.bar !== null) { bar.firstElementChild.style.width = info.bar * 100 + '%'; bar.firstElementChild.style.background = info.bar < 0.3 ? 'var(--red)' : 'var(--accent)'; }
@@ -213,6 +217,7 @@ export class HUD {
   }
 
   showEnd(win, reason, m) {
+    if (m.endInfo) return this._showEndInfo(win, m.endInfo(win, reason));
     $('end-title').textContent = win ? 'MISSION COMPLETE' : 'MISSION FAILED';
     $('end-title').style.color = win ? 'var(--text)' : 'var(--red)';
     $('end-sub').textContent = win ? `Line held · ${m.stats.bombsStopped ? 'petrol bomb stopped' : 'bomber dealt with'} · officers extracted from Rue Oberkampf` : reason || '';
@@ -227,5 +232,16 @@ export class HUD {
       <div class="row"><span>Mission time</span><span>${Math.floor(m.t / 60)}:${String(Math.floor(m.t % 60)).padStart(2, '0')}</span></div>
       <div class="row total"><span>SCORE</span><span>${m.score.toLocaleString('fr-FR')}</span></div>
       <div class="rank">${win ? 'RATING · ' + rank : 'Restart to try again'}</div>`;
+  }
+
+  // end screen described by the level's own mission script (Level 2 onwards)
+  _showEndInfo(win, e) {
+    const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    $('end-title').textContent = e.title;
+    $('end-title').style.color = win ? 'var(--text)' : 'var(--red)';
+    $('end-sub').textContent = e.sub;
+    $('end-stats').innerHTML = e.rows.map(([k, v]) => `<div class="row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')
+      + `<div class="row total"><span>SCORE</span><span>${this.game.missions.score.toLocaleString('fr-FR')}</span></div>`
+      + `<div class="rank">${esc(e.rank)}</div>`;
   }
 }

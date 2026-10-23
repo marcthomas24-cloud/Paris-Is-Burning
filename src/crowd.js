@@ -1,7 +1,7 @@
 // Crowd simulation: per-agent state machines, perception with reaction delays,
 // panic contagion, steering/avoidance, spatial hashing and distance-based LOD.
 import * as THREE from 'three';
-import { buildCharacter, randomOutfit, giveItem, clearItem, newPose, baseLayer, applyPose, crouch, lying, setRingVisible, addPoliceGear, updateShield } from './characters.js';
+import { buildCharacter, randomOutfit, policeOutfit, giveItem, clearItem, newPose, baseLayer, applyPose, crouch, lying, setRingVisible, addPoliceGear, updateShield } from './characters.js';
 import { mulberry } from './textures.js';
 import { LAYOUT } from './world.js';
 import { Humans } from './humans.js';
@@ -50,8 +50,8 @@ export class Crowd {
     for (let i = 0; i < count; i++) this._spawn(randomOutfit(this.rng));
     // looting crews, and passers-by caught up in the violence
     this.crews = LOOT_SITES.map(([side, z], i) => ({ id: i, side, z0: z, home: z, door: V(), rally: V(), members: [] }));
-    for (const c of this.crews) for (let k = 0; k < CREW_SIZE; k++) { const n = this._spawn(randomOutfit(this.rng, 'looter')); n.kind = 'looter'; n.crew = c; c.members.push(n); }
-    for (let k = 0; k < CIVILIANS; k++) this._spawn(randomOutfit(this.rng, 'civilian')).kind = 'civilian';
+    for (const c of this.crews) for (let k = 0; k < CREW_SIZE; k++) { const n = this._spawn(randomOutfit(this.rng)); n.kind = 'looter'; n.crew = c; c.members.push(n); }
+    for (let k = 0; k < CIVILIANS; k++) this._spawn(randomOutfit(this.rng)).kind = 'civilian';
     // far-distance instanced crowd (distant agents + background population)
     if (Humans.ready) {
       this.far = new FarCrowd(this.scene, 640);
@@ -65,7 +65,7 @@ export class Crowd {
     // CRS squads by the vans and along the pavement
     positions.push([-11, 132.5, 'squad'], [-12.6, 134, 'squad'], [11.2, 132.5, 'squad'], [12.6, 134.2, 'squad'], [-3.5, 139.5, 'squad'], [4.8, 140.5, 'squad']);
     for (const [x, z, role] of positions) {
-      const rig = buildCharacter(this.world, { skin: 0xd8b090, height: 1.0 + this.rng() * 0.05 }, 'police');
+      const rig = buildCharacter(this.world, policeOutfit(this.rng), 'police');
       addPoliceGear(rig);
       this.scene.add(rig.root);
       this.police.push({ rig, pos: new THREE.Vector3(x, 0, z), heading: role === 'line' ? Math.PI : 0, role, flinch: 0, hp: 1 });
@@ -479,7 +479,11 @@ export class Crowd {
     n.hp = style === 'melee' ? 2 + (this.rng() < 0.4 ? 1 : 0) : 2;
     n.neutralized = false;
     n.cool = this.rng() * 1.5;
-    if (n.rig.itemType !== 'none' && style !== 'bomber') clearItem(n.rig);
+    // Props are only dropped when the attack needs the hands: a melee aggressor keeps a
+    // one-handed flag, throwers swap theirs for a stone, two-handed props are let go.
+    // Clothing is never changed: becoming hostile does not alter how someone looks.
+    const keep = style === 'bomber' || (style === 'melee' && (n.rig.itemType === 'flag' || n.rig.itemType === 'frflag'));
+    if (n.rig.itemType !== 'none' && !keep) clearItem(n.rig);
     if (style === 'thrower') giveItem(n.rig, 'stone');
     this.setState(n, style === 'thrower' ? 'pursue' : 'pursue');
     n.lastAggro = this.time;
@@ -617,7 +621,7 @@ export class Crowd {
       for (let i = 0; i < n; i++) spots.push([Math.max(-14, Math.min(14, cx + R(-4, 4))), cz + R(-4, 4)]);
     }
     for (let i = 0; i < 14; i++) spots.push([R(-12, 12), R(186, 200)]);
-    // black-clad looting gangs along the shop fronts of the side streets and at the far barricade
+    // looting gangs along the shop fronts of the side streets and at the far barricade
     const gangs = [];
     for (const s of LAYOUT.crossStreets) for (const xs of [-1, 1]) for (let gI = 0; gI < 3; gI++) {
       const sz = rng() < 0.5 ? -1 : 1, cx = xs * R(66, 112), cz = s.z + sz * (s.half - 1.4), n = 5 + Math.floor(rng() * 6);
@@ -627,11 +631,11 @@ export class Crowd {
       const cx = R(-12, 12), cz = R(-210, -175), n = 6 + Math.floor(rng() * 6);
       for (let i = 0; i < n; i++) gangs.push([Math.max(-14, Math.min(14, cx + R(-3, 3))), cz + R(-3, 3)]);
     }
-    const mk = (x, z, style) => {
-      const o = randomOutfit(rng, style);
+    const mk = (x, z) => {
+      const o = randomOutfit(rng);
       return { x, z, h: rng() * 6.28, ph: rng() * 6.28, kind: o.base || (o.gender === 'f' ? 'michelle' : 'male'), scale: o.height, colors: outfitColors(o), pat: o.shellPattern === 1, walk: rng() < 0.15 };
     };
-    this.bg = spots.slice(0, 560).map(([x, z]) => mk(x, z)).concat(gangs.map(([x, z]) => mk(x, z, 'looter')));
+    this.bg = spots.slice(0, 560).map(([x, z]) => mk(x, z)).concat(gangs.map(([x, z]) => mk(x, z)));
   }
 
   _drawBackground(t) {
