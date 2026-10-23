@@ -241,7 +241,7 @@ export class Missions {
           sc.escapeT += dt;
           n.lastAggro = crowd.time; // still a wanted suspect
           if (n.state === 'flee') n.fleeFrom.copy(player.pos);
-          if (sc.escapeT > 22 && !n.neutralized) { sc.phase = 'escaped'; sc.active = false; sc.marked = false; n.temperament = 'peaceful'; g.hud.alert('Suspect escaped into the crowd', 'bad', 3); onDone(false); }
+          if (sc.escapeT > 30 && !n.neutralized) { sc.phase = 'escaped'; sc.active = false; sc.marked = false; n.temperament = 'peaceful'; g.hud.alert('Suspect escaped into the crowd', 'bad', 3); onDone(false); }
         }
         if ((sc.phase === 'light' && n.st > 0.6) || sc.phase === 'wind') {
           if (n.rig.wick) {
@@ -265,7 +265,12 @@ export class Missions {
           g.hud.alert('Device dropped — attack prevented!', 'good', 3);
         }
       },
-      move() { return sc.phase === 'wait' ? { speed: 0 } : null; },
+      move() {
+        if (sc.phase === 'wait') return { speed: 0 };
+        // running from the scene: slower than a sprinting officer, and tiring
+        if (sc.phase === 'flee' && n.state === 'flee') return { speed: Math.max(3.3, 4.6 - sc.escapeT * 0.25) };
+        return null;
+      },
     };
     n.script = sc;
     return sc;
@@ -277,18 +282,22 @@ export class Missions {
     const from = n.pos.clone().setY(n.pos.y + 2.0);
     const d = n.distToPlayer;
     let aim;
-    if (d < 30) aim = player.pos.clone().addScaledVector(player.vel, 0.5).setY(0.1);
+    // thrown at where the officer is now (barely leading), so moving away during the
+    // flight or dodging avoids it
+    if (d < 30) aim = player.pos.clone().addScaledVector(player.vel, 0.15).setY(0.1);
     else aim = V(n.pos.x + Math.sin(n.heading) * 14, 0.1, n.pos.z + Math.cos(n.heading) * 14);
-    aim.x += (Math.random() - 0.5) * 1.2; aim.z += (Math.random() - 0.5) * 1.2;
+    aim.x += (Math.random() - 0.5) * 2.4; aim.z += (Math.random() - 0.5) * 2.4;
+    const thrower = n.pos.clone();
     const proj = g.effects.throwProjectile(from, aim, 'petrol', (pos) => {
       const ground = pos.clone().setY(g.world.groundHeight(pos.x, pos.z));
-      g.effects.ignite(ground, 3.3, 6);
+      g.effects.ignite(ground, 2.6, 5);
       g.audio.molotov(ground, 1.2);
       g.crowd.disturb(ground, 20, 1.0, 'explosion');
       const pd = g.player.pos.distanceTo(ground);
       g.cameraRig.shake(Math.max(0, 0.6 - pd * 0.03));
-      if (pd < 4.2) g.player.takeDamage(26 * (1 - pd / 5), ground, V(g.player.pos.x - ground.x, 0, g.player.pos.z - ground.z).normalize().multiplyScalar(3));
-    }, Math.max(0.8, Math.min(1.5, d / 14)));
+      // a raised shield facing the thrower stops the splash
+      if (pd < 3.2) g.player.takeDamage(22 * (1 - pd / 4), thrower, V(g.player.pos.x - ground.x, 0, g.player.pos.z - ground.z).normalize().multiplyScalar(3));
+    }, Math.max(1.0, Math.min(1.6, d / 12)));
     proj.check = (pos) => g.player.hitTest(pos);
     g.audio.swing(n.pos, true);
     g.hud.alert('PETROL BOMB THROWN!', 'bad', 2.5);
