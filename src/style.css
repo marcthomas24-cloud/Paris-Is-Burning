@@ -267,7 +267,6 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 #boss-name { font-size: 15px; font-weight: 800; letter-spacing: 0.22em; }
 #boss-sub { font-size: 11px; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
 #boss-hp { position: relative; height: 9px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18); }
-#boss-hp > div { height: 100%; width: 100%; background: var(--red); transition: width 0.15s; }
 #boss-hp .tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: 0.8; }
 #boss-state { height: 16px; margin-top: 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.25em; }
 #boss-state.open { color: var(--green); }
@@ -284,3 +283,40 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 @media (max-width: 900px) {
   #boss-bar { bottom: 22px; }
 }
+
+/* ---------- cinematics, title card, banner (Level 2) ---------- */
+#cine { position: absolute; inset: 0; z-index: 30; pointer-events: auto; cursor: pointer; }
+.cine-bar { position: absolute; left: 0; right: 0; height: 11vh; background: #000; animation: cineBar 0.45s ease-out both; }
+.cine-bar.top { top: 0; } .cine-bar.bottom { bottom: 0; }
+@keyframes cineBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+#cine-card { position: absolute; left: 6vw; bottom: 16vh; opacity: 0; transform: translateX(-12px); transition: opacity 0.5s, transform 0.5s; text-shadow: 0 2px 12px rgba(0,0,0,0.9); }
+#cine-card.show { opacity: 1; transform: none; }
+#cine-title { font-size: clamp(26px, 5vw, 54px); font-weight: 900; letter-spacing: 0.18em; }
+#cine-sub { margin-top: 4px; font-size: clamp(11px, 1.6vw, 15px); letter-spacing: 0.3em; text-transform: uppercase; color: var(--amber); }
+#cine-line { position: absolute; left: 50%; bottom: calc(5.5vh - 0.75em); /* inside the bottom bar, like film subtitles */ transform: translateX(-50%); max-width: min(720px, 86vw); text-align: center; font-size: clamp(14px, 2vw, 19px); font-style: italic; opacity: 0; transition: opacity 0.4s; text-shadow: 0 2px 8px rgba(0,0,0,0.95); }
+#cine-line.show { opacity: 1; }
+#cine-skip { position: absolute; right: 16px; top: calc(5.5vh - 0.6em); font-size: 11px; letter-spacing: 0.2em; color: var(--dim); }
+.cine-on #hud { opacity: 0; transition: opacity 0.3s; }
+.cine-on #touch-ui { display: none !important; }
+#title-card { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); text-align: center; opacity: 0; pointer-events: none; text-shadow: 0 2px 14px rgba(0,0,0,0.9); }
+#title-card.show { animation: titleCard 3.5s ease both; }
+@keyframes titleCard { 0% { opacity: 0; letter-spacing: 0.5em; } 15%, 75% { opacity: 1; letter-spacing: 0.3em; } 100% { opacity: 0; } }
+#title-card .tc-title { font-size: clamp(28px, 6vw, 64px); font-weight: 900; letter-spacing: 0.3em; }
+#title-card .tc-sub { font-size: clamp(11px, 1.6vw, 14px); letter-spacing: 0.3em; color: var(--dim); text-transform: uppercase; }
+#banner { position: absolute; top: 24%; left: 50%; transform: translateX(-50%); text-align: center; opacity: 0; pointer-events: none; text-shadow: 0 2px 14px rgba(0,0,0,0.95); }
+#banner.show { animation: banner 1.8s ease both; }
+@keyframes banner { 0% { opacity: 0; transform: translateX(-50%) scale(1.25); } 12% { opacity: 1; transform: translateX(-50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+#banner .bn-title { font-size: clamp(24px, 4.5vw, 46px); font-weight: 900; letter-spacing: 0.3em; color: var(--amber); }
+#banner .bn-sub { font-size: 14px; font-style: italic; margin-top: 6px; }
+#boss-hp > .fill, #boss-hp > .chip { position: absolute; left: 0; top: 0; height: 100%; width: 100%; }
+#boss-hp > .fill { background: var(--red); transition: width 0.08s; }
+#boss-hp > .chip { background: #f4e9d8; opacity: 0.75; transition: width 0.5s ease 0.35s; }
+/* results: rows arrive one after another */
+#end-stats .row { animation: rowIn 0.35s ease both; }
+#end-stats .row:nth-child(2) { animation-delay: 0.06s; } #end-stats .row:nth-child(3) { animation-delay: 0.12s; } #end-stats .row:nth-child(4) { animation-delay: 0.18s; }
+#end-stats .row:nth-child(5) { animation-delay: 0.24s; } #end-stats .row:nth-child(6) { animation-delay: 0.3s; } #end-stats .row:nth-child(7) { animation-delay: 0.36s; } #end-stats .row:nth-child(n+8) { animation-delay: 0.42s; }
+@keyframes rowIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+#end-stats .hook { margin-top: 14px; font-style: italic; color: var(--dim); font-size: 13px; line-height: 1.5; animation: rowIn 0.6s ease 0.8s both; }
+#boss-bar .boss-name { white-space: nowrap; overflow: hidden; }
+#boss-sub { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ended #hud { opacity: 0; transition: opacity 0.4s; }

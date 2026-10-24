@@ -38,6 +38,7 @@ export const LEVELS = {
     Missions: Level2, phases: L2_PHASES, lighting: 'night', hazardDir: 1,
     policeOff: ['injured', 'guard'], // the cut-off officers were extracted at the end of Level 1
     reserveCrews: true,              // extra looting crews along the Level 2 route
+    music: true,                     // synthesised score (music.js); Level 1 keeps its original soundscape
     start: { x: -1.5, z: -100, heading: 0 },
   },
 };

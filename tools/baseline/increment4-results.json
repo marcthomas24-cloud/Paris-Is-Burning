@@ -1,0 +1,30 @@
+{
+  "description": "Level 2 increment 4: cinematic presentation and audio - test results",
+  "date": "2026-10-24",
+  "branch": "level2 (on top of f5836a6, increment 3)",
+  "cinematics": {
+    "sequences": { "glimpse": "2.9 s", "enforcer": "3.3 s", "leader": "4.2 s", "victory": "5.6 s" },
+    "skip": "Space, Enter or click on desktop; tap on touch (verified at 375x812); grace period 0.3 s",
+    "duringCinematic": "player cannot be hurt, controls ignored, no encounter starts, HUD and touch controls hidden",
+    "screenshots": "Enforcer intro (letterbox, name card, shield slam), le Patron intro (axe raised, line as subtitle in the bottom bar), phase banner, victory shot, results with hook, phone layout"
+  },
+  "level2Watched": {
+    "seed12": { "time_s": 175.95, "score": 10675, "cinematicsAt_s": { "glimpse": 5.9, "enforcer": 52.2, "leader": 128.5, "victory": 169.3 }, "bossTimes_s": { "enforcer": 21.0, "leader": 40.7 }, "peaceful": 0, "result": "LEVEL 2 COMPLETE, hook shown", "consoleErrors": 0 },
+    "secondLoad": "identical (time, score, cinematic timings, stats, boss times, crowd positions) with different slice sizes and menu idle"
+  },
+  "level2Skipped": { "seed12": { "time_s": 167.27, "score": 9575, "allFourCinematicsStartedAndSkipped": true, "result": "LEVEL 2 COMPLETE, hook shown", "consoleErrors": 0 } },
+  "level1Regression": { "seed3": { "time_s": 84.4, "score": 7352, "matchesBaseline": true, "consoleErrors": 0 } },
+  "checkpoint": "die in the Enforcer fight -> RETRY SECTION -> intro cinematic replays, boss 10/10, arena on, arena fires replaced not duplicated (world fires 51 before and after)",
+  "audio": {
+    "method": "real time, audio on, __audioProbe in the Leader fight",
+    "musicState": "boss (calm / combat / boss / boss3 / victory follow the action; Level 1 stays off)",
+    "beforeLevelling": { "musicOnRms": -15.4, "musicOffRms": -18.7, "peak": -0.5, "clips": 0 },
+    "afterLevelling": { "musicOnRms": -17.6, "musicOffRms": -19.4, "peak": -3.9, "clips": 0, "note": "music levels lowered ~25% so the score sits under the soundscape (+1.8 dB)" },
+    "observation": "once, right after switching the simulation from the test harness back to real time, 22 'crash' voices were listed; they had cleared a second later and the probe showed no clipping"
+  },
+  "performance": {
+    "desktopEnforcerFightWithArenaFires": { "updateMs": "7.7-8.7", "renderMs": "21.4-22.0", "calls": 149 },
+    "mobileEmulationDuringCinematic": { "updateMs": 6.09, "renderMs": 11.88, "calls": 111 },
+    "shaderPrograms": "unchanged during cinematics, phase changes and beacon recolouring"
+  }
+}

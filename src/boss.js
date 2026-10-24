@@ -88,6 +88,7 @@ export class Boss {
     this.hp = d.hp; this.phaseIdx = 0; this.s = 'intro'; this.t = 0; this.cool = 1.0;
     this.queue = []; this.cur = null; this.chargeCool = 2.0; this.flinchT = 0; this.warned = 0; this.strafeSide = 1; this.strafeT = 0;
     this.lastFeint = false; this.hits = 0; this.blocks = 0; this.arrested = false; this.blockedBashes = 0;
+    this.introT = 0; this.wait = 0; this.slammed = false; this.startedAt = g.crowd.time;
     n.pos.copy(pos); n.anchor.copy(pos); n.vel.set(0, 0, 0); n.knock.set(0, 0, 0); n.heading = heading;
     n.temperament = 'hostile'; n.attackStyle = 'boss'; n.neutralized = false; n.arrested = false; n.untargetable = false;
     n.radius = 0.42; n.mass = 3; n.stimuli.length = 0; n.boss = this;
@@ -104,6 +105,12 @@ export class Boss {
       amber: false, marked: true,
     };
     g.crowd.setArena(arena.x, arena.z, arena.r, n);
+    // burning barriers just outside the arena: they frame the fight and light it (no damage)
+    this.fires = [];
+    for (const a of [0.8, 2.4, 3.9, 5.5]) {
+      const x = arena.x + Math.sin(a) * (arena.r + 1.2), z = arena.z + Math.cos(a) * (arena.r + 1.2);
+      if (!g.world.blocked(x, z, 0.6)) this.fires.push(g.effects.addFire(V().set(x, 0.3, z), 1.1, 1.2));
+    }
   }
 
   // Remove the boss from the fight (level reset, checkpoint retry).
@@ -111,6 +118,9 @@ export class Boss {
     const n = this.n;
     this.s = 'off';
     removeFireAxe(n.rig); clearItem(n.rig);
+    for (const f of this.fires || []) this.game.effects.removeFire(f);
+    this.fires = [];
+    if (n.rig.ring) n.rig.ring.scale.setScalar(1);
     n.boss = null; n.script = null; n.attackStyle = null;
     this.game.crowd.clearArena();
   }
@@ -166,10 +176,13 @@ export class Boss {
     // a non-damaging shove to reset the spacing
     const away = tmp.set(g.player.pos.x - n.pos.x, 0, g.player.pos.z - n.pos.z);
     if (away.length() < 4) g.player.knock.addScaledVector(away.normalize(), 5);
+    // presentation: a banner with his line, a sting, a short slow-down and a restrained camera punch
     g.cameraRig.shake(0.25);
-    g.hud.alert(`PHASE ${this.phaseIdx + 1}`, 'bad', 2, 'bossphase');
+    g.cameraRig.kick(6);
+    g.hitStop(0.18);
     const bark = this.def.barks && this.def.barks[this.phaseIdx];
-    if (bark) g.hud.alert(bark, 'info', 3.5, 'bossbark');
+    g.hud.banner(`PHASE ${this.phaseIdx + 1}`, bark || '');
+    g.audio.music.sting('phase');
     g.audio.shout(n.pos);
   }
 
@@ -198,7 +211,11 @@ export class Boss {
     this.n.script.amber = this.s === 'wind' || this.s === 'feint';
     switch (this.s) {
       case 'intro':
-        if (this.t > 2.5 || d < 12) { this.s = 'idle'; this.t = 0; }
+        // during his introduction he holds his ground (the cinematic shows the beats);
+        // afterwards he engages after a short moment, or at once if the officer comes close
+        if (g.cinematic) { this.introT += dt; this._introBeats(); break; }
+        this.wait += dt;
+        if (this.wait > 0.8 || d < 10) { this.s = 'idle'; this.t = 0; }
         break;
       case 'idle':
         if (this.cool <= 0) this._choose(d);
@@ -236,6 +253,15 @@ export class Boss {
     }
   }
 
+  // intro beats, timed to the introduction cinematic
+  _introBeats() {
+    const g = this.game, n = this.n;
+    if (this.def.id === 'enforcer' && !this.slammed && this.introT > 1.25) {
+      this.slammed = true; // the steel shield slammed into the road
+      g.audio.impact(n.pos, true, true); g.effects.dust(n.pos.clone().setY(0.2), 16); g.cameraRig.shake(0.2);
+    }
+  }
+
   _choose(d) {
     const ph = this.phase, A = this.def.attacks;
     if (this.def.id === 'enforcer') {
@@ -269,6 +295,7 @@ export class Boss {
     this.cur = a; this.s = 'wind'; this.t = 0;
     if (feinting) this.lastFeint = true;
     if (Math.random() < 0.5) g.audio.shout(n.pos);
+    if (!a.blockable) g.audio.music.sting('warn'); // unblockable: a distinct warning sound every time
     if (!a.blockable && this.warned < 3) {
       this.warned++;
       g.hud.alert(a.kind === 'charge' ? 'CHARGE — dodge sideways!' : 'Heavy swing — dodge or step back!', 'bad', 1.4, 'bossunblock');
@@ -369,6 +396,16 @@ export class Boss {
     P.shLX = -1.25; P.elL = -1.8; P.shLZ = 0.35; P.knL = P.knR = 0.25; P.y = -0.04; P.spX = 0.12;
     P.shRX = this.def.axe ? -0.7 : -0.6; P.elR = this.def.axe ? -1.0 : -1.5; P.shRZ = -0.25;
     P.brow = 1; P.mouth = 0.2;
+    // unblockable wind-ups: the ring pulses (blockable ones stay steady)
+    if (rig.ring) rig.ring.scale.setScalar(s === 'wind' && a && !a.blockable ? 1 + 0.3 * Math.abs(Math.sin(t * 16)) : 1);
+    if (s === 'intro' && this.game.cinematic) {
+      const it = this.introT;
+      if (this.def.id === 'enforcer') {
+        // shield raised high, then slammed down at 1.25 s
+        if (it < 1.25) { sp = [SHIELD_POSE.wind[0].clone().setY(0.55), SHIELD_POSE.wind[1]]; P.shLX = -2.0; P.elL = -1.2; P.spX = -0.15; sk = 6; }
+        else { sp = SHIELD_POSE.strike; P.shLX = -1.5; P.elL = -0.6; P.spX = 0.35; sk = 30; }
+      } else if (it > 0.8 && it < 2.9) { P.shRX = -2.9; P.elR = -0.7; P.shRZ = -0.15; P.spX = -0.1; P.hdX = -0.15; P.mouth = 0.7; } // axe raised
+    }
     if (s === 'wind' && a) {
       if (a.kind === 'bash' || a.kind === 'shove') { sp = SHIELD_POSE.wind; P.shLX = -1.1; P.elL = -1.9; P.spY = 0.45 * k; P.spX = -0.12; P.knL = P.knR = 0.4; }
       else if (a.kind === 'charge') { crouch(P, 0.45 * k + 0.1); P.spX = 0.35 + 0.15 * k; P.hdX = 0.2; P.shLX = -1.1; }

@@ -13,9 +13,12 @@ import { Input } from './input.js';
 import { loadHumans, makeEnvMap, Humans } from './humans.js';
 import { IncidentScheduler } from './events.js';
 import { Post } from './post.js';
+import { Cinematic } from './cinematic.js';
 import { TouchControls } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
+// controls during a cinematic: nothing pressed
+const NULL_INPUT = { down: () => false, pressed: () => false, mouse: () => false, axis: { x: 0, y: 0 } };
 
 class Game {
   constructor() {
@@ -103,6 +106,7 @@ class Game {
     this.input.onLockLost = () => { if (this.state === 'playing') this.pause(); };
     addEventListener('resize', () => this.resize());
     addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this.cinematic && this.state === 'playing') { this.cinematic.skip(); return; }
       if (e.code === 'Escape' && !this.input.locked) {
         if (this.state === 'playing') this.pause(); else if (this.state === 'paused') this.resume();
       }
@@ -144,15 +148,16 @@ class Game {
       else if (a === 'continue' || a === 'level') this.startLevel(a === 'continue' ? this.level.id + 1 : +b.dataset.level);
     }));
     $('onboarding').addEventListener('click', () => this._dismissOnboarding());
+    $('cine').addEventListener('pointerdown', (e) => { e.preventDefault(); if (this.cinematic) this.cinematic.skip(); });
     this.touch = new TouchControls(this);
     // audio settings: sliders on the Audio screen and the HUD mute button
     const syncAudioUI = (s) => {
-      for (const k of ['master', 'ambience', 'effects']) { const v = Math.round(s[k] * 100); $('vol-' + k).value = v; $('vol-' + k + '-out').textContent = v + '%'; }
+      for (const k of ['master', 'ambience', 'effects', 'music']) { const v = Math.round(s[k] * 100); $('vol-' + k).value = v; $('vol-' + k + '-out').textContent = v + '%'; }
       $('vol-mute').checked = s.muted;
       $('hud-mute').classList.toggle('muted', s.muted);
       $('hud-mute').setAttribute('aria-pressed', String(s.muted));
     };
-    for (const k of ['master', 'ambience', 'effects']) $('vol-' + k).addEventListener('input', (e) => this.audio.setSetting(k, e.target.value / 100));
+    for (const k of ['master', 'ambience', 'effects', 'music']) $('vol-' + k).addEventListener('input', (e) => this.audio.setSetting(k, e.target.value / 100));
     $('vol-mute').addEventListener('change', (e) => { this.audio.init(); this.audio.setSetting('muted', e.target.checked); });
     this.audio.onSettings = syncAudioUI;
     syncAudioUI(this.audio.getSettings());
@@ -178,6 +183,14 @@ class Game {
     this.player.reset();
     this.cameraRig.reset(this.player);
     this.applyLighting(def.lighting);
+  }
+
+  // Play a short camera sequence (see cinematic.js). Developer runs can skip them all.
+  playCinematic(opts) {
+    if (this.cinematic) this.cinematic.finish(true, true);
+    if (this.skipCinematics) { if (opts.onDone) opts.onDone(true); return null; }
+    this.cinematic = new Cinematic(this, opts).begin();
+    return this.cinematic;
   }
 
   // Start (or restart) a level from a menu or the end screen. Locked levels are refused.
@@ -255,6 +268,8 @@ class Game {
   }
 
   restart() {
+    if (this.cinematic) this.cinematic.finish(true, true);
+    $('app').classList.remove('ended');
     this.player.reset();
     this.crowd.reset();
     this.missions.reset();
@@ -292,6 +307,7 @@ class Game {
     this.pendingEnd = null;
     this.state = 'ended';
     this.hud.showEnd(win, reason, this.missions);
+    $('app').classList.add('ended'); // results over a clean picture: the gameplay HUD fades out
     const next = LEVELS[this.level.id + 1];
     $('btn-continue').classList.toggle('hidden', !(win && next && Progress.unlocked(next.id)));
     $('btn-retry').classList.toggle('hidden', !(!win && this.missions.cp)); // section checkpoint (Level 2)
@@ -397,10 +413,19 @@ class Game {
     // police beacons: nearest two vans pulse blue
     const bars = this.world.lightBars.map((b) => [b, b.distanceToSquared(p)]).sort((a, b) => a[1] - b[1]);
     const on = Math.floor(this.time * 4) % 2 === 0;
+    const A = this.crowd && this.crowd.arena;
     this.policeLights.forEach((l, i) => {
+      if (A) {
+        // boss arena: the two beacons strobe red and blue at its edge (same lights, new colours)
+        l.position.set(A.x + (i ? 1 : -1) * A.r * 0.75, 3.2, A.z - A.r * 0.35);
+        l.color.setHex(i ? 0x2a5cff : 0xff2a2a);
+        l.intensity = (i % 2 === 0) === on ? this.lighting.beaconOn * 1.3 : this.lighting.beaconOff;
+        return;
+      }
       const b = bars[i];
       if (!b) return;
       l.position.copy(b[0]);
+      l.color.setHex(0x3060ff);
       l.intensity = (i % 2 === 0) === on ? this.lighting.beaconOn : this.lighting.beaconOff;
     });
   }
@@ -421,6 +446,13 @@ class Game {
     for (const f of this.world.fires) fires.push({ pos: f.pos, k: 0.6 * f.scale * (f.boost || 1) });
     for (const f of this.effects.flames) fires.push({ pos: f.pos, k: 1.6 * (1 - f.t / f.life) + 0.3 });
     const threats = this.crowd.threats().length;
+    if (this.level.music) {
+      const m = this.missions, b = m.boss;
+      if (threats) this._lastThreatT = this.time;
+      const fighting = this.time - (this._lastThreatT ?? -99) < 4; // hold through short gaps
+      a.music.setState(m.stage === 'victory' || (m.ended && this.pendingEnd && this.pendingEnd.win) ? 'victory'
+        : b && b.active ? (b.phaseIdx >= 2 ? 'boss3' : 'boss') : fighting ? 'combat' : 'calm');
+    } else a.music.setState('off');
     a.update(dt, { intensity: Math.min(1, panic / 8 + threats / 5 + (this.missions.phase || 0) * 0.2), fires });
   }
 
@@ -435,9 +467,14 @@ class Game {
     if (input.down('ArrowRight')) mx += 900 * rawDt;
     if (input.down('ArrowUp')) my -= 500 * rawDt;
     if (input.down('ArrowDown')) my += 500 * rawDt;
-    this.cameraRig.rotate(mx, my);
+    const cine = this.cinematic;
+    if (!cine) this.cameraRig.rotate(mx, my);
+    if (cine) {
+      if (input.pressed('Space') || input.pressed('Enter') || input.pressed('Mouse0')) cine.skip();
+      this.player.invuln = Math.max(this.player.invuln, 0.1); // nobody lands a hit during a cinematic
+    }
 
-    this.player.update(dt, input, this.cameraRig.yaw);
+    this.player.update(dt, this.cinematic ? NULL_INPUT : input, this.cameraRig.yaw);
     this.crowd.update(dt, this.player);
     this.missions.update(dt);
     this.events.update(dt);
@@ -446,6 +483,7 @@ class Game {
     this.world.update(dt, this.time);
     const near = this.crowd.query(this.player.pos.x, this.player.pos.z, 2.5, []).filter((o) => o.id !== undefined).length;
     this.cameraRig.update(rawDt, this.player, near);
+    if (this.cinematic) this.cinematic.update(rawDt, this.cameraRig.lastPose);
     this._lights();
 
     this._audioMix(rawDt);

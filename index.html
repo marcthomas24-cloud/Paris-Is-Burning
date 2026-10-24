@@ -50,7 +50,9 @@
       <div id="crosshair"></div>
       <div id="offscreen-arrow"></div>
       <div id="threat-warning" class="hidden">⚠ PETROL BOMB</div>
-      <div id="boss-bar" class="hidden"><div class="boss-name"><span id="boss-name"></span><span id="boss-sub"></span></div><div id="boss-hp"><div></div></div><div id="boss-state"></div></div>
+      <div id="title-card"><div class="tc-title"></div><div class="tc-sub"></div></div>
+      <div id="banner"><div class="bn-title"></div><div class="bn-sub"></div></div>
+      <div id="boss-bar" class="hidden"><div class="boss-name"><span id="boss-name"></span><span id="boss-sub"></span></div><div id="boss-hp"><div class="chip"></div><div class="fill"></div></div><div id="boss-state"></div></div>
 
       <div id="hud-buttons">
         <button data-action="mute" id="hud-mute" class="hud-btn" aria-label="Mute sound" aria-pressed="false"><span class="ico-on">🔊</span><span class="ico-off">🔇</span></button>
@@ -96,6 +98,14 @@
       </div>
       <p class="dim">Striking peaceful demonstrators costs points. Arrest downed aggressors <span class="desk-only">with E</span><span class="touch-only">by tapping the prompt</span>.</p>
       <div class="dim small"><span class="desk-only">Click</span><span class="touch-only">Tap</span> to begin</div>
+    </div>
+
+    <!-- Cinematic overlay: letterbox, name card, subtitle, skip hint -->
+    <div id="cine" class="hidden">
+      <div class="cine-bar top"></div><div class="cine-bar bottom"></div>
+      <div id="cine-card"><div id="cine-title"></div><div id="cine-sub"></div></div>
+      <div id="cine-line"></div>
+      <div id="cine-skip"><span class="desk-only">SPACE / CLICK</span><span class="touch-only">TAP</span> TO SKIP</div>
     </div>
 
     <!-- Menus -->
@@ -144,6 +154,7 @@
           <label for="vol-master">Master</label><input type="range" id="vol-master" min="0" max="100" step="1" /><output id="vol-master-out" for="vol-master"></output>
           <label for="vol-ambience">Ambience</label><input type="range" id="vol-ambience" min="0" max="100" step="1" /><output id="vol-ambience-out" for="vol-ambience"></output>
           <label for="vol-effects">Effects</label><input type="range" id="vol-effects" min="0" max="100" step="1" /><output id="vol-effects-out" for="vol-effects"></output>
+          <label for="vol-music">Music</label><input type="range" id="vol-music" min="0" max="100" step="1" /><output id="vol-music-out" for="vol-music"></output>
           <label for="vol-mute">Mute</label><input type="checkbox" id="vol-mute" /><span class="dim small desk-only">M key</span>
         </div>
         <p class="dim small">Settings are saved on this device.</p>

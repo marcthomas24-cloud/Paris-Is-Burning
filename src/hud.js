@@ -116,7 +116,9 @@ export class HUD {
         const hp = $('boss-hp'); hp.querySelectorAll('.tick').forEach((e) => e.remove());
         for (const f of bi.marks) { const tk = document.createElement('span'); tk.className = 'tick'; tk.style.left = (f * 100) + '%'; hp.appendChild(tk); }
       }
-      $('boss-hp').firstElementChild.style.width = (bi.hp / bi.max) * 100 + '%';
+      const w = (bi.hp / bi.max) * 100 + '%';
+      const fill = $('boss-hp').querySelector('.fill'), chip = $('boss-hp').querySelector('.chip');
+      if (fill.style.width !== w) { fill.style.width = w; chip.style.width = w; } // the chip lags behind (CSS transition delay)
       const st = $('boss-state');
       const txt = bi.state === 'defeated' ? 'DOWN — ARREST HIM' : bi.state === 'transition' ? `PHASE ${bi.phase + 1}` : bi.open ? 'OPENING' : '';
       if (st.textContent !== txt) { st.textContent = txt; st.className = bi.open || bi.state === 'defeated' ? 'open' : bi.state === 'transition' ? 'phase' : ''; }
@@ -251,6 +253,22 @@ export class HUD {
       <div class="rank">${win ? 'RATING · ' + rank : 'Restart to try again'}</div>`;
   }
 
+  // Non-blocking title card (level start): fades in and out over `dur` seconds.
+  titleCard(title, sub, dur = 3.5) {
+    const el = $('title-card');
+    el.querySelector('.tc-title').textContent = title; el.querySelector('.tc-sub').textContent = sub;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    clearTimeout(this._tcT); this._tcT = setTimeout(() => el.classList.remove('show'), dur * 1000);
+  }
+
+  // Big centred banner (boss phase changes).
+  banner(title, sub = '', dur = 1.8) {
+    const el = $('banner');
+    el.querySelector('.bn-title').textContent = title; el.querySelector('.bn-sub').textContent = sub;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    clearTimeout(this._bnT); this._bnT = setTimeout(() => el.classList.remove('show'), dur * 1000);
+  }
+
   // end screen described by the level's own mission script (Level 2 onwards)
   _showEndInfo(win, e) {
     const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -259,6 +277,7 @@ export class HUD {
     $('end-sub').textContent = e.sub;
     $('end-stats').innerHTML = e.rows.map(([k, v]) => `<div class="row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')
       + `<div class="row total"><span>SCORE</span><span>${this.game.missions.score.toLocaleString('fr-FR')}</span></div>`
-      + `<div class="rank">${esc(e.rank)}</div>`;
+      + `<div class="rank">${esc(e.rank)}</div>`
+      + (e.hook ? `<div class="hook">${esc(e.hook)}</div>` : '');
   }
 }

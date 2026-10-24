@@ -20,9 +20,12 @@ import { Missions } from './missions.js';
 import { EncounterRunner } from './encounters.js';
 import { randomOutfit, giveItem, clearItem, prewarmItems } from './characters.js';
 import { Boss, ENFORCER, LEADER } from './boss.js';
+import { frontOf, orbit, overShoulderAt } from './cinematic.js';
 import { mulberry } from './textures.js';
 
 export const L2_PHASES = ['DEPLOYMENT', 'ESCALATION', 'THE ENFORCER', 'SECOND PUSH', 'THE LEADER'];
+// the hook for the next level: where le Patron's goods went
+const HOOK = 'Control: "His ledger names a depot on the canal. That is tomorrow night."';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const REACH = 5;
 
@@ -141,7 +144,7 @@ export class Level2 extends Missions {
     this.completed = SECTIONS.map(() => false);
     this.phaseTimes = SECTIONS.map(() => 0);
     this.section = 0;
-    this.stats.blocked = 0;
+    this.stats.blocked = 0; this.stats.dodges = 0; this.bossTimes = {};
     this.cp = null;
     this.leaderSeen = false;
     if (this.enc) this.enc.reset();
@@ -165,6 +168,8 @@ export class Level2 extends Missions {
       this.boss = new Boss(g, npc, sec.boss === 'enforcer' ? ENFORCER : LEADER);
       const at = V(sec.spawn[0], 0, sec.spawn[1]);
       this.boss.start(at, Math.atan2(g.player.pos.x - at.x, g.player.pos.z - at.z), { x: sec.arena[0], z: sec.arena[1], r: sec.arena[2] });
+      this.bossStart = this.t;
+      this._bossIntro(sec.boss, npc);
     }
     // checkpoint: retrying after a failure restarts this section with the score so far
     this.cp = { section: i, score: this.score, stats: { ...this.stats }, t: this.t };
@@ -189,7 +194,7 @@ export class Level2 extends Missions {
     this.t += dt; this.stageT += dt;
     switch (this.stage) {
       case 'intro':
-        if (this.stageT > 1.2) this._startSection(0);
+        if (this.stageT > 1.2) { this._startSection(0); g.hud.titleCard('NUIT', 'Boulevard de la République · 01h12'); }
         break;
       case 'route': {
         const sec = SECTIONS[this.section];
@@ -229,16 +234,56 @@ export class Level2 extends Missions {
         b.stop(); this.boss = null;
         g.crowd.arrest(n); n.untargetable = true;
         this.onArrest(n);
+        this.bossTimes[sec.boss] = this.t - this.bossStart;
         this.addScore(sec.boss === 'enforcer' ? 800 : 1500, sec.boss === 'enforcer' ? 'Enforcer arrested' : 'Le Patron arrested');
         this._phaseDone(this.section, 0, sec.boss === 'enforcer' ? 'The Enforcer is in custody' : 'Le Patron is in custody');
         if (sec.after) this.radio(sec.after);
-        if (this.section + 1 >= SECTIONS.length) this.complete();
+        if (this.section + 1 >= SECTIONS.length) this._victory(n);
         else this._startSection(this.section + 1);
       }
     }
   }
 
   bossInfo() { return this.boss ? this.boss.info() : null; }
+
+  // ------------------------------------------------------------- presentation
+  _bossIntro(id, n) {
+    const g = this.game, p = g.player;
+    if (id === 'enforcer') {
+      g.playCinematic({
+        id: 'enforcer', title: 'THE ENFORCER', sub: "le Patron's lieutenant", titleAt: [0.4, 3.0], sting: 'intro',
+        shots: [{ dur: 1.7, a: frontOf(n, 8.0, 0.8, 2.6, 46), b: frontOf(n, 6.2, 1.0, 2.0, 42) }, { dur: 1.6, a: frontOf(n, 6.2, 1.0, 2.0, 42), b: 'rig' }],
+      });
+    } else {
+      const base = n.heading;
+      g.playCinematic({
+        id: 'leader', title: 'LE PATRON', sub: 'runs the looting crews', titleAt: [0.5, 3.6], sting: 'intro',
+        line: LEADER.barks[0], lineAt: [1.0, 3.8],
+        // from his axe side, high enough to clear the street furniture
+        shots: [{ dur: 2.4, a: orbit(() => n.pos, 5.8, 1.9, base - 0.95, 44, 1.45), b: orbit(() => n.pos, 4.9, 1.6, base - 0.4, 40, 1.45) },
+          { dur: 1.8, a: orbit(() => n.pos, 4.9, 1.6, base - 0.4, 40, 1.45), b: 'rig' }],
+      });
+    }
+  }
+
+  // Le Patron in custody: the crews scatter, a short closing shot, then the results.
+  _victory(n) {
+    const g = this.game, p = g.player;
+    this.stage = 'victory';
+    g.events.setHazards(false);
+    for (const m of g.crowd.npcs) if (m.temperament === 'looter') { m.fleeFrom = n.pos.clone(); g.crowd.setState(m, 'flee', 8); }
+    const mid = () => V((p.pos.x + n.pos.x) / 2, 0, (p.pos.z + n.pos.z) / 2);
+    const a0 = Math.atan2(p.pos.x - n.pos.x, p.pos.z - n.pos.z) + 1.2;
+    const end = () => { this.radio(HOOK); this.complete(); };
+    g.playCinematic({
+      id: 'victory', title: 'LE PATRON IN CUSTODY', sub: 'Boulevard de la République · 01h58', titleAt: [0.6, 5.0], sting: 'victory',
+      line: 'The crews scatter into the side streets.', lineAt: [1.4, 5.0],
+      shots: [{ dur: 5.6, a: orbit(mid, 5.0, 1.7, a0, 46, 1.0), b: orbit(mid, 6.0, 2.8, a0 + 1.5, 50, 1.0) }],
+      onDone: end,
+    });
+  }
+
+  // where the next encounter will start (keeps the marker leading the officer on)
 
   // where the next encounter will start (keeps the marker leading the officer on)
   _nextTriggerPos(sec, end) {
@@ -261,6 +306,12 @@ export class Level2 extends Missions {
     n.rig.root.visible = true;
     n.role = 'shout'; n.lookT = 99; n.untargetable = true;
     giveItem(n.rig, 'flare'); // a lit road flare held up: easy to pick out at night
+    // a short look at him from where the officer stands (the encounters wait meanwhile)
+    const p = g.player;
+    g.playCinematic({
+      id: 'glimpse', title: 'LE PATRON', sub: 'runs the looting crews', titleAt: [0.7, 2.5],
+      shots: [{ dur: 0.8, a: 'rig', b: overShoulderAt(p, n, 22) }, { dur: 1.5, a: overShoulderAt(p, n, 22), b: overShoulderAt(p, n, 20) }, { dur: 0.6, a: overShoulderAt(p, n, 20), b: 'rig' }],
+    });
     g.crowd.setState(n, 'act', 999);
     const route = [V(-10, 0, -30), V(-16, 0, -21), V(-45, 0, -20)]; // off into Rue de Malte
     const sc = { t: 0, leg: -1 };
@@ -313,6 +364,7 @@ export class Level2 extends Missions {
   endInfo(win, reason) {
     const s = this.stats;
     const t = `${Math.floor(this.t / 60)}:${String(Math.floor(this.t % 60)).padStart(2, '0')}`;
+    const fmt = (v) => (v === undefined ? '—' : `${Math.floor(v / 60)}:${String(Math.floor(v % 60)).padStart(2, '0')}`);
     return {
       title: win ? 'LEVEL 2 COMPLETE' : 'MISSION FAILED',
       sub: win ? 'Le Patron and his lieutenant in custody · the route to the staging area is open' : reason || '',
@@ -321,10 +373,14 @@ export class Level2 extends Missions {
         ['Crew members neutralised', s.neutralized],
         ['Arrests', s.arrests],
         ['Petrol bombs prevented', `${s.bombsStopped} / ${s.bombsStopped + s.bombsThrown}`],
+        ['The Enforcer', fmt(this.bossTimes.enforcer)],
+        ['Le Patron', fmt(this.bossTimes.leader)],
+        ['Strikes blocked by a guard / dodges', `${s.blocked} / ${s.dodges}`],
         ['Peaceful people struck', s.peaceful],
         ['Mission time', t],
       ],
-      rank: win ? 'Grey-box build: cinematics and audio come next' : this.cp ? 'Retry from the start of this section, or restart' : 'Restart to try again',
+      hook: win ? HOOK : '',
+      rank: win ? 'RATING · ' + (this.score >= 9000 && s.peaceful === 0 ? 'COMMENDATION' : this.score >= 7000 ? 'PROFESSIONAL' : this.score >= 5000 ? 'ADEQUATE' : 'UNDER REVIEW') : this.cp ? 'Retry from the start of this section, or restart' : 'Restart to try again',
     };
   }
 }

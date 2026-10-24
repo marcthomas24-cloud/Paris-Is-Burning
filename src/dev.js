@@ -68,6 +68,8 @@ export function installDev(game) {
     // the page pauses itself on blur / visibility / pointer-lock loss; the bot carries on
     if (g.state === 'paused') { g._screen(null); g.state = 'playing'; g.audio.setPaused(false); B.pauses = (B.pauses || 0) + 1; }
     I.keys.clear(); I.buttons.clear();
+    // cinematics: skipped with a key press (set __bot.watch = true to let them play)
+    if (g.cinematic && !B.watch) { I.edges.add('Enter'); window.__step(0.1); return; }
     const threat = g.crowd.nearest(p, (n) => g.crowd.isThreat(n) || (n.script && n.script.active), m.stage === 'p3' ? 12 : 30);
     let goal = null, fight = false;
     if (threat) { goal = threat.pos; fight = true; } else if (m.markerPos) goal = m.markerPos;

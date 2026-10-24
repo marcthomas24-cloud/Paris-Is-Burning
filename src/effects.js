@@ -429,6 +429,15 @@ export class Effects {
     this.fire.update(dt, this.wind, fogObj);
   }
 
+  // remove a fire added with addFire (boss arenas take theirs down when the fight ends)
+  removeFire(fire) {
+    const k = this.dynamicFires.findIndex((f) => f.fire === fire);
+    if (k < 0) return;
+    const f = this.dynamicFires.splice(k, 1)[0];
+    const i = this.world.fires.indexOf(f.fire); if (i >= 0) this.world.fires.splice(i, 1);
+    const j = this.world.smokes.indexOf(f.smoke); if (j >= 0) this.world.smokes.splice(j, 1);
+  }
+
   inFire(pos) {
     for (const f of this.flames) {
       const r = f.radius * (1 - (f.t / f.life) * 0.4);

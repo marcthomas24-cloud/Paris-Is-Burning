@@ -107,7 +107,16 @@ A complete run takes about 2–3 minutes. A fast, efficient run is around 1:45; 
 - **The Enforcer** (10 hits): a heavy steel shield that blocks from the front. *Shield bash* (0.8 s wind-up, blockable) leaves him open for 1.3 s. *Charge* (1.0 s wind-up, unblockable): he aims when the wind-up ends, so sidestep or dodge as he launches; if he misses he recovers for 1.4 s, and if he runs into a car, wall or barricade he is stunned for 2.4 s. After two of his bashes are blocked he backs off and charges.
 - **Le Patron** (15 hits, three phases, a car-door shield and a fire axe). *Phase 1:* shield up, a heavy overhead chop (0.9 s, unblockable, 1.4 s opening) and a shield shove. *Phase 2:* he circles and strings two- and three-hit combinations: light swings you can block, ending in a heavy chop you must dodge. *Phase 3:* faster, shorter openings, and occasional feints: the wind-up visibly cancels and the real chop winds up in full, so a dodge spent on the feint has recovered in time. Each phase change is a short invulnerable pause that cancels his attack and pushes you back; damage never carries over.
 
-**Le Patron** runs the looting crews. He uses the night as cover: while the city's attention is on the protests, his crews strip the shops on this stretch of the boulevard for him. He is not part of the protest, and the people marching are no concern of his. He is a heavy-set man in an olive puffer jacket with a keffiyeh scarf, carrying a lit road flare in the street sections and a fire axe in the fight. Art, voice and his introduction come in a later build.
+**Presentation** (`src/cinematic.js`, `src/music.js`):
+
+- **Short introductions**, each skippable with Space, Enter, a click or a tap: the first sight of le Patron (a telephoto look from where you stand, about 3 s), the Enforcer (shield slammed into the road, 3.3 s) and le Patron before his fight (axe raised, his line as a subtitle, 4.2 s). The game world keeps running underneath, nothing can hurt you meanwhile, and no new group attacks until it ends.
+- **Victory:** after his arrest, a slow shot of le Patron in custody as his crews scatter (5.6 s), then the results with a hook for the next level.
+- **Phase changes:** a banner with his line, a sting, a short slow-down and a small camera punch. Unblockable wind-ups make the ring pulse and play a two-note warning; blockable ones keep a steady amber ring. The boss bar shows lost health as a pale segment that drains after each hit.
+- **Arenas:** burning barriers just outside each arena frame and light the fight, and the two police beacons move to its edge and strobe red and blue (the same lights, recoloured, so no shaders compile).
+- **Music (Level 2):** a synthesised stand-in score: a slow minor pad, a low pulse that comes in for fights and quickens for bosses (faster again in le Patron's last phase), a sub drone under boss fights, and a resolving chord for the victory. It has its own **Music** volume on the Audio screen. Level 1 keeps its original soundscape without music.
+- **Results:** rows arrive one by one; Level 2 adds both boss times, guard blocks and dodges, a rating, and the hook. The gameplay HUD fades out behind the results.
+
+**Le Patron** runs the looting crews. He uses the night as cover: while the city's attention is on the protests, his crews strip the shops on this stretch of the boulevard for him. He is not part of the protest, and the people marching are no concern of his. He is a heavy-set man in an olive puffer jacket with a keffiyeh scarf, carrying a lit road flare in the street sections and a fire axe in the fight. Bespoke art and voice are not part of this build.
 
 **Checkpoints.** If you fail in Level 2, **RETRY SECTION** restarts the current section with the score you had when it began.
 
@@ -256,6 +265,8 @@ src/
   level2.js      Level 2 mission script: sections, encounters, the Leader's first appearance, checkpoints
   encounters.js  Data-driven encounter runner (triggers, selection, resolution)
   boss.js        Boss state machine and the Enforcer / Leader attack tables; fairness lint
+  cinematic.js   Skippable camera sequences (shots, letterbox, name cards, subtitles)
+  music.js       Synthesised score and stings (Level 2)
   seed.js        ?seed=N: seeded Math.random for reproducible runs
   dev.js         Test helpers, loaded only with ?dev in the URL
 ```
@@ -268,7 +279,7 @@ Add `?dev` to the URL to load the test helpers (`src/dev.js`):
 |---|---|
 | `__start({ audio })` | Start playing (pass `{ audio: false }` for silent, reproducible runs) |
 | `__step(seconds)` | Advance the simulation in fixed 1/60 s steps. From the first call the real-time loop only renders; `__live()` hands the simulation back |
-| `__botRun(ms)` | Scripted bot that plays with the normal controls for up to `ms` of wall time; call repeatedly until `ended` |
+| `__botRun(ms)` | Scripted bot that plays with the normal controls for up to `ms` of wall time; call repeatedly until `ended`. It skips cinematics with a key press unless `__bot.watch = true` |
 | `__perf(frames)` | Average simulation and render cost per frame, draw calls and triangles summed over all post-processing passes, and the number of compiled shader programs |
 | `__level(id, stage)` / `__jump(i)` | Switch level (ignores unlocks) / jump to a Level 2 section |
 | `__unlock(id)` / `__resetProgress()` | Unlock a level / clear saved progress |

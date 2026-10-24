@@ -27,6 +27,8 @@ export class CameraRig {
   }
 
   shake(a) { this.shakeAmt = Math.min(0.6, this.shakeAmt + a); }
+  // brief field-of-view punch (phase changes): restrained, eases out
+  kick(deg) { this.fovKick = Math.min(10, (this.fovKick || 0) + deg); }
 
   rotate(dx, dy) {
     this.yaw -= dx * 0.0024;
@@ -78,7 +80,9 @@ export class CameraRig {
     }
     this.camera.position.copy(pos);
     this.camera.lookAt(look);
-    const wantFov = player.sprinting ? 70 : player.blocking ? 56 : 62;
+    this.fovKick = (this.fovKick || 0) * Math.exp(-dt * 4);
+    const wantFov = (player.sprinting ? 70 : player.blocking ? 56 : 62) + this.fovKick;
+    this.lastPose = { pos: pos.clone(), look: look.clone(), fov: wantFov }; // cinematics blend back to this
     this.fov += (wantFov - this.fov) * Math.min(1, dt * 4);
     if (Math.abs(this.camera.fov - this.fov) > 0.01) { this.camera.fov = this.fov; this.camera.updateProjectionMatrix(); }
   }

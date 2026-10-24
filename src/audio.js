@@ -13,6 +13,8 @@
 // Every layer is driven from update() (no free-running timers), so pausing stops
 // new sounds and nothing piles up while the game is paused or the tab is hidden.
 
+import { Music } from './music.js';
+
 const R = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -39,14 +41,14 @@ const CATS = {
 const MAX_VOICES = 22;
 
 const SETTINGS_KEY = 'parisBurning.audio.v1';
-const DEFAULTS = { master: 0.8, ambience: 0.8, effects: 0.9, muted: false };
+const DEFAULTS = { master: 0.8, ambience: 0.8, effects: 0.9, music: 0.7, muted: false };
 
 function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
     if (s && typeof s === 'object') {
       const out = { ...DEFAULTS };
-      for (const k of ['master', 'ambience', 'effects']) if (Number.isFinite(s[k])) out[k] = clamp(s[k], 0, 1);
+      for (const k of ['master', 'ambience', 'effects', 'music']) if (Number.isFinite(s[k])) out[k] = clamp(s[k], 0, 1);
       out.muted = !!s.muted;
       return out;
     }
@@ -104,6 +106,7 @@ export class Audio {
     this.vehicles = [];
     this.alarms = [];
     this.pending = [];     // deferred one-shots {t, fn} run from update()
+    this.music = new Music(this);
     this.recentBooms = [];
     this.lastSlot = {};
     this.settings = loadSettings();
@@ -173,6 +176,7 @@ export class Audio {
     this.ambVol = c.createGain(); this.duck = c.createGain();
     this.ambVol.connect(this.duck).connect(this.game);
     this.sfxVol = c.createGain(); this.sfxVol.connect(this.game);
+    this.musicVol = c.createGain(); this.musicVol.connect(this.game); // music bus (music.js)
     this.amb = this.ambVol; this.sfx = this.sfxVol;
     this._applySettings(true);
     this._makeNoise();
@@ -288,6 +292,7 @@ export class Audio {
     set(this.master.gain, s.muted ? 0 : curve(s.master));
     set(this.ambVol.gain, curve(s.ambience));
     set(this.sfxVol.gain, curve(s.effects));
+    set(this.musicVol.gain, curve(s.music));
     set(this.uiBus.gain, curve(s.effects) * 0.7);
   }
 
@@ -489,6 +494,7 @@ export class Audio {
     const c = this.ctx, now = c.currentTime;
     if (c.state !== 'running') return;
     this.intensity = info.intensity ?? this.intensity;
+    this.music.update();
     this.crowdSmooth += (this.crowdLevel - this.crowdSmooth) * Math.min(1, dt * 0.8);
     const cl = this.crowdSmooth;
 

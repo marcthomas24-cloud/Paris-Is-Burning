@@ -93,6 +93,7 @@ export class EncounterRunner {
     for (const e of this.list) {
       const st = this.state[e.id];
       if (st.status === 'waiting') {
+        if (this.game.cinematic) continue; // nothing starts while a cinematic plays
         const tr = e.trigger || { now: true };
         const go = tr.now || (tr.z !== undefined && (p.z - tr.z) * this.dir >= 0) || (tr.after && this.state[tr.after] && this.state[tr.after].status === 'resolved');
         if (go) this.start(e);

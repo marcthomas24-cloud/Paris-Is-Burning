@@ -152,6 +152,7 @@ export class Player {
     if (!this.dead && input.pressed('Space') && this.dodgeCool <= 0 && this.stamina > 12 && this.staggerT <= 0) {
       this.dodgeDir.copy(wish.lengthSq() > 0 ? wish : this.forward().negate()).normalize();
       this.dodgeT = 0.32; this.dodgeCool = 0.75; this.invuln = 0.28;
+      if (g.missions && g.missions.stats.dodges !== undefined) g.missions.stats.dodges++;
       this.stamina -= 18;
       this.attack = null;
       g.audio.footstep(this.pos, 0.3, true);
