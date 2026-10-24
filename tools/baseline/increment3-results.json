@@ -37,6 +37,7 @@
     "launchToContact_s": { "4.5m": 0.52, "5.5m": 0.63, "7m": 0.8, "9m": 1.03 },
     "rule": "regular charges trigger beyond 6.5 m; the back-off before a pattern charge now reaches 6.2 m (about 0.7 s)"
   },
+  "chargeWallStun": "obstacle between Enforcer and officer: wind -> charge -> stun (2.4 s), officer untouched, logged as wall impact; a frontal hit landed during the stun (10 -> 9). Not produced naturally in the bot runs, where every charge was dodged and ended by distance.",
   "checkpoints": {
     "enforcer": "died at 6/10 hp -> RETRY SECTION -> new fight, 10/10, phase 1, intro, arena on, score restored to section start (777), no axe",
     "leader": "died at 8/15 hp in phase 2 -> RETRY SECTION -> new fight, 15/15, phase 1, intro, arena on, score restored (777), exactly one axe"
