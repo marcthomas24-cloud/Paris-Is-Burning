@@ -217,6 +217,8 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 .touch #score-pop { top: 40px; font-size: 12px; }
 .touch #bottom-left { left: auto; bottom: auto; right: calc(env(safe-area-inset-right, 0px) + 8px); top: calc(env(safe-area-inset-top, 0px) + 58px); width: 96px; }
 .touch #minimap { width: 96px; height: 96px; }
+/* short landscape phones: a smaller minimap keeps the health / stamina bars clear of DODGE */
+@media (max-height: 380px) { .touch #minimap { width: 64px; height: 64px; } }
 .touch .bar-row { margin-top: 5px; }
 .touch .bar-label { font-size: 8px; letter-spacing: 0.12em; }
 .touch #alerts { top: calc(env(safe-area-inset-top, 0px) + 40px); max-width: 52vw; }

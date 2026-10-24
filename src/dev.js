@@ -8,8 +8,10 @@ import { randomOutfit } from './characters.js';
 import { mulberry } from './textures.js';
 import { reseed, SEED } from './seed.js';
 import { lintBoss, ENFORCER, LEADER } from './boss.js';
+import { installTests } from './devtests.js';
 
 export function installDev(game) {
+  installTests(game); // regression and fairness checks (devtests.js)
   // Fixed-step simulation. The first call hands the simulation to the harness:
   // the real-time loop then only renders (see Game.frame), so runs are reproducible.
   window.__step = (sec, fn) => {

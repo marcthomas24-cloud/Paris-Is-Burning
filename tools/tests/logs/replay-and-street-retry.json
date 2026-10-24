@@ -1,0 +1,19 @@
+{
+  "build": "production (dist/, vite preview :5176), final stabilisation build",
+  "url": "http://localhost:5176/?dev&level=2&seed=12 (continuing after the Level 2 audit run)",
+  "replayAfterCompletion": {
+    "steps": "Level 2 end screen -> click RESTART (the only button shown) -> inspect -> await __auditRun()",
+    "afterRestart": {"state":"playing","level":2,"section":0,"cp":null,"hp":100,"bossActive":false,"npcs":216,"sceneObjects":393,"screensVisible":[]},
+    "replayRun": {"t":172.34,"score":9725,"scoreSum":9725,"title":"LEVEL 2 COMPLETE","encountersStarted":13,"bossTimes":{"enforcer":19.2,"leader":34.5},"errors":[],"issues":[]},
+    "verdict": "PASS"
+  },
+  "streetSectionRetry": {
+    "script": "inline console script: RESTART; bot until section N has an active encounter; player.takeDamage(1000); click #btn-retry; check section, score == checkpoint score, hp 100, no active/resolved encounters; bot to the end",
+    "results": [
+      {"target":1,"before":{"section":1,"active":1,"cpSection":1,"cpScore":1600},"failed":{"state":"ended","retryShown":true},"after":{"state":"playing","section":1,"score":1600,"hp":100,"encActive":0,"encResolved":0,"encTotal":5,"npcs":216},"end":{"title":"LEVEL 2 COMPLETE","score":9275},"pass":true},
+      {"target":3,"before":{"section":3,"active":1,"cpSection":3,"cpScore":5150},"failed":{"state":"ended","retryShown":true},"after":{"state":"playing","section":3,"score":5150,"hp":100,"encActive":0,"encResolved":0,"encTotal":5,"npcs":216},"end":{"title":"LEVEL 2 COMPLETE","score":9725},"pass":true}
+    ],
+    "verdict": "PASS"
+  },
+  "limitation": "There is no button back to the main menu from the end screen (RESTART only); Level 1 after Level 2 requires a page reload."
+}

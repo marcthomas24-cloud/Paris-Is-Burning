@@ -1,0 +1,23 @@
+{
+  "build": "production (dist/, vite preview :5176), after geometry cache fix",
+  "url": "http://localhost:5176/?dev&level=2&seed=77",
+  "command": "await __probeMemory(10)  (run twice: 20 boss retries, alternating enforcer / leader)",
+  "first10": [
+    {"heapMB":126.9,"geometries":1,"textures":1,"programs":29},
+    {"heapMB":137.5,"geometries":160,"textures":110,"programs":71},
+    {"heapMB":142.6,"geometries":173,"textures":145,"programs":72},
+    {"heapMB":175.9,"geometries":173,"textures":149,"programs":72},
+    {"heapMB":163.7,"geometries":176,"textures":156,"programs":72},
+    {"heapMB":163.4,"geometries":176,"textures":158,"programs":72},
+    {"heapMB":150.5,"geometries":178,"textures":161,"programs":72},
+    {"heapMB":180.5,"geometries":178,"textures":163,"programs":72},
+    {"heapMB":155.6,"geometries":180,"textures":170,"programs":72},
+    {"heapMB":156.3,"geometries":180,"textures":171,"programs":72},
+    {"heapMB":150.0,"geometries":180,"textures":176,"programs":72}
+  ],
+  "after20": {"heapMB":153.7,"geometries":182,"textures":185,"programs":72,"sceneObjects":393,"npcs":216},
+  "distinctSceneGeometries": {"after10": 203, "after20": 203},
+  "textureBreakdownAfter10": "176 = 110 base + 66 skeleton bone textures (created once per skinned mesh on first draw; 250 skeletons in the scene, so bounded)",
+  "beforeFix": "geometries 229 -> 344 over 10 retries (~11.5 per retry): every giveItem / attachFireAxe built new geometries",
+  "verdict": "PASS: distinct geometries constant; GPU counts converge on fixed ceilings (lazy first upload); heap flat"
+}

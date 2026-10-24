@@ -1,0 +1,19 @@
+{
+  "build": "production (dist/, vite preview :5176), final stabilisation build",
+  "hardware": "Windows 11 Pro PC, AMD Radeon integrated GPU (shared with other running sessions), Claude desktop app built-in Chromium 152",
+  "viewport": "1280x720, devicePixelRatio 1, renderer pixel ratio 1",
+  "method": "__frameTimes(scenario, frames): game.update(1/60) then game.render() + gl.finish() per frame, timed with performance.now(). Seeded runs: adaptive crowd detail and dynamic resolution are OFF, so this is full-detail worst case. The Browser pane was hidden (background page) during most runs.",
+  "results": [
+    {"scenario":"leader (le Patron fight)","url":"?dev&level=2&seed=12","frames":300,"update":{"p50":12.9,"p95":21.4,"max":56.5},"render":{"p50":23.4,"p95":72.1,"max":107},"total":{"p50":36.3,"p95":83.6,"max":121.4},"programs":71},
+    {"scenario":"enforcer fight","url":"?dev&level=2&seed=12","frames":300,"update":{"p50":14,"p95":21.5,"max":46.1},"render":{"p50":24.6,"p95":92.8,"max":123.2},"total":{"p50":39.6,"p95":105.2,"max":136.8},"programs":72},
+    {"scenario":"Level 1 dense crowd (bot to t=60 s), first pass","url":"?dev&seed=3","frames":300,"update":{"p50":7.5,"p95":11.1,"max":22.4},"render":{"p50":27.1,"p95":110.7,"max":295.1},"total":{"p50":35.4,"p95":116,"max":300.3},"programs":50,"npcs":198},
+    {"scenario":"Level 1 dense crowd, immediate repeat","frames":300,"update":{"p50":4.9,"p95":7.2,"max":12.5},"render":{"p50":28.5,"p95":33.3,"max":76.9},"total":{"p50":33.3,"p95":39.5,"max":83.5},"programs":"50 before, 50 after"},
+    {"scenario":"le Patron intro cinematic (cinematic active during the sample)","url":"?dev&level=2&seed=12","frames":240,"update":{"p50":10.4,"p95":17.8,"max":52.2},"render":{"p50":23.4,"p95":32.1,"max":119.2},"total":{"p50":33.1,"p95":45.6,"max":125.4},"programs":71}
+  ],
+  "notRun": [
+    "Real-time frame pacing with adaptive quality (requestAnimationFrame did not fire: 0 frames in 2 s; the Claude window was not on screen)",
+    "Dedicated phase-transition and explosion timing (covered only incidentally inside the boss samples)",
+    "Any physical mobile device"
+  ],
+  "interpretation": "Median ~33-40 ms per frame (25-30 fps) at full detail on this integrated GPU. First-pass spikes (render max 295 ms) did not recur on repeat with no new shader programs, so they look like one-off first-draw uploads or GPU contention (cause UNVERIFIED). These figures cannot be used as a frame-rate claim for players."
+}

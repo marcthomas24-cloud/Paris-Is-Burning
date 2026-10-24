@@ -1,0 +1,8 @@
+{
+  "build": "production (dist/, vite preview :5176), final stabilisation build",
+  "url": "http://localhost:5176/?dev",
+  "commands": ["await __auditAppearance({ seeds: 30, level: 1 })", "await __auditAppearance({ seeds: 30, level: 2 })"],
+  "level1": {"selections":509,"zCritical":2.94,"verdict":"no material appearance skew detected (screening check; see minDetectablePts)","carriedProps":"no skew","maxAbsZ":2.33,"maxAbsZMarker":"faceCovered (selected 31.4% vs pool 36.4%, under-selected)","flags":{"palestinianFlag":[15.1,15.3,-0.12],"algerianFlag":[5.9,7.1,-1.05],"frenchFlag":[6.3,6.1,0.22]},"hostility":{"outfitsChangedByMakeHostile":0,"meleeFlagCarriersSelected":73,"flagsKept":73},"selfTest":{"marker":"keffiyeh","weight":2,"z":8.16,"detected":true}},
+  "level2": {"selections":1140,"zCritical":2.94,"verdict":"no material appearance skew detected (screening check; see minDetectablePts)","carriedProps":"no skew","markers_selectedPct_poolPct_z":{"keffiyeh":[21.6,22.3,-0.61],"algeriaShirt":[3.4,3.6,-0.34],"psg":[17.4,16.5,0.78],"headscarf":[5.8,5.7,0.21],"faceCovered":[38.1,38.6,-0.36],"balaclava":[5.4,5,0.57],"hiVis":[10.1,10.1,-0.05],"smartClothes":[15.2,15.9,-0.64],"female":[31.3,30.7,0.49],"complexionEu":[34.3,31,2.46],"complexionNa":[34.6,35.7,-0.8],"complexionAf":[31.1,33.3,-1.61]},"flags":"too rare to assess (0 selected, 0 expected): Level 2 attackers are drawn only from looting crews, which carry no flags (role-linked diagnostic, as approved in increment 2)","hostility":{"outfitsChangedByMakeHostile":0},"selfTest":{"z":10.38,"detected":true}},
+  "verdict": "PASS (both levels; self-tests detect a planted skew)"
+}

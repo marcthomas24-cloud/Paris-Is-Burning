@@ -2,8 +2,16 @@
 import * as THREE from 'three';
 import * as T from './textures.js';
 import { Humans, createHuman, updateHuman } from './humans.js';
+import { isolateRender } from './seed.js';
 
 const matCache = new Map();
+// Props handed out again and again (shields, axe, flare, stones, cameras) share one geometry
+// per shape: removing a prop does not free its geometry, so building new ones on every
+// hand-out made GPU geometry grow with each restart.
+const geoCache = new Map();
+function geo(key, make) { let g = geoCache.get(key); if (!g) { g = make(); geoCache.set(key, g); } return g; }
+let FLARE_TIP = null;
+
 export function colMat(hex, opts = {}) {
   const k = hex + JSON.stringify(opts);
   if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color: hex, roughness: 0.85, ...opts }));
@@ -522,8 +530,8 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
     rig.handR.add(g);
     rig.wick = new THREE.Object3D(); rig.wick.position.set(0, 0.2, 0); g.add(rig.wick);
   } else if (type === 'camera') {
-    const cam = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.09, 0.08), colMat(0x111111, { roughness: 0.4 }));
-    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.09, 12), colMat(0x1a1a1a, { roughness: 0.25, metalness: 0.6 }));
+    const cam = new THREE.Mesh(geo('BoxGeometry(0.13, 0.09, 0.08)', () => new THREE.BoxGeometry(0.13, 0.09, 0.08)), colMat(0x111111, { roughness: 0.4 }));
+    const lens = new THREE.Mesh(geo('CylinderGeometry(0.035, 0.04, 0.09, 12)', () => new THREE.CylinderGeometry(0.035, 0.04, 0.09, 12)), colMat(0x1a1a1a, { roughness: 0.25, metalness: 0.6 }));
     lens.rotation.x = Math.PI / 2; lens.position.set(0, 0, 0.08);
     cam.add(lens);
     cam.position.set(-0.04, -0.06, 0.06);
@@ -537,8 +545,8 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
     rig.spine.add(g);
   } else if (type === 'flare') {
     // lit road flare: red emissive tip (picked up by the bloom); sparks are spawned by the holder's script
-    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.3, 8), colMat(0x8a1010, { roughness: 0.6 }));
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshStandardMaterial({ color: 0xff5040, emissive: 0xff2a10, emissiveIntensity: 9 }));
+    const stick = new THREE.Mesh(geo('CylinderGeometry(0.018, 0.018, 0.3, 8)', () => new THREE.CylinderGeometry(0.018, 0.018, 0.3, 8)), colMat(0x8a1010, { roughness: 0.6 }));
+    const tip = new THREE.Mesh(geo('SphereGeometry(0.035, 8, 6)', () => new THREE.SphereGeometry(0.035, 8, 6)), FLARE_TIP || (FLARE_TIP = new THREE.MeshStandardMaterial({ color: 0xff5040, emissive: 0xff2a10, emissiveIntensity: 9 })));
     tip.position.y = -0.17;
     g.add(stick, tip);
     g.position.set(0, -0.06, 0.03);
@@ -548,39 +556,39 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
     // improvised shield on the left hand: a plywood board, a torn-down road sign or a bin lid
     const s = new THREE.Group();
     if (variant === 'sign') {
-      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.02, 24), colMat(0xc8161d, { roughness: 0.5, metalness: 0.3 }));
+      const disc = new THREE.Mesh(geo('CylinderGeometry(0.38, 0.38, 0.02, 24)', () => new THREE.CylinderGeometry(0.38, 0.38, 0.02, 24)), colMat(0xc8161d, { roughness: 0.5, metalness: 0.3 }));
       disc.rotation.x = Math.PI / 2;
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.025), colMat(0xf2f2f2, { roughness: 0.5 }));
+      const bar = new THREE.Mesh(geo('BoxGeometry(0.5, 0.12, 0.025)', () => new THREE.BoxGeometry(0.5, 0.12, 0.025)), colMat(0xf2f2f2, { roughness: 0.5 }));
       bar.position.z = 0.004;
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), colMat(0x8a8f94, { roughness: 0.4, metalness: 0.6 }));
+      const pole = new THREE.Mesh(geo('CylinderGeometry(0.025, 0.025, 0.5, 8)', () => new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8)), colMat(0x8a8f94, { roughness: 0.4, metalness: 0.6 }));
       pole.position.set(0, -0.55, -0.02);
       s.add(disc, bar, pole);
     } else if (variant === 'heavy') {
       // the Enforcer's reinforced shield: a steel plate bolted to a board, with straps
-      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.12, 0.04), colMat(0x3a3d42, { roughness: 0.55, metalness: 0.5 }));
-      const band = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.07, 0.06), colMat(0x1d1f22, { roughness: 0.6, metalness: 0.4 }));
+      const plate = new THREE.Mesh(geo('BoxGeometry(0.8, 1.12, 0.04)', () => new THREE.BoxGeometry(0.8, 1.12, 0.04)), colMat(0x3a3d42, { roughness: 0.55, metalness: 0.5 }));
+      const band = new THREE.Mesh(geo('BoxGeometry(0.84, 0.07, 0.06)', () => new THREE.BoxGeometry(0.84, 0.07, 0.06)), colMat(0x1d1f22, { roughness: 0.6, metalness: 0.4 }));
       band.position.set(0, 0.32, 0.02);
       const band2 = band.clone(); band2.position.y = -0.32;
-      const slit = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.05), colMat(0x0a0a0a));
+      const slit = new THREE.Mesh(geo('BoxGeometry(0.3, 0.05, 0.05)', () => new THREE.BoxGeometry(0.3, 0.05, 0.05)), colMat(0x0a0a0a));
       slit.position.set(0, 0.42, 0.02);
       s.add(plate, band, band2, slit);
     } else if (variant === 'door') {
       // the Leader's shield: a car door torn off a burnt-out car
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.62, 0.06), colMat(0x5a1a18, { roughness: 0.45, metalness: 0.4 }));
+      const panel = new THREE.Mesh(geo('BoxGeometry(0.88, 0.62, 0.06)', () => new THREE.BoxGeometry(0.88, 0.62, 0.06)), colMat(0x5a1a18, { roughness: 0.45, metalness: 0.4 }));
       panel.position.y = -0.12;
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.38, 0.04), colMat(0x121212, { roughness: 0.3, metalness: 0.5 }));
+      const frame = new THREE.Mesh(geo('BoxGeometry(0.84, 0.38, 0.04)', () => new THREE.BoxGeometry(0.84, 0.38, 0.04)), colMat(0x121212, { roughness: 0.3, metalness: 0.5 }));
       frame.position.y = 0.36;
-      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.03), colMat(0x8a8f94, { metalness: 0.7, roughness: 0.3 }));
+      const handle = new THREE.Mesh(geo('BoxGeometry(0.14, 0.03, 0.03)', () => new THREE.BoxGeometry(0.14, 0.03, 0.03)), colMat(0x8a8f94, { metalness: 0.7, roughness: 0.3 }));
       handle.position.set(-0.28, 0.0, 0.04);
       s.add(panel, frame, handle);
     } else if (variant === 'lid') {
-      const lid = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.78, 0.05), colMat(0xd8b52a, { roughness: 0.7 }));
-      const lip = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.06, 0.09), colMat(0xc8a520, { roughness: 0.7 }));
+      const lid = new THREE.Mesh(geo('BoxGeometry(0.6, 0.78, 0.05)', () => new THREE.BoxGeometry(0.6, 0.78, 0.05)), colMat(0xd8b52a, { roughness: 0.7 }));
+      const lip = new THREE.Mesh(geo('BoxGeometry(0.64, 0.06, 0.09)', () => new THREE.BoxGeometry(0.64, 0.06, 0.09)), colMat(0xc8a520, { roughness: 0.7 }));
       lip.position.set(0, 0.39, 0.02);
       s.add(lid, lip);
     } else {
-      const board = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.86, 0.025), colMat(0xa8835a, { roughness: 0.95 }));
-      const slat = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.08, 0.04), colMat(0x6a5038, { roughness: 0.95 }));
+      const board = new THREE.Mesh(geo('BoxGeometry(0.62, 0.86, 0.025)', () => new THREE.BoxGeometry(0.62, 0.86, 0.025)), colMat(0xa8835a, { roughness: 0.95 }));
+      const slat = new THREE.Mesh(geo('BoxGeometry(0.66, 0.08, 0.04)', () => new THREE.BoxGeometry(0.66, 0.08, 0.04)), colMat(0x6a5038, { roughness: 0.95 }));
       slat.position.set(0, 0.2, 0.02);
       const slat2 = slat.clone(); slat2.position.y = -0.22;
       s.add(board, slat, slat2);
@@ -591,7 +599,7 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
     g.position.copy(SHIELD_POSE.guard[0]);
     rig.spine.add(g);
   } else if (type === 'stone') {
-    const st = new THREE.Mesh(new THREE.DodecahedronGeometry(0.06), colMat(0x6a6660));
+    const st = new THREE.Mesh(geo('DodecahedronGeometry(0.06)', () => new THREE.DodecahedronGeometry(0.06)), colMat(0x6a6660));
     st.position.set(0, -0.1, 0.03); g.add(st);
     rig.handR.add(g);
   }
@@ -607,15 +615,15 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
 export function attachFireAxe(rig) {
   initShared();
   const g = new THREE.Group();
-  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.92, 8), colMat(0x1a1a1a, { roughness: 0.5 }));
+  const handle = new THREE.Mesh(geo('CylinderGeometry(0.02, 0.024, 0.92, 8)', () => new THREE.CylinderGeometry(0.02, 0.024, 0.92, 8)), colMat(0x1a1a1a, { roughness: 0.5 }));
   handle.position.y = -0.34;
-  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.2, 8), colMat(0xd8b52a, { roughness: 0.6 }));
+  const grip = new THREE.Mesh(geo('CylinderGeometry(0.026, 0.026, 0.2, 8)', () => new THREE.CylinderGeometry(0.026, 0.026, 0.2, 8)), colMat(0xd8b52a, { roughness: 0.6 }));
   grip.position.y = 0.0;
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.26), colMat(0xb81414, { roughness: 0.4, metalness: 0.4 }));
+  const head = new THREE.Mesh(geo('BoxGeometry(0.06, 0.12, 0.26)', () => new THREE.BoxGeometry(0.06, 0.12, 0.26)), colMat(0xb81414, { roughness: 0.4, metalness: 0.4 }));
   head.position.set(0, -0.76, 0.06);
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.16, 0.08), colMat(0xc8ccd0, { roughness: 0.25, metalness: 0.8 }));
+  const blade = new THREE.Mesh(geo('BoxGeometry(0.02, 0.16, 0.08)', () => new THREE.BoxGeometry(0.02, 0.16, 0.08)), colMat(0xc8ccd0, { roughness: 0.25, metalness: 0.8 }));
   blade.position.set(0, -0.76, 0.21);
-  const pick = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.16, 6), colMat(0xb81414, { roughness: 0.4, metalness: 0.4 }));
+  const pick = new THREE.Mesh(geo('ConeGeometry(0.03, 0.16, 6)', () => new THREE.ConeGeometry(0.03, 0.16, 6)), colMat(0xb81414, { roughness: 0.4, metalness: 0.4 }));
   pick.rotation.x = -Math.PI / 2; pick.position.set(0, -0.76, -0.13);
   g.add(handle, grip, head, blade, pick);
   g.rotation.x = rig.skinned ? -1.0 : 1.15;
@@ -637,7 +645,7 @@ export function prewarmItems(renderer, scene, camera, types) {
     if (type === 'axe') attachFireAxe(rig); else giveItem(rig, type, Math.random, variant);
   }
   scene.add(holder);
-  renderer.compile(scene, camera);
+  isolateRender(() => renderer.compile(scene, camera)); // like drawing, compiling stays off the simulation's random stream
   scene.remove(holder);
 }
 

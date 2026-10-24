@@ -1,5 +1,5 @@
 // Paris Burning — bootstrap, game loop and state machine.
-import { SEED } from './seed.js'; // first: seeds Math.random when ?seed=N is given
+import { SEED, isolateRender } from './seed.js'; // first: seeds Math.random when ?seed=N is given
 import * as THREE from 'three';
 import { World } from './world.js';
 import { Effects } from './effects.js';
@@ -376,8 +376,10 @@ class Game {
   }
 
   render() {
-    if (this.post) this.post.render(1 / 60, this.time, this.effects ? Math.min(1, this.effects.smokiness) : 0, this.hud ? this.hud.flash : 0);
-    else this.renderer.render(this.scene, this.camera);
+    isolateRender(() => { // seeded runs: drawing never touches the simulation's random stream
+      if (this.post) this.post.render(1 / 60, this.time, this.effects ? Math.min(1, this.effects.smokiness) : 0, this.hud ? this.hud.flash : 0);
+      else this.renderer.render(this.scene, this.camera);
+    });
   }
 
   // thicker, warmer haze in the smoke-filled stretches of the boulevard

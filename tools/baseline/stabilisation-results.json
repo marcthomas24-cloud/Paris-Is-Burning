@@ -1,0 +1,47 @@
+{
+  "description": "Stabilisation and release-readiness audit (branch level2, after increment 4). Detailed per-test logs are in tools/tests/logs/.",
+  "date": "2026-10-24",
+  "baseCommit": "f6db7f8",
+  "environment": {
+    "os": "Windows 11 Pro 10.0.26200",
+    "gpu": "AMD Radeon integrated (ANGLE D3D11), shared with other running sessions",
+    "browser": "Claude desktop app built-in browser, Chromium 152",
+    "build": "npm ci + npm run build (Vite 5.4.10, three r169), served by vite preview on :5176",
+    "finalBundle": "dist/assets/index-DD2lQ86k.js",
+    "notTested": ["physical phone or tablet", "Firefox", "Safari / iOS", "Chrome on Android", "Edge", "real-time frame pacing (requestAnimationFrame did not run: Claude window off screen)"]
+  },
+  "proposedReferences": {
+    "status": "PROPOSED, NOT ADOPTED: needs approval before replacing the committed baselines",
+    "level1_seed3": {
+      "command": "?dev&seed=3, await __runToEnd()",
+      "result": { "t": 91.1, "score": 6300, "title": "MISSION COMPLETE", "stats": { "neutralized": 15, "arrests": 8, "peaceful": 0, "bombsStopped": 1, "bombsThrown": 1 }, "minHp": 94, "crowdSum": ["283.211", "2835.882"] },
+      "reproducedAt": ["hidden pane", "900x640", "1280x720"]
+    },
+    "level2_seed12": {
+      "command": "?dev&level=2&seed=12, await __auditRun({ watch: true })",
+      "result": { "t": 210.77, "score": 9875, "title": "LEVEL 2 COMPLETE", "bossTimes": { "enforcer": 21.7, "leader": 43.3 }, "encountersStarted": 13, "crowdSum": ["340.677", "2763.332"], "issues": [] },
+      "reproducedAt": ["900x640 (final run); the pre-geometry-fix build gave identical results at 854x630 and 502x549"]
+    },
+    "whyTheyDiffer": [
+      "Committed Level 1 baseline (84.4 s / 7352, increment 2) was only reproducible at a 502x549 viewport: three.js generateUUID() draws Math.random during rendering (bone textures, program setup), and how much it draws depends on the viewport and frustum. Rendering now uses its own seeded stream (seed.js isolateRender), so seeded runs are independent of window size.",
+      "Caching prop geometries (characters.js) means fewer three.js constructors, each of which draws 4 Math.random values for its UUID, so the simulation stream shifts again. Mid-audit (render isolated, before the cache) Level 1 seed 3 was 96.32 s / 5807.",
+      "Increment 4 Level 2 seed 12 reference (175.95 s / 10675, watched) shifts for the same two reasons."
+    ]
+  },
+  "results": {
+    "productionBuild": { "verdict": "PASS", "log": "tools/tests/logs/npm-ci.log, tools/tests/logs/build.log", "notes": "0 failed requests in preview, 7/7 models and 23/23 audio files 200, no console errors; npm audit: 2 dev-only advisories (esbuild moderate, vite high), not upgraded" },
+    "level1Regression": { "verdict": "PASS", "log": "tools/tests/logs/level1-seed3.json" },
+    "level2Audit": { "verdict": "PASS", "log": "tools/tests/logs/level2-seed12-audit.json" },
+    "replayAfterLevel2": { "verdict": "PASS", "log": "tools/tests/logs/replay-and-street-retry.json" },
+    "streetSectionRetry": { "verdict": "PASS", "log": "tools/tests/logs/replay-and-street-retry.json" },
+    "bossBattery": { "verdict": "PASS", "log": "tools/tests/logs/boss-battery.json" },
+    "memory": { "verdict": "PASS (after fix; FAIL before)", "log": "tools/tests/logs/memory-probe.json" },
+    "audioVoiceCap": { "verdict": "PASS (after fix; FAIL before)", "notes": "5 simultaneous crash voices against a cap of 2 on the old build; 2 live / 10 cut after the fix" },
+    "audioInterruptions": { "verdict": "PASS (gain level only)", "log": "tools/tests/logs/hud-touch-audio.json" },
+    "hudLayout": { "verdict": "PASS after fix (phone landscape FAIL before)", "log": "tools/tests/logs/hud-touch-audio.json" },
+    "cinematicSkipTouch": { "verdict": "PASS", "log": "tools/tests/logs/hud-touch-audio.json" },
+    "appearanceAudit": { "verdict": "PASS", "log": "tools/tests/logs/appearance-audit.json" },
+    "frameTimes": { "verdict": "MEASURED (no pass/fail threshold); real-time pacing NOT RUN", "log": "tools/tests/logs/frame-times.json" },
+    "physicalDevice": { "verdict": "NOT RUN", "notes": "no phone or tablet available" }
+  }
+}

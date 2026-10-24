@@ -356,8 +356,12 @@ export class Audio {
     this._prune(now);
     const [max, base] = CATS[cat] || CATS.misc;
     const pri = base * level;
-    const same = this.voices.filter((v) => v.cat === cat);
-    const pool = same.length >= max ? same : this.voices.length >= MAX_VOICES ? this.voices : null;
+    // voices already cut (pri -1, fading out for 80 ms) neither count towards the caps nor
+    // serve again as the victim: otherwise several requests in one frame all 'replace' the
+    // same dying voice and the category grows past its limit
+    const live = this.voices.filter((v) => v.pri >= 0);
+    const same = live.filter((v) => v.cat === cat);
+    const pool = same.length >= max ? same : live.length >= MAX_VOICES ? live : null;
     if (pool) {
       let victim = null, vp = Infinity;
       for (const v of pool) { const p = this._effPri(v, now); if (p < vp) { vp = p; victim = v; } }

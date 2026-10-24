@@ -1,0 +1,21 @@
+{
+  "build": "production (dist/, vite preview :5176)",
+  "method": "Chromium device emulation in the Claude built-in browser (resize_window; widths < 768 also emulate a touch phone). Level 2 seed 12, __boss('leader') (boss bar visible), then __hudLayout() and a screenshot. No physical device.",
+  "hudLayout": [
+    {"viewport":"1280x720 desktop","overlaps":[],"offscreen":[],"verdict":"PASS"},
+    {"viewport":"768x1024 tablet (no touch)","overlaps":[["objective","compass",26,30],["objective","alerts",195,3]],"offscreen":[],"verdict":"PASS with note: rectangles touch but on screen the compass's faded edge sits under the objective panel; no text collides"},
+    {"viewport":"375x812 phone portrait (touch)","overlaps":[["bottom-left","hud-buttons",40,4],["bottom-left","alerts",10,74],["minimap","alerts",10,34],["boss-bar","alerts",147,42]],"offscreen":[],"verdict":"PASS with note: 'alerts' is an empty container for transient radio lines; the mute button's top edge touches the stamina bar by ~4 px (cosmetic)"},
+    {"viewport":"740x360 phone landscape (touch), BEFORE fix","overlaps":[["objective","alerts",43,42],["bottom-left","touch-buttons",90,16],["hud-buttons","alerts",15,8]],"rects":{"bottom-left":[636,58,732,204],"tb-dodge":[660,194,718,252]},"verdict":"FAIL: DODGE button covered the ENDURANCE bar (screenshot)"},
+    {"viewport":"740x360 phone landscape (touch), AFTER fix","overlaps":[["objective","alerts",43,42],["hud-buttons","alerts",15,8]],"rects":{"bottom-left":[636,58,732,172],"tb-dodge":[660,194,718,252]},"verdict":"PASS"},
+    {"viewport":"667x340 phone landscape (touch), AFTER fix","overlaps":[["objective","alerts",61,42],["bottom-left","touch-buttons",90,4],["hud-buttons","alerts",33,8]],"rects":{"bottom-left":[563,58,659,172],"tb-dodge":[587,174,645,232]},"verdict":"PASS (2 px clear; the 4 px box overlap is empty container space). Screens shorter than ~338 px would still collide."},
+    {"viewport":"740x412 phone landscape (touch), AFTER fix (rule inactive)","rects":{"bottom-left":[636,58,732,204],"minimap":[636,58,732,154],"tb-dodge":[660,246,718,304]},"verdict":"PASS, unchanged"}
+  ],
+  "fix": "src/style.css: @media (max-height: 380px) { .touch #minimap { width: 64px; height: 64px; } }",
+  "cinematicSkipTouch": {"steps":"__boss('leader') with cinematics on; step 0.5 s; dispatch pointerdown (pointerType touch) on #cine; step 0.3 s","before":{"cine":"leader","t":0.5,"total":4.2},"after":{"cine":false,"cineHidden":true,"state":"playing","bossState":"intro","touchUi":"block"},"note":"A tap at t < 0.3 s is ignored by design (grace period)","verdict":"PASS"},
+  "audioInterruptions": {
+    "steps":"game.audio.init(); ctx.resume(); game.pause(); game.resume(); audio.toggleMute() x2 (gain values read after each step)",
+    "results":{"start":{"gameGain":1,"master":0.64,"music":0.49},"paused":{"gameGain":0},"resumed":{"gameGain":0.994},"muted":{"master":0},"unmuted":{"master":0.64}},
+    "routing":"music bus -> game bus -> master, so pause also silences music",
+    "verdict":"PASS (gain level only; not checked by ear; tab-hidden suspend path not exercised)"
+  }
+}

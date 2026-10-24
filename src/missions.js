@@ -447,7 +447,7 @@ export class Missions {
           light: ['Stop him before he throws it!', 'DANGER', 'danger', 'Device being lit'],
           wind: ['STOP HIM NOW!', 'DANGER', 'danger', 'About to throw'],
           throw: ['Take cover!', 'DANGER', 'danger', 'Device thrown'],
-          flee: ['Catch the fleeing suspect', 'ACTIVE', 'active', `Suspect fleeing · ${Math.max(0, Math.ceil(22 - (sc ? sc.escapeT : 0)))}s`],
+          flee: ['Catch the fleeing suspect', 'ACTIVE', 'active', `Suspect fleeing · ${Math.max(0, Math.ceil(30 - (sc ? sc.escapeT : 0)))}s`],
           done: ['Neutralise the aggressors in the surge', 'ACTIVE', 'active', ag],
         };
         const m = map[ph] || map.wait;

@@ -1,0 +1,11 @@
+{
+  "build": "production (dist/, vite preview :5176), final stabilisation build",
+  "url": "http://localhost:5176/?dev&seed=3",
+  "command": "await __runToEnd()",
+  "runs": [
+    {"viewport": "pane default (hidden pane)", "t": 91.1, "score": 6300, "title": "MISSION COMPLETE", "continueShown": true, "stats": {"neutralized":15,"arrests":8,"peaceful":0,"bombsStopped":1,"bombsThrown":1,"damage":0}, "minHp": 94, "crowdSum": ["283.211","2835.882"], "errors": []},
+    {"viewport": "900x640", "t": 91.1, "score": 6300, "title": "MISSION COMPLETE", "continueShown": true, "stats": {"neutralized":15,"arrests":8,"peaceful":0,"bombsStopped":1,"bombsThrown":1,"damage":0}, "minHp": 94, "crowdSum": ["283.211","2835.882"], "errors": []}
+  ],
+  "verdict": "PASS (completes, no errors, identical at two viewports)",
+  "note": "Differs from the committed baseline (84.4 s / 7352, valid only at 502x549) and from the mid-audit figure (96.32 s / 5807). Both shifts are seeded-stream changes: (1) render-time UUIDs no longer consume the simulation stream; (2) cached prop geometries mean fewer three.js constructors, each of which draws 4 Math.random values for its UUID. New reference proposed, not adopted, pending approval."
+}
