@@ -31,6 +31,7 @@ export class Input {
       if (this.locked) this.wasLocked = true;
       else if (this.wasLocked && this.onLockLost) this.onLockLost();
     });
+    document.addEventListener('pointerlockerror', () => { this.dragLook = true; });
   }
 
   // virtual buttons from the touch controls: 'Mouse0', 'Mouse2', key codes
@@ -46,8 +47,8 @@ export class Input {
     if (this.touch) return; // no pointer lock on touch screens
     try {
       const p = this.canvas.requestPointerLock && this.canvas.requestPointerLock();
-      if (p && p.catch) p.catch(() => {});
-    } catch (e) { /* pointer lock unavailable (iframe / automation): drag-look still works */ }
+      if (p && p.catch) p.catch(() => { this.dragLook = true; });
+    } catch (e) { this.dragLook = true; } // pointer lock unavailable (iframe / embedded browser): drag to look instead
   }
 
   unlock() { this.wasLocked = false; if (document.pointerLockElement) document.exitPointerLock(); }
