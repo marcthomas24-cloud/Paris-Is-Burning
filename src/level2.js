@@ -5,9 +5,13 @@
 //
 //  1 Deployment   standard enemies, first sight of the Leader directing his crews
 //  2 Escalation   shield-carriers, groups, a petrol bomber, incoming petrol bombs
-//  3 The Enforcer mini-boss at the Rue de Malte junction        (increment 3)
+//  3 The Enforcer mini-boss at the Rue de Malte junction, le Patron's lieutenant
 //  4 Second push  ambush from the shop fronts, barricades, mixed groups
-//  5 The Leader   final boss at the Rue Jean-Pierre Timbaud junction (increment 3)
+//  5 The Leader   le Patron himself at the Rue Jean-Pierre Timbaud junction
+//
+// Le Patron uses the night as cover: while the city is busy with the protests, his
+// crews strip the shops on this stretch for him. He is not part of the protest and
+// the people marching are no concern of his. Bosses: see boss.js.
 //
 // Shares the Missions interface (reset / update / hudInfo / callbacks / scoring)
 // so the game loop, HUD and end screen treat both levels the same way.
@@ -15,6 +19,7 @@ import * as THREE from 'three';
 import { Missions } from './missions.js';
 import { EncounterRunner } from './encounters.js';
 import { randomOutfit, giveItem, clearItem, prewarmItems } from './characters.js';
+import { Boss, ENFORCER, LEADER } from './boss.js';
 import { mulberry } from './textures.js';
 
 export const L2_PHASES = ['DEPLOYMENT', 'ESCALATION', 'THE ENFORCER', 'SECOND PUSH', 'THE LEADER'];
@@ -53,9 +58,11 @@ const SECTIONS = [
     ],
   },
   {
-    start: [0, -34], end: [0, -20], hazards: false, placeholder: true,
-    radio: 'Rue de Malte junction. [Placeholder: the Enforcer fight arrives in the next build.]',
-    text: 'Secure the Rue de Malte junction',
+    start: [0, -34], end: [0, -20], hazards: false,
+    boss: 'enforcer', arena: [0, -16, 15], spawn: [0, -8],
+    radio: "Big one with the steel shield: le Patron's lieutenant. The crews call him the Enforcer. Make him commit.",
+    text: 'Stop the Enforcer',
+    after: 'Lieutenant in custody. Le Patron is pulling his crews back to Timbaud.',
     encounters: [],
   },
   {
@@ -76,9 +83,10 @@ const SECTIONS = [
     ],
   },
   {
-    start: [0, 53], end: [0, 70], hazards: false, placeholder: true,
-    radio: 'Rue Jean-Pierre Timbaud. [Placeholder: the fight with the Leader arrives in the next build.]',
-    text: 'Secure the Rue Jean-Pierre Timbaud junction',
+    start: [0, 53], end: [0, 70], hazards: false,
+    boss: 'leader', arena: [0, 72, 15], spawn: [0, 80],
+    radio: 'That is le Patron. His crews have been stripping this boulevard for him all night.',
+    text: 'Stop le Patron',
     encounters: [],
   },
 ];
@@ -98,17 +106,33 @@ function leaderOutfit() {
   return o;
 }
 
+// The Enforcer: heavy-set, all in black, balaclava; fixed look, complexion from the generator.
+function enforcerOutfit() {
+  let o = null;
+  for (let s = 4242; !o || o.gender !== 'm' || o.base === 'rb_male_a'; s++) o = randomOutfit(mulberry(s));
+  Object.assign(o, {
+    top: 'hoodie', smart: false, topColor: 0x141416, topBase: 0x000000, longSleeve: true,
+    garment: 'puffer', shellColor: 0x1b1d22, shellPattern: 0, vest: false, keepTop: false,
+    scarf: 'none', mask: 'balaclava', hat: 'none', hood: false, backpack: false,
+    pants: 0x141416, shoes: 0x151515, height: 1.12, build: 1.14, keepBottom: false, keepShoes: false,
+  });
+  o.body = { ...o.body, girth: 1.16, shoulders: 1.1, chest: 1.05 };
+  return o;
+}
+
 export class Level2 extends Missions {
   constructor(game) {
     super(game);
     this.enc = new EncounterRunner(game, 1);
+    game.crowd.addReserveCrews(); // the Leader's extra crews along this route
     // one Leader per game, kept across level switches
     this.leader = game.crowd.leader || (game.crowd.leader = game.crowd.spawnSpecial(leaderOutfit()));
-    // compile the new props and the (hidden) Leader now rather than on first sight
-    const lr = this.leader.rig.root;
-    lr.visible = true; lr.position.copy(game.camera.position).add(game.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(4));
-    prewarmItems(game.renderer, game.scene, game.camera, [['impshield', 'board'], ['impshield', 'sign'], ['impshield', 'lid'], ['flare']]);
-    lr.visible = false;
+    this.enforcer = game.crowd.enforcer || (game.crowd.enforcer = game.crowd.spawnSpecial(enforcerOutfit()));
+    // compile the new props and the (hidden) bosses now rather than on first sight
+    const ahead = game.camera.position.clone().add(game.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(4));
+    for (const b of [this.leader, this.enforcer]) { b.rig.root.visible = true; b.rig.root.position.copy(ahead); }
+    prewarmItems(game.renderer, game.scene, game.camera, [['impshield', 'board'], ['impshield', 'sign'], ['impshield', 'lid'], ['impshield', 'heavy'], ['impshield', 'door'], ['flare'], ['axe']]);
+    for (const b of [this.leader, this.enforcer]) b.rig.root.visible = false;
     this.reset();
   }
 
@@ -121,7 +145,10 @@ export class Level2 extends Missions {
     this.cp = null;
     this.leaderSeen = false;
     if (this.enc) this.enc.reset();
+    if (this.boss) { this.boss.stop(); this.boss = null; }
+    this.game.crowd.clearArena();
     if (this.leader) this.game.crowd.retire(this.leader);
+    if (this.enforcer) this.game.crowd.retire(this.enforcer);
   }
 
   // ------------------------------------------------------------- sections
@@ -131,6 +158,14 @@ export class Level2 extends Missions {
     this.enc.load(sec.encounters);
     g.events.setHazards(sec.hazards);
     if (sec.radio) this.radio(sec.radio);
+    if (this.boss) { this.boss.stop(); this.boss = null; }
+    if (sec.boss) {
+      const npc = sec.boss === 'enforcer' ? this.enforcer : this.leader;
+      g.crowd.retire(npc);
+      this.boss = new Boss(g, npc, sec.boss === 'enforcer' ? ENFORCER : LEADER);
+      const at = V(sec.spawn[0], 0, sec.spawn[1]);
+      this.boss.start(at, Math.atan2(g.player.pos.x - at.x, g.player.pos.z - at.z), { x: sec.arena[0], z: sec.arena[1], r: sec.arena[2] });
+    }
     // checkpoint: retrying after a failure restarts this section with the score so far
     this.cp = { section: i, score: this.score, stats: { ...this.stats }, t: this.t };
   }
@@ -158,6 +193,7 @@ export class Level2 extends Missions {
         break;
       case 'route': {
         const sec = SECTIONS[this.section];
+        if (sec.boss) { this._bossUpdate(sec); break; }
         this.enc.update(dt);
         if (sec.leader && !this.leaderSeen && this.enc.state[sec.leader.after] && this.enc.state[sec.leader.after].status === 'resolved') this._showLeader(sec.leader.at);
         const end = V(sec.end[0], 0, sec.end[1]);
@@ -180,6 +216,30 @@ export class Level2 extends Missions {
     this._updateMarker(dt);
   }
 
+  // Boss sections end with the arrest: the defeated boss kneels until the officer cuffs him.
+  _bossUpdate(sec) {
+    const g = this.game, b = this.boss;
+    this.markerPos = null;
+    if (!b || b.s !== 'defeated') return;
+    const n = b.n;
+    this.markerPos = n.pos;
+    if (Math.hypot(g.player.pos.x - n.pos.x, g.player.pos.z - n.pos.z) < 2.6) {
+      g.hud.prompt('E', sec.boss === 'enforcer' ? 'Arrest the Enforcer' : 'Arrest le Patron');
+      if (g.input.pressed('KeyE')) {
+        b.stop(); this.boss = null;
+        g.crowd.arrest(n); n.untargetable = true;
+        this.onArrest(n);
+        this.addScore(sec.boss === 'enforcer' ? 800 : 1500, sec.boss === 'enforcer' ? 'Enforcer arrested' : 'Le Patron arrested');
+        this._phaseDone(this.section, 0, sec.boss === 'enforcer' ? 'The Enforcer is in custody' : 'Le Patron is in custody');
+        if (sec.after) this.radio(sec.after);
+        if (this.section + 1 >= SECTIONS.length) this.complete();
+        else this._startSection(this.section + 1);
+      }
+    }
+  }
+
+  bossInfo() { return this.boss ? this.boss.info() : null; }
+
   // where the next encounter will start (keeps the marker leading the officer on)
   _nextTriggerPos(sec, end) {
     const p = this.game.player.pos;
@@ -199,7 +259,7 @@ export class Level2 extends Missions {
     n.pos.set(at[0], 0, at[1]); n.anchor.copy(n.pos); n.vel.set(0, 0, 0);
     n.heading = Math.atan2(g.player.pos.x - n.pos.x, g.player.pos.z - n.pos.z);
     n.rig.root.visible = true;
-    n.role = 'shout'; n.lookT = 99;
+    n.role = 'shout'; n.lookT = 99; n.untargetable = true;
     giveItem(n.rig, 'flare'); // a lit road flare held up: easy to pick out at night
     g.crowd.setState(n, 'act', 999);
     const route = [V(-10, 0, -30), V(-16, 0, -21), V(-45, 0, -20)]; // off into Rue de Malte
@@ -217,7 +277,7 @@ export class Level2 extends Missions {
     };
     sc.move = () => (sc.leg >= 0 && sc.leg < route.length ? { speed: 5.4, dest: route[sc.leg] } : { speed: 0 });
     n.script = sc;
-    this.radio('Control: the man with the flare is directing them. The crews call him "le Patron". Do not chase him.');
+    this.radio('Control: the man with the flare runs those crews. They call him "le Patron". Do not chase him.');
   }
 
   // ------------------------------------------------------------- end
@@ -239,6 +299,11 @@ export class Level2 extends Missions {
     const d = Math.round(Math.hypot(p.x - sec.end[0], p.z - sec.end[1]));
     const fighting = this.enc.active().length;
     const { total, down } = this.enc.counts();
+    if (sec.boss) {
+      const bi = this.boss ? this.boss.info() : null;
+      if (bi && bi.state === 'defeated') return Object.assign(info, { text: sec.boss === 'enforcer' ? 'Arrest the Enforcer' : 'Arrest le Patron', status: 'active', chip: 'DOWN', detail: 'Press E beside him' });
+      return Object.assign(info, { text: sec.text, status: 'danger', chip: 'BOSS', detail: 'Strike when his guard drops, or from the side' });
+    }
     const b = this.bomber && this.bomber.script;
     if (b && b.active && (b.phase === 'retrieve' || b.phase === 'light' || b.phase === 'wind')) return Object.assign(info, { text: 'Stop the petrol bomber!', status: 'danger', chip: 'DANGER', detail: 'Strike him before he throws' });
     if (fighting) return Object.assign(info, { text: sec.text, status: 'danger', chip: 'ENGAGED', detail: `Crew ${down} / ${total} · ${fighting} still fighting` });
@@ -250,7 +315,7 @@ export class Level2 extends Missions {
     const t = `${Math.floor(this.t / 60)}:${String(Math.floor(this.t % 60)).padStart(2, '0')}`;
     return {
       title: win ? 'LEVEL 2 COMPLETE' : 'MISSION FAILED',
-      sub: win ? 'Route to the staging area reopened · bosses are placeholders in this build' : reason || '',
+      sub: win ? 'Le Patron and his lieutenant in custody · the route to the staging area is open' : reason || '',
       rows: [
         ['Sections cleared', `${this.completed.filter(Boolean).length} / ${SECTIONS.length}`],
         ['Crew members neutralised', s.neutralized],
@@ -259,7 +324,7 @@ export class Level2 extends Missions {
         ['Peaceful people struck', s.peaceful],
         ['Mission time', t],
       ],
-      rank: win ? 'Next build: the Enforcer and the Leader' : this.cp ? 'Retry from the start of this section, or restart' : 'Restart to try again',
+      rank: win ? 'Grey-box build: cinematics and audio come next' : this.cp ? 'Retry from the start of this section, or restart' : 'Restart to try again',
     };
   }
 }

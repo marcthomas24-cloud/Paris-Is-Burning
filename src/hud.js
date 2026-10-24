@@ -105,6 +105,23 @@ export class HUD {
 
     $('threat-warning').classList.toggle('hidden', !m.warning);
 
+    // boss bar: name, health with phase marks, and when the guard is down
+    const bi = m.bossInfo ? m.bossInfo() : null;
+    $('boss-bar').classList.toggle('hidden', !bi);
+    if (bi) {
+      const key = bi.name + bi.max + bi.phases;
+      if (this._bossKey !== key) {
+        this._bossKey = key;
+        $('boss-name').textContent = bi.name; $('boss-sub').textContent = bi.sub;
+        const hp = $('boss-hp'); hp.querySelectorAll('.tick').forEach((e) => e.remove());
+        for (const f of bi.marks) { const tk = document.createElement('span'); tk.className = 'tick'; tk.style.left = (f * 100) + '%'; hp.appendChild(tk); }
+      }
+      $('boss-hp').firstElementChild.style.width = (bi.hp / bi.max) * 100 + '%';
+      const st = $('boss-state');
+      const txt = bi.state === 'defeated' ? 'DOWN — ARREST HIM' : bi.state === 'transition' ? `PHASE ${bi.phase + 1}` : bi.open ? 'OPENING' : '';
+      if (st.textContent !== txt) { st.textContent = txt; st.className = bi.open || bi.state === 'defeated' ? 'open' : bi.state === 'transition' ? 'phase' : ''; }
+    }
+
     // damage vignette
     this.flash = Math.max(0, this.flash - dt * 1.5);
     const low = p.health < 35 ? (0.35 + Math.sin(g.time * 5) * 0.1) * (1 - p.health / 35) : 0;

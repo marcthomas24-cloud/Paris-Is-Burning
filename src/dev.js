@@ -7,6 +7,7 @@ import { LEVELS, Progress } from './levels.js';
 import { randomOutfit } from './characters.js';
 import { mulberry } from './textures.js';
 import { reseed, SEED } from './seed.js';
+import { lintBoss, ENFORCER, LEADER } from './boss.js';
 
 export function installDev(game) {
   // Fixed-step simulation. The first call hands the simulation to the harness:
@@ -41,6 +42,16 @@ export function installDev(game) {
   window.__jump = (i) => { if (!game.missions.jumpTo) return 'this level has no sections'; game.missions.jumpTo(i); return game.missions.section; };
   window.__unlock = (id = 2) => { Progress.unlock(id); game._syncLevelMenu(); return Progress.unlocked(id); };
   window.__resetProgress = () => { Progress.reset(); game._syncLevelMenu(); return Progress.unlocked(2); };
+  // bosses: jump to a fight, land a hit through the real hit path, check the fairness rules
+  window.__boss = (name = 'enforcer') => window.__level(2, name === 'leader' ? 4 : 2);
+  window.__bossHit = (from = 'back') => {
+    const b = game.missions.boss; if (!b) return 'no boss';
+    const n = b.n, f = from === 'back' ? -1.6 : 1.6;
+    const pos = n.pos.clone().add({ x: Math.sin(n.heading) * f, y: 0, z: Math.cos(n.heading) * f });
+    const dir = n.pos.clone().sub(pos).setY(0).normalize();
+    return { result: game.crowd.onBatonHit(n, dir, pos), hp: b.hp, phase: b.phaseIdx + 1, state: b.s };
+  };
+  window.__lintBosses = () => ({ enforcer: lintBoss(ENFORCER), leader: lintBoss(LEADER) });
   // line up a few agents in front of the camera for inspection
   window.__studio = (filter, z = 156, n = 4) => {
     const list = game.crowd.npcs.filter(filter).slice(0, n);
@@ -61,13 +72,31 @@ export function installDev(game) {
     let goal = null, fight = false;
     if (threat) { goal = threat.pos; fight = true; } else if (m.markerPos) goal = m.markerPos;
     if (g.crowd.arrestable(p) && !threat) I.edges.add('KeyE');
+    if (m.boss && m.boss.s === 'defeated') { goal = m.boss.n.pos; fight = false; if (p.distanceTo(goal) < 2.4) I.edges.add('KeyE'); }
     if (m.stage === 'final' && m.extractReady && Math.hypot(p.x + 3, p.z + 112) < 4) I.edges.add('KeyE');
     if (goal) {
       const dx = goal.x - p.x, dz = goal.z - p.z, d = Math.hypot(dx, dz);
       g.cameraRig.yaw = Math.atan2(-dx, -dz) + (B.stuckT > 0.6 ? B.side * 0.9 : 0);
+      // bosses: react to what can be seen (wind-up pose and ring, charge, opening), never to
+      // whether a wind-up is a feint; block blockable attacks, dodge sideways out of heavy ones
+      const bs = fight && threat.boss;
       // shields: raise the shield, close in and wait for the bash; strike once it is lowered
       const guarded = fight && threat.attackStyle === 'shield' && g.crowd.guards(threat, p);
-      if (guarded && d < 3.5) { I.buttons.add(2); if (d > 1.7) I.keys.add('KeyW'); }
+      if (bs && bs.active) {
+        const a = bs.cur, s = bs.s, side = B.side > 0 ? 'KeyD' : 'KeyA';
+        const dodge = () => { if (B.lastDodged !== a) { B.lastDodged = a; I.keys.add(side); I.edges.add('Space'); B.side *= -1; B.dodges = (B.dodges || 0) + 1; } };
+        if (s === 'rec' || s === 'stun') { if (d < 1.9) I.edges.add('Mouse0'); else { I.keys.add('KeyW'); if (d > 3) I.keys.add('ShiftLeft'); } }
+        else if (s === 'wind' && a) {
+          if (a.blockable) { I.buttons.add(2); if (d > 2.0) I.keys.add('KeyW'); }
+          else if (a.kind === 'charge') I.buttons.add(2); // wait for the launch: the charge aims as the wind-up ends
+          else if (d < a.range + 0.7 && bs.t > a.wind - 0.25) dodge();
+          else I.buttons.add(2);
+        }
+        else if (s === 'charge') { if (d < 4.2) dodge(); }
+        else if (s === 'transition') I.keys.add('KeyS');
+        else { I.buttons.add(2); if (d > 2.3) I.keys.add('KeyW'); }
+      }
+      else if (guarded && d < 3.5) { I.buttons.add(2); if (d > 1.7) I.keys.add('KeyW'); }
       else if (fight && d < 1.8) I.edges.add('Mouse0'); else { I.keys.add('KeyW'); if (d > 6) I.keys.add('ShiftLeft'); if (B.strafeT > 0) { B.strafeT -= 0.1; I.keys.add(B.side > 0 ? 'KeyD' : 'KeyA'); I.keys.delete('KeyW'); } }
       const before = p.clone();
       window.__step(0.1);

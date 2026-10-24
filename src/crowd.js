@@ -28,6 +28,8 @@ function headingTo(from, to) { return Math.atan2(to.x - from.x, to.z - from.z); 
 // breaks into a shop, carries goods off, sets it alight and moves on.
 const LOOT_SITES = [[-1, 98], [1, 92], [-1, 40], [1, 12], [-1, -52], [1, -78], [-1, -138], [1, -142]];
 const CREW_SIZE = 4;
+// Extra crews working the Level 2 route (added when Level 2 first loads; inactive in Level 1)
+const RESERVE_SITES = [[-1, -64], [1, -38], [-1, 30], [1, 50]];
 const CIVILIANS = 16;
 const CROSS = LAYOUT.crossStreets;
 // Shield-carrier (Level 2): an improvised shield blocks baton strikes from the front.
@@ -102,9 +104,10 @@ export class Crowd {
     this.time = 0;
     const gps = this.world.gatherPoints;
     this.lastScream = -9;
-    for (const c of this.crews) { c.z0 = c.home; this._placeCrew(c); c.burns = 0; c.burnT = 8 + this.rng() * 25; }
+    for (const c of this.crews) { if (c.reserve && !this.reserveOn) continue; c.z0 = c.home; this._placeCrew(c); c.burns = 0; c.burnT = 8 + this.rng() * 25; }
     this.npcs.forEach((n, i) => {
       if (n.special) { this.retire(n); return; } // scripted characters are placed by their level
+      if (n.crew && n.crew.reserve && !this.reserveOn) { this.retire(n); n.temperament = 'reserve'; return; } // Level 2 crews
       // first third clusters near the police line so the player starts with a crowd in view
       const gp = i < 34 ? gps[i % 3] : gps[3 + (i % (gps.length - 3))];
       n.anchor.set(gp.x + (this.rng() - 0.5) * (i < 34 ? 16 : 9), 0, gp.z + (this.rng() - 0.5) * (i < 34 ? 12 : 9));
@@ -228,6 +231,7 @@ export class Crowd {
 
   _updateCrews(dt) {
     for (const c of this.crews) {
+      if (c.reserve && !this.reserveOn) continue;
       c.burnT -= dt;
       if (c.burnT > 0) continue;
       c.burnT = 28 + this.rng() * 30;
@@ -519,6 +523,7 @@ export class Crowd {
 
   onBatonHit(n, dir, attackerPos) {
     const g = this.game;
+    if (n.script && n.script.onBaton) return n.script.onBaton(n, dir, attackerPos); // bosses handle their own hits
     if (this.guards(n, attackerPos)) {
       // blocked: no damage; both sides are pushed apart and the officer recoils
       n.guardBlocks++;
@@ -946,6 +951,12 @@ export class Crowd {
     n.pos.z += (n.vel.z + n.knock.z) * dt;
     n.knock.multiplyScalar(Math.exp(-dt * 5));
     this.world.resolveCircle(n.pos, n.radius);
+    const A = this.arena;
+    if (A && n !== A.boss) {
+      const ax = n.pos.x - A.x, az = n.pos.z - A.z, ad = Math.hypot(ax, az);
+      const R = A.r + 0.3; // margin: crowd separation afterwards can nudge a few centimetres
+      if (ad < R) { const k = R / (ad || 1); n.pos.x = A.x + ax * k; n.pos.z = A.z + az * k; }
+    }
     n.pos.y += (this.world.groundHeight(n.pos.x, n.pos.z) - n.pos.y) * Math.min(1, dt * 12);
     // heading
     const sp = Math.hypot(n.vel.x, n.vel.z);
@@ -957,7 +968,8 @@ export class Crowd {
     else if ((s.startsWith('atk') || s.startsWith('throw') || s === 'circle' || s === 'bomb_wind' || s === 'bomb_throw') && n.targetRef) want = headingTo(n.pos, n.targetRef.pos);
     else if (sp > 0.35 && s !== 'stagger' && !(s === 'act' && n.yield > 0)) want = Math.atan2(n.vel.x, n.vel.z);
     else if (s === 'act' || s === 'surrender' || s === 'loot_smash' || s === 'loot_grab' || s.startsWith('arson')) want = headingTo(n.pos, n.focus);
-    if (n.attackStyle === 'shield' && n.targetRef && (s === 'pursue' || s === 'circle' || s === 'atk_wind')) {
+    if (n.script && n.script.heading) n.heading = n.script.heading(n, dt); // scripted facing (bosses)
+    else if (n.attackStyle === 'shield' && n.targetRef && (s === 'pursue' || s === 'circle' || s === 'atk_wind')) {
       want = headingTo(n.pos, n.targetRef.pos);
       let dh = want - n.heading;
       while (dh > Math.PI) dh -= Math.PI * 2;
@@ -1177,10 +1189,38 @@ export class Crowd {
       else if (s === 'down' || s === 'recover') { P.mouth = 0.3 + jit * 0.2; P.brow = -0.8; }
       else if (s === 'surrender') { P.mouth = 0.15; P.brow = -0.6; }
     }
+    if (n.script && n.script.pose) { const r = n.script.pose(n, P, dt, t); if (r) rate = r; } // bosses pose themselves
     applyPose(rig, P, dt, rate);
     // lying bodies sit slightly above ground
     rig.root.position.y = n.pos.y + (s === 'down' ? 0.12 : s === 'recover' ? 0.12 * Math.max(0, 1 - n.st / (n.dur * 0.5)) : 0);
   }
+
+  // ------------------------------------------------------------------ Level 2 support
+  // Add the reserve crews once (Level 2), then switch them on or off per level.
+  addReserveCrews() {
+    if (this.reserveCrews) return;
+    const rng = mulberry(9001); // own stream: Level 1's crowd is untouched
+    this.reserveCrews = RESERVE_SITES.map(([side, z], i) => ({ id: this.crews.length + i, side, z0: z, home: z, door: V(), rally: V(), members: [], reserve: true }));
+    for (const c of this.reserveCrews) {
+      this.crews.push(c);
+      for (let k = 0; k < CREW_SIZE; k++) { const n = this._spawn(randomOutfit(rng)); n.kind = 'looter'; n.crew = c; c.members.push(n); n.rig.pose = newPose(); this.retire(n); n.temperament = 'reserve'; }
+    }
+  }
+  setReserve(on) { this.reserveOn = !!on && !!this.reserveCrews; }
+
+  // Boss arena: nobody but the boss may stand inside; people already there are moved out.
+  setArena(x, z, r, boss) {
+    this.arena = { x, z, r, boss };
+    for (const n of this.npcs) {
+      if (n === boss || n.state === 'gone') continue;
+      for (const v of [n.pos, n.anchor, n.target]) {
+        const dx = v.x - x, dz = v.z - z, d = Math.hypot(dx, dz);
+        if (d < r + 3) { const k = (r + 4 + Math.random() * 4) / (d || 1); v.x = x + dx * k; v.z = z + dz * k; }
+      }
+      if (n.march) n.march = null;
+    }
+  }
+  clearArena() { this.arena = null; }
 
   // Officers not present in the current level (e.g. Level 2 has no cut-off group at Oberkampf).
   setPoliceOff(roles = []) {
@@ -1201,7 +1241,7 @@ export class Crowd {
   // crowd pool: its temperament is never 'peaceful', 'looter' or 'civilian'.
   spawnSpecial(outfit) {
     const n = this._spawn(outfit);
-    n.special = true; n.kind = 'special';
+    n.special = true; n.kind = 'special'; n.untargetable = true;
     n.hp = 99; n.radius = 0.34; n.mass = 1.3; n.speedMul = 1; n.courage = 1; n.fear = 0;
     n.stimuli.length = 0; n.hitCount = 0; n.surge = null; n.march = null; n.thinkT = 0; n.animAcc = 0; n.cool = 0;
     n.rig.pose = newPose();

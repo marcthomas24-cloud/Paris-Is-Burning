@@ -94,17 +94,24 @@ A complete run takes about 2–3 minutes. A fast, efficient run is around 1:45; 
 
 1. **Deployment.** Three crew groups introduce the standard enemies. After the first, the Leader is glimpsed directing his crews with a lit road flare, then leaves into Rue de Malte. He cannot be targeted or chased.
 2. **Escalation.** Shield-carriers, a petrol-bomb suspect, a rush from a side street, a mixed group at Place de Malte and its reinforcements from both sides. Petrol bombs land on the boulevard ahead.
-3. **The Enforcer** at the Rue de Malte junction (placeholder in this build).
+3. **The Enforcer** at the Rue de Malte junction: le Patron's lieutenant (boss fight, below).
 4. **Second push.** An ambush from the shop fronts, throwers behind the barricade, a shop break-out, shields holding the street, and the crew's reserve from Rue Jean-Pierre Timbaud.
-5. **The Leader** at the Rue Jean-Pierre Timbaud junction (placeholder in this build).
+5. **Le Patron** at the Rue Jean-Pierre Timbaud junction (boss fight, below). Arresting him completes the level.
 
 **Shield-carriers** carry an improvised shield (a plywood board, a torn-down road sign or a bin lid) that blocks baton strikes from the front: the strike bounces off and the officer recoils. They advance slowly, keep the shield towards you and bash: the shield is drawn back with an **amber ring** (0.75 s) before the bash, which can be blocked with your own shield. After it, the shield drops for about a second: strike then. A sprinting officer can also get round the side. No new controls are needed.
 
-**Encounters** (`src/encounters.js`) are data: who comes (melee, thrower, shield), from where, and what triggers them (passing a point on the boulevard, or the previous group being dealt with). Members are drawn from the looting crews, then from anyone free on the street, at random; appearance is never read. A section is complete when its groups are dealt with and you reach its end point.
+**Encounters** (`src/encounters.js`) are data: who comes (melee, thrower, shield), from where, and what triggers them (passing a point on the boulevard, or the previous group being dealt with). Members are drawn at random from free members of the looting crews; peaceful people are never recruited, and if too few crew members are free a group is smaller (counted as a shortfall). Level 2 adds four reserve crews along its route (48 crew members in all); they are inactive in Level 1. Appearance is never read. A section is complete when its groups are dealt with and you reach its end point.
+
+**Bosses** (`src/boss.js`). Both use the existing controls (strike, shield, dodge) and the same rules: every attack has a wind-up of at least 0.55 s with an amber ring; each attack is either blockable with the shield or must be dodged or stepped away from; no hit takes more than a quarter of your health; the boss can only be hurt from the front while its guard is down (or from the side or behind); an opening allows two hits (three while stunned) before the boss shoves you clear without damage; a fight ends when you arrest the kneeling boss with **E**. During a boss fight nobody else may enter the arena, the baton only targets the boss, and no ambient petrol bombs land there. `__lintBosses()` checks the attack tables against these rules.
+
+- **The Enforcer** (10 hits): a heavy steel shield that blocks from the front. *Shield bash* (0.8 s wind-up, blockable) leaves him open for 1.3 s. *Charge* (1.0 s wind-up, unblockable): he aims when the wind-up ends, so sidestep or dodge as he launches; if he misses he recovers for 1.4 s, and if he runs into a car, wall or barricade he is stunned for 2.4 s. After two of his bashes are blocked he backs off and charges.
+- **Le Patron** (15 hits, three phases, a car-door shield and a fire axe). *Phase 1:* shield up, a heavy overhead chop (0.9 s, unblockable, 1.4 s opening) and a shield shove. *Phase 2:* he circles and strings two- and three-hit combinations: light swings you can block, ending in a heavy chop you must dodge. *Phase 3:* faster, shorter openings, and occasional feints: the wind-up visibly cancels and the real chop winds up in full, so a dodge spent on the feint has recovered in time. Each phase change is a short invulnerable pause that cancels his attack and pushes you back; damage never carries over.
+
+**Le Patron** runs the looting crews. He uses the night as cover: while the city's attention is on the protests, his crews strip the shops on this stretch of the boulevard for him. He is not part of the protest, and the people marching are no concern of his. He is a heavy-set man in an olive puffer jacket with a keffiyeh scarf, carrying a lit road flare in the street sections and a fire axe in the fight. Art, voice and his introduction come in a later build.
 
 **Checkpoints.** If you fail in Level 2, **RETRY SECTION** restarts the current section with the score you had when it began.
 
-The Leader's character (a heavy-set man in an olive puffer jacket with a keffiyeh scarf) and his motive are placeholders for later increments; his complexion and build come from the shared generator.
+The bosses' looks are grey-box placeholders; their complexions come from the shared generator.
 
 **Lighting presets** (`src/levels.js`): `dusk` (Level 1) and `night` (Level 2). A preset only changes light colours and intensities, fog, sky uniforms, lamp glow and exposure. It never adds or removes lights, so switching does not compile new shaders.
 
@@ -248,6 +255,7 @@ src/
                  progression / unlocks
   level2.js      Level 2 mission script: sections, encounters, the Leader's first appearance, checkpoints
   encounters.js  Data-driven encounter runner (triggers, selection, resolution)
+  boss.js        Boss state machine and the Enforcer / Leader attack tables; fairness lint
   seed.js        ?seed=N: seeded Math.random for reproducible runs
   dev.js         Test helpers, loaded only with ?dev in the URL
 ```
@@ -265,6 +273,7 @@ Add `?dev` to the URL to load the test helpers (`src/dev.js`):
 | `__level(id, stage)` / `__jump(i)` | Switch level (ignores unlocks) / jump to a Level 2 section |
 | `__unlock(id)` / `__resetProgress()` | Unlock a level / clear saved progress |
 | `__auditAppearance({ seeds, level })` | Appearance audit for Level 1 or 2 (below) |
+| `__boss(name)` / `__bossHit(from)` / `__lintBosses()` | Jump to the Enforcer or Leader fight / land a hit from the back or front through the real hit path / check the attack tables against the fairness rules |
 
 URL shortcuts: `?dev&level=2` starts in Level 2, and `?dev&level=2&stage=3` starts at its fourth section. `?seed=N` makes a run reproducible: with `__start({ audio: false })` and `__step` / `__botRun`, a whole playthrough replays identically. To make that hold, the simulation never runs on wall-clock time: staggered effects use game-time timers, the menu's background simulation is frozen in seeded runs, and the dynamic-resolution system leaves crowd detail alone while the harness steps the game.
 

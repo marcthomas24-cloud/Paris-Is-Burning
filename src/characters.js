@@ -555,6 +555,24 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), colMat(0x8a8f94, { roughness: 0.4, metalness: 0.6 }));
       pole.position.set(0, -0.55, -0.02);
       s.add(disc, bar, pole);
+    } else if (variant === 'heavy') {
+      // the Enforcer's reinforced shield: a steel plate bolted to a board, with straps
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.12, 0.04), colMat(0x3a3d42, { roughness: 0.55, metalness: 0.5 }));
+      const band = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.07, 0.06), colMat(0x1d1f22, { roughness: 0.6, metalness: 0.4 }));
+      band.position.set(0, 0.32, 0.02);
+      const band2 = band.clone(); band2.position.y = -0.32;
+      const slit = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.05), colMat(0x0a0a0a));
+      slit.position.set(0, 0.42, 0.02);
+      s.add(plate, band, band2, slit);
+    } else if (variant === 'door') {
+      // the Leader's shield: a car door torn off a burnt-out car
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.62, 0.06), colMat(0x5a1a18, { roughness: 0.45, metalness: 0.4 }));
+      panel.position.y = -0.12;
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.38, 0.04), colMat(0x121212, { roughness: 0.3, metalness: 0.5 }));
+      frame.position.y = 0.36;
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.03), colMat(0x8a8f94, { metalness: 0.7, roughness: 0.3 }));
+      handle.position.set(-0.28, 0.0, 0.04);
+      s.add(panel, frame, handle);
     } else if (variant === 'lid') {
       const lid = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.78, 0.05), colMat(0xd8b52a, { roughness: 0.7 }));
       const lip = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.06, 0.09), colMat(0xc8a520, { roughness: 0.7 }));
@@ -578,11 +596,35 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
     rig.handR.add(g);
   }
   rig.item = g;
-  rig.gripR = !!rig.baton || ['flag', 'frflag', 'bigflag', 'placard', 'phone', 'bottle', 'stone', 'camera', 'loot', 'flare'].includes(type);
+  rig.gripR = !!rig.baton || !!rig.axe || ['flag', 'frflag', 'bigflag', 'placard', 'phone', 'bottle', 'stone', 'camera', 'loot', 'flare'].includes(type);
   rig.gripL = type === 'bigflag' || type === 'loot' || type === 'impshield';
   g.traverse((o) => { if (o.isMesh) o.castShadow = type === 'banner' || type === 'placard' || type === 'bigflag' || type === 'loot' || type === 'impshield'; });
   return g;
 }
+
+// The Leader's fire axe, held in the right hand alongside his shield (it is not the
+// rig's single 'item' slot). Oriented like the police baton: extends from the fist.
+export function attachFireAxe(rig) {
+  initShared();
+  const g = new THREE.Group();
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.92, 8), colMat(0x1a1a1a, { roughness: 0.5 }));
+  handle.position.y = -0.34;
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.2, 8), colMat(0xd8b52a, { roughness: 0.6 }));
+  grip.position.y = 0.0;
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.26), colMat(0xb81414, { roughness: 0.4, metalness: 0.4 }));
+  head.position.set(0, -0.76, 0.06);
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.16, 0.08), colMat(0xc8ccd0, { roughness: 0.25, metalness: 0.8 }));
+  blade.position.set(0, -0.76, 0.21);
+  const pick = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.16, 6), colMat(0xb81414, { roughness: 0.4, metalness: 0.4 }));
+  pick.rotation.x = -Math.PI / 2; pick.position.set(0, -0.76, -0.13);
+  g.add(handle, grip, head, blade, pick);
+  g.rotation.x = rig.skinned ? -1.0 : 1.15;
+  g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  rig.handR.add(g);
+  rig.axe = g; rig.gripR = true;
+  return g;
+}
+export function removeFireAxe(rig) { if (rig.axe) { rig.axe.parent && rig.axe.parent.remove(rig.axe); rig.axe = null; } }
 
 // Compile the shaders of props that first appear mid-level (Level 2's shields and flare)
 // while the level loads, so their first appearance does not stall a frame.
@@ -590,9 +632,9 @@ export function prewarmItems(renderer, scene, camera, types) {
   const holder = new THREE.Group();
   holder.position.copy(camera.position).add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(3));
   for (const [type, variant] of types) {
-    const rig = { spine: new THREE.Group(), handL: new THREE.Group(), handR: new THREE.Group() };
+    const rig = { spine: new THREE.Group(), handL: new THREE.Group(), handR: new THREE.Group(), skinned: true };
     holder.add(rig.spine, rig.handL, rig.handR);
-    giveItem(rig, type, Math.random, variant);
+    if (type === 'axe') attachFireAxe(rig); else giveItem(rig, type, Math.random, variant);
   }
   scene.add(holder);
   renderer.compile(scene, camera);
@@ -601,7 +643,7 @@ export function prewarmItems(renderer, scene, camera, types) {
 
 export function clearItem(rig) {
   if (rig.item) { rig.item.parent && rig.item.parent.remove(rig.item); rig.item = null; }
-  rig.gripR = !!rig.baton; rig.gripL = false;
+  rig.gripR = !!rig.baton || !!rig.axe; rig.gripL = false;
   rig.itemType = 'none'; rig.itemVariant = null; rig.flareTip = null;
   rig.wick = null;
 }

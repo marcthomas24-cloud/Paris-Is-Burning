@@ -93,7 +93,8 @@ export class Player {
     const list = crowd.query(this.pos.x, this.pos.z, 3.4, []);
     let best = null, bs = Infinity;
     for (const n of list) {
-      if (n.id === undefined || n.special || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue;
+      if (n.id === undefined || n.untargetable || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue;
+      if (crowd.arena && n !== crowd.arena.boss) continue; // boss fight: the baton only goes for the boss
       const dx = n.pos.x - this.pos.x, dz = n.pos.z - this.pos.z;
       const d = Math.hypot(dx, dz);
       const ang = Math.acos(Math.max(-1, Math.min(1, (dx * dirHint.x + dz * dirHint.z) / (d || 1))));
@@ -214,7 +215,8 @@ export class Player {
     const list = g.crowd.query(this.pos.x, this.pos.z, 2.6, []);
     let best = null, bs = Infinity;
     for (const n of list) {
-      if (n.id === undefined || n.special || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue; // scripted characters are not targets
+      if (n.id === undefined || n.untargetable || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue; // scripted characters off-fight are not targets
+      if (g.crowd.arena && n !== g.crowd.arena.boss) continue; // boss fight: bystanders are never struck
       const dx = n.pos.x - this.pos.x, dz = n.pos.z - this.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > 2.05 + n.radius * 0.5) continue;

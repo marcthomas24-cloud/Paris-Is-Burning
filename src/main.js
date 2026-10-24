@@ -170,6 +170,9 @@ class Game {
       this.missions = new def.Missions(this);
     }
     this.player.start = def.start;
+    const wasOn = this.crowd.reserveOn;
+    this.crowd.setReserve(!!def.reserveCrews);
+    if (this.crowd.reserveOn !== !!wasOn) this.crowd.reset(); // bring the reserve crews in or out
     this.crowd.setPoliceOff(def.policeOff || []);
     this.events.hazardDir = def.hazardDir || -1;
     this.player.reset();

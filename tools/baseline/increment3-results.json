@@ -1,0 +1,67 @@
+{
+  "description": "Level 2 increment 3: boss mechanics (grey-box) - test results",
+  "date": "2026-10-24",
+  "branch": "level2 (on top of 113d054, increment 2)",
+  "crews": {
+    "change": "4 reserve crews (16 members) added along the Level 2 route, inactive in Level 1; encounters draw only from free crew members, never from peaceful people",
+    "level2CrewMembers": 48,
+    "shortfallInFullRun": 0,
+    "level1Characters": 198
+  },
+  "fairnessLint": { "enforcer": [], "leader": [] },
+  "bossFights": {
+    "method": "?dev&level=2&stage=2|4&seed=N, bot with normal controls only (strike, shield, dodge); it reacts to visible state and does not know whether a wind-up is a feint",
+    "runs": [
+      { "boss": "enforcer", "seed": 31, "fightTime_s": 23.1, "finished": true, "minHp": 97, "unblockableTaken": [], "states": "backoff 1, charge 2, rec 6" },
+      { "boss": "enforcer", "seed": 7, "fightTime_s": 22.6, "finished": true, "minHp": 73, "unblockableTaken": ["charge:20"] },
+      { "boss": "leader", "seed": 31, "fightTime_s": 41.3, "finished": true, "minHp": 92, "unblockableTaken": [], "transitions": 2 },
+      { "boss": "leader", "seed": 7, "fightTime_s": 40.7, "finished": true, "minHp": 86, "unblockableTaken": [], "transitions": 2, "feints": 2 }
+    ],
+    "bystandersInArena": "0 (after adding a 0.3 m boundary margin; before it, people on the edge measured 14.95-14.99 m from centre against a 15 m radius)",
+    "excessiveForceDuringBossFights": 0
+  },
+  "phaseTransitions": {
+    "trials": 20,
+    "method": "per threshold (10 and 5) x 10: bring the Leader to threshold+1, start an attack wind-up, land the crossing hit at varying points, then 3 more hits at once",
+    "passed": 20,
+    "observed": "crossing hit always mid wind-up (chop, shove, swing); health clamped at the threshold; attack cancelled; all extra hits blocked; 0 attacks resolved and 0 player health lost during the transition; exactly one phase gained; boss back to idle"
+  },
+  "feints": {
+    "method": "phase 3 with feint chance forced to 1, 400 bot ticks",
+    "feints": 6,
+    "realAttackAfterFeintDodged": "6/6 (bot spent a dodge on each feint, dodged again, invulnerable at the real chop)",
+    "chopDamageTaken": "0 of 12 chops"
+  },
+  "chargeReactionWindow": {
+    "method": "officer standing still at distance D, charge launched; time from launch to contact (wind-up 1.0 s on top)",
+    "launchToContact_s": { "4.5m": 0.52, "5.5m": 0.63, "7m": 0.8, "9m": 1.03 },
+    "rule": "regular charges trigger beyond 6.5 m; the back-off before a pattern charge now reaches 6.2 m (about 0.7 s)"
+  },
+  "checkpoints": {
+    "enforcer": "died at 6/10 hp -> RETRY SECTION -> new fight, 10/10, phase 1, intro, arena on, score restored to section start (777), no axe",
+    "leader": "died at 8/15 hp in phase 2 -> RETRY SECTION -> new fight, 15/15, phase 1, intro, arena on, score restored (777), exactly one axe"
+  },
+  "level1Regression": { "seed3": { "time_s": 84.4, "score": 7352, "matchesIncrement2Baseline": true, "consoleErrors": 0 } },
+  "level2Determinism": {
+    "seed12": { "time_s": 173.8, "score": 9425, "result": "LEVEL 2 COMPLETE", "sectionStarts_s": [2, 29.9, 60.8, 80.2, 137.4], "minHp": 67 },
+    "secondLoad": "identical time, score, health, stats, crowd positions and shortfall with different slice sizes and gaps (section timestamps differ only by harness sampling)"
+  },
+  "appearanceAudit": {
+    "level2_30seeds": { "selections": 1140, "verdict": "no material appearance skew", "maxAbsZ": 1.68, "carriedFlags": "too rare to assess (the eligible pool is crew members only, who carry no flags)", "selfTestZ": 10.62, "outfitsChangedByMakeHostile": 0 }
+  },
+  "performance": {
+    "note": "built-in browser; GPU shared with other sessions' pages, so render times are noisy",
+    "desktop_502x549": {
+      "enforcerFight": { "updateMs": "7.2-7.3", "renderMs": "18.9-22.8", "calls": 145 },
+      "leaderFight": { "updateMs": "8.5-8.7", "renderMs": "20.0-29.9", "calls": 182 },
+      "level1DenseSameSession": { "updateMs": "8.0-8.8", "renderMs": "33.7-59.5", "calls": "164-171" },
+      "shaderPrograms": "76 throughout"
+    },
+    "mobileEmulation_375x812_touch": {
+      "enforcerFight": { "updateMs": "6.9-7.1", "renderMs": "17.8-18.7", "calls": 139 },
+      "leaderFight": { "updateMs": "7.5-8.5", "renderMs": "19.1-20.6", "calls": "200-211" },
+      "pixelRatio": 1, "shadowMap": 1024,
+      "caveat": "Chromium emulation on a desktop GPU; real phone performance not measured"
+    }
+  }
+}

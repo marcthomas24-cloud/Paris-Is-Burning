@@ -8,9 +8,10 @@
 // of travel. An encounter resolves when every member is neutralised, arrested or
 // no longer hostile.
 //
-// Who takes part is decided by role and availability only: members are drawn from
-// the looting crews (the Leader's people) and, if too few are free, from anyone
-// else on the street, at random. Appearance is never read (see __auditAppearance).
+// Who takes part is decided by role and availability only: members are drawn at
+// random from the free members of the looting crews (the Leader's people). Peaceful
+// people are never recruited; if too few crew members are free, the group is smaller
+// (counted in `shortfall`). Appearance is never read (see __auditAppearance).
 import * as THREE from 'three';
 
 export class EncounterRunner {
@@ -23,6 +24,7 @@ export class EncounterRunner {
   reset() {
     this.list = [];      // encounters of the current section
     this.state = {};     // id -> { status: 'waiting' | 'active' | 'resolved', members, t }
+    this.shortfall = 0;  // members that could not be found
   }
 
   // Load a section's encounters (earlier sections' encounters are dropped).
@@ -35,15 +37,15 @@ export class EncounterRunner {
   // Someone free to be sent in: the selection pool for every encounter.
   eligible(n, minDist = 22) {
     const free = !n.script && !n.arrested && !n.neutralized && !n.special && n.state !== 'gone' && n.state !== 'down' && n.state !== 'recover' && n.distToPlayer > minDist;
-    return free && (n.temperament === 'looter' || n.temperament === 'peaceful');
+    return free && n.temperament === 'looter';
   }
 
   _pick(count) {
     const crowd = this.game.crowd;
     const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-    const crews = shuffle(crowd.npcs.filter((n) => n.temperament === 'looter' && this.eligible(n)));
-    const others = shuffle(crowd.npcs.filter((n) => n.temperament === 'peaceful' && this.eligible(n)));
-    return crews.concat(others).slice(0, count);
+    const picked = shuffle(crowd.npcs.filter((n) => this.eligible(n))).slice(0, count);
+    this.shortfall += count - picked.length;
+    return picked;
   }
 
   start(e) {

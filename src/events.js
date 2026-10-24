@@ -120,7 +120,9 @@ export class IncidentScheduler {
       this.t = R(3.5, 9);
       const p = g.player.pos;
       // prefer areas at a visible distance, never on top of the player
-      const cands = ZONES.filter((z) => { const d = z.crowd.distanceTo(p); return d > (z.inside ? 30 : 20) && d < 170 && z !== this.lastZone; });
+      // never into a boss arena: a boss fight must contain no damage the player cannot see coming
+      const A = g.crowd.arena, nearArena = (v) => A && Math.hypot(v.x - A.x, v.z - A.z) < A.r + 25;
+      const cands = ZONES.filter((z) => { const d = z.crowd.distanceTo(p); return d > (z.inside ? 30 : 20) && d < 170 && z !== this.lastZone && !nearArena(z.police) && !nearArena(z.crowd); });
       if (!cands.length) return;
       const z = cands[Math.floor(Math.random() * cands.length)];
       this.lastZone = z;

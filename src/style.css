@@ -260,3 +260,27 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 #hud-buttons, #prompt { z-index: 2; }
 #onboarding { z-index: 5; }
 .screen { z-index: 10; }
+
+/* ---------- boss bar (Level 2) ---------- */
+#boss-bar { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); width: min(520px, 60vw); text-align: center; text-shadow: 0 1px 4px rgba(0,0,0,0.9); }
+#boss-bar .boss-name { display: flex; justify-content: center; align-items: baseline; gap: 10px; margin-bottom: 5px; }
+#boss-name { font-size: 15px; font-weight: 800; letter-spacing: 0.22em; }
+#boss-sub { font-size: 11px; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
+#boss-hp { position: relative; height: 9px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18); }
+#boss-hp > div { height: 100%; width: 100%; background: var(--red); transition: width 0.15s; }
+#boss-hp .tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: 0.8; }
+#boss-state { height: 16px; margin-top: 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.25em; }
+#boss-state.open { color: var(--green); }
+#boss-state.phase { color: var(--amber); }
+/* phones: directly under the objective panel, clear of the minimap and bars on the right */
+.touch #boss-bar { bottom: auto !important; top: calc(env(safe-area-inset-top, 0px) + 112px); left: calc(env(safe-area-inset-left, 0px) + 8px) !important; right: auto !important; transform: none !important; width: min(62vw, 239px) !important; text-align: left; }
+.touch #boss-bar .boss-name { justify-content: flex-start; }
+.touch #boss-name { font-size: 12px; }
+.touch #boss-sub { display: none; }
+/* narrower windows: beside the minimap; above the control hints while they are shown */
+@media (max-width: 1150px) {
+  #boss-bar { left: 300px; right: 16px; width: auto; transform: none; bottom: 170px; }
+}
+@media (max-width: 900px) {
+  #boss-bar { bottom: 22px; }
+}
