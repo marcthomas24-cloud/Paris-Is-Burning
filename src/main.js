@@ -18,6 +18,12 @@ import { TouchControls } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
 // controls during a cinematic: nothing pressed
+const PREFS_KEY = 'parisBurning.gameplay.v1';
+const PREF_DEFAULTS = { sens: 1, invertY: false, brutality: false };
+function loadPrefs() {
+  try { return { ...PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') }; } catch (e) { return { ...PREF_DEFAULTS }; }
+}
+
 const NULL_INPUT = { down: () => false, pressed: () => false, mouse: () => false, axis: { x: 0, y: 0 } };
 
 class Game {
@@ -60,6 +66,7 @@ class Game {
     this.hitStopT = 0;
     this.state = 'menu';
     this.input = new Input(canvas);
+    this.prefs = loadPrefs();
     if (this.input.touch) { this.pr = Math.min(this.maxPR, 1.0); this.renderer.setPixelRatio(this.pr); sun.shadow.mapSize.set(1024, 1024); }
     this.audio = new Audio();
     this.ready = false;
@@ -161,6 +168,18 @@ class Game {
     $('vol-mute').addEventListener('change', (e) => { this.audio.init(); this.audio.setSetting('muted', e.target.checked); });
     this.audio.onSettings = syncAudioUI;
     syncAudioUI(this.audio.getSettings());
+    // gameplay options (same screen): mouse sensitivity, invert look, police brutality
+    const syncPrefs = () => {
+      const p = this.prefs;
+      $('opt-sens').value = Math.round(p.sens * 100); $('opt-sens-out').textContent = Math.round(p.sens * 100) + '%';
+      $('opt-invert').checked = p.invertY; $('opt-brutality').checked = p.brutality;
+      this.cameraRig.sens = p.sens; this.cameraRig.invertY = p.invertY;
+    };
+    const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(this.prefs)); } catch (e) { /* storage blocked */ } syncPrefs(); };
+    $('opt-sens').addEventListener('input', (e) => { this.prefs.sens = e.target.value / 100; savePrefs(); });
+    $('opt-invert').addEventListener('change', (e) => { this.prefs.invertY = e.target.checked; savePrefs(); });
+    $('opt-brutality').addEventListener('change', (e) => { this.prefs.brutality = e.target.checked; savePrefs(); });
+    syncPrefs();
   }
 
   // ------------------------------------------------------------- levels
@@ -319,6 +338,7 @@ class Game {
   // --- callbacks from systems
   onThreatNeutralized(n) { this.missions.onThreatNeutralized(n); }
   onPeacefulStruck(n) { this.missions.onPeacefulStruck(n); }
+  onDownedStruck(n) { this.missions.onDownedStruck(n, this.prefs.brutality); }
   onPoliceLineHit(d) { this.missions.onPoliceLineHit(d); }
   onPlayerDown() { this.hud.alert('Officer down', 'bad', 3); this.missions.fail('You were incapacitated.'); }
   hitStop(t) { this.hitStopT = t; }
@@ -465,6 +485,7 @@ class Game {
     this.time += dt;
     const input = this.input;
     let [mx, my] = input.consumeMouse();
+    mx += input.edgeTurn() * 800 * rawDt; // unlocked mouse: rest the cursor at a screen edge to keep turning
     if (input.down('ArrowLeft')) mx -= 900 * rawDt;
     if (input.down('ArrowRight')) mx += 900 * rawDt;
     if (input.down('ArrowUp')) my -= 500 * rawDt;

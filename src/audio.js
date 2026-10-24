@@ -36,7 +36,7 @@ const SLOT = { whistle: 3, glass: 2.5, boom: 3, punch: 0.6, shield: 0.8, metal: 
 // replaces a playing one of lower (audibility-weighted, age-decayed) priority.
 const CATS = {
   boom: [3, 10], impact: [5, 8], swing: [2, 6], step: [2, 3], glass: [3, 5], crash: [2, 4],
-  shout: [2, 2], scream: [3, 4], whistle: [1, 2], chant: [1, 3], roar: [1, 4], fw: [3, 3], alarm: [2, 2], misc: [4, 3],
+  shout: [2, 2], whistle: [1, 2], chant: [1, 3], roar: [1, 4], fw: [3, 3], alarm: [2, 2], misc: [4, 3],
 };
 const MAX_VOICES = 22;
 
@@ -563,8 +563,9 @@ export class Audio {
   // French two-tone sirens on vehicles that drive past along the cross streets
   _updateSirens(dt, now) {
     const L = this.listener, T = this.t;
-    const want = 1 + (this.intensity > 0.5 ? 2 : this.intensity > 0.2 ? 1 : 0);
-    if (T.siren <= 0) { T.siren = R(6, 16); if (this.vehicles.length < want) this._spawnVehicle(); }
+    // one vehicle at a time, a second only when things are at their worst
+    const want = this.intensity > 0.6 ? 2 : 1;
+    if (T.siren <= 0) { T.siren = R(22, 45); if (this.vehicles.length < want) this._spawnVehicle(); }
     for (let i = this.vehicles.length - 1; i >= 0; i--) {
       const v = this.vehicles[i];
       v.t += dt; v.x += v.vx * dt; v.z += v.vz * dt;
@@ -572,7 +573,8 @@ export class Audio {
       const fade = clamp(Math.min(v.t / 3, (v.life - v.t) / 3), 0, 1);
       v.g.gain.setTargetAtTime(Math.max(0, p.g * 0.3 * fade), now, 0.12);
       if (v.pan) v.pan.pan.setTargetAtTime(p.pan, now, 0.12);
-      v.lp.frequency.setTargetAtTime(Math.min(6000, p.lp + 600), now, 0.2);
+      // keep the upper harmonics even far off: a pure low tone reads as a telephone, not a siren
+      v.lp.frequency.setTargetAtTime(clamp(p.lp + 1500, 3200, 7000), now, 0.2);
       if (v.prevD !== null && v.src.playbackRate && dt > 1e-4) {
         const vr = (p.d - v.prevD) / dt;
         if (Number.isFinite(vr)) v.src.playbackRate.setTargetAtTime(clamp(1 - vr / 343, 0.94, 1.06), now, 0.15);
@@ -591,8 +593,12 @@ export class Audio {
     const lanes = [-190, -110, -20, 70, 175].filter((z) => Math.abs(z - L.z) > 25 && Math.abs(z - L.z) < 170);
     const lz = lanes.length ? pick(lanes) : L.z + (Math.random() < 0.5 ? -1 : 1) * R(60, 120);
     const dir = Math.random() < 0.5 ? 1 : -1;
-    const v = { x: -dir * R(130, 180), z: lz + R(-3, 3), vx: dir * R(12, 20), vz: 0, t: 0, life: 22, prevD: null, nodes: [] };
-    const keys = ['sirenPolice', 'sirenPolice', 'sirenGend', 'sirenPompiers'].filter((k) => this.samples[k]);
+    // a quick pass: in from one side, out of the other within about 11 s
+    const speed = R(20, 27), life = 11;
+    const v = { x: -dir * speed * life * 0.5, z: lz + R(-3, 3), vx: dir * speed, vz: 0, t: 0, life, prevD: null, nodes: [] };
+    // police / gendarmerie two-tone, or a rising-falling wail; the pompiers' close
+    // 435/488 Hz pair sounded like a phone left off the hook, so it is not used
+    const keys = Math.random() < 0.4 ? [] : ['sirenPolice', 'sirenPolice', 'sirenGend'].filter((k) => this.samples[k]);
     const g = c.createGain(); g.gain.value = 0;
     const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2500;
     const pan = c.createStereoPanner ? c.createStereoPanner() : null;
@@ -603,11 +609,23 @@ export class Audio {
       src.start(c.currentTime, Math.random() * buf.duration);
       src.connect(lp);
     } else {
-      // fallback: square-wave two-tone, softened
-      src = c.createOscillator(); src.type = 'square';
-      const t = c.currentTime;
-      for (let k = 0; k < 50; k++) src.frequency.setValueAtTime(k % 2 ? 580 : 435, t + k * 0.5);
-      src.start(); const f2 = c.createGain(); f2.gain.value = 0.18; src.connect(f2).connect(lp); v.nodes.push(f2);
+      // wail: two slightly detuned saws sweeping ~620 -> 1350 Hz and back, through a horn-like band
+      const t = c.currentTime, up = R(1.5, 1.9), down = R(1.3, 1.6), lo = R(600, 650), hi = R(1300, 1400);
+      src = c.createOscillator(); src.type = 'sawtooth';
+      const o2 = c.createOscillator(); o2.type = 'sawtooth'; o2.detune.value = 9;
+      for (const o of [src, o2]) {
+        o.frequency.setValueAtTime(lo, t);
+        for (let k = 0, tt = t; tt < t + life + 2; k++) {
+          o.frequency.exponentialRampToValueAtTime(hi, tt += up);
+          o.frequency.exponentialRampToValueAtTime(lo, tt += down);
+        }
+      }
+      const horn = c.createBiquadFilter(); horn.type = 'peaking'; horn.frequency.value = 1600; horn.Q.value = 0.8; horn.gain.value = 6;
+      const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 450;
+      const f2 = c.createGain(); f2.gain.value = 0.16;
+      src.connect(f2); o2.connect(f2); f2.connect(hp).connect(horn).connect(lp);
+      src.start(t); o2.start(t); o2.stop(t + life + 2);
+      v.nodes.push(o2, f2, hp, horn);
     }
     lp.connect(g);
     if (pan) g.connect(pan).connect(this.amb); else g.connect(this.amb);
@@ -945,44 +963,6 @@ export class Audio {
       const g = this.ctx.createGain(); this._env(g.gain, t, 0.002, 1, 0.6); g.connect(f); v.nodes.push(g);
       this._noise(v, g, this.white, t, 0.8);
       return 0.8;
-    });
-  }
-
-  // a frightened scream: a voiced source whose pitch jumps up and then sags,
-  // with vibrato, shaped by open-vowel formants, a little rasp and breath noise
-  scream(pos, female = true) {
-    if (!this.enabled) return;
-    this._shot('scream', pos, 0.42, { ref: 6, max: 90, far: 40, farKeep: 0.4 }, (out, t, p, v) => {
-      const c = this.ctx, dur = R(0.55, 1.25);
-      const f0 = female ? R(620, 920) : R(320, 480);
-      const osc = c.createOscillator(); osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(f0 * 0.75, t);
-      osc.frequency.linearRampToValueAtTime(f0 * R(1.05, 1.2), t + dur * 0.22);
-      osc.frequency.linearRampToValueAtTime(f0 * R(0.72, 0.88), t + dur);
-      const vib = c.createOscillator(); vib.frequency.value = R(5.5, 9);
-      const vg = c.createGain(); vg.gain.value = f0 * R(0.02, 0.045);
-      vib.connect(vg).connect(osc.frequency);
-      const env = c.createGain();
-      env.gain.setValueAtTime(0.0001, t);
-      env.gain.exponentialRampToValueAtTime(1, t + 0.05);
-      env.gain.setValueAtTime(1, t + dur * 0.6);
-      env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      const rasp = c.createWaveShaper();
-      const curve = new Float32Array(256);
-      for (let i = 0; i < 256; i++) { const x = i / 127.5 - 1; curve[i] = Math.tanh(x * 2.5); }
-      rasp.curve = curve;
-      osc.connect(rasp).connect(env);
-      const scale = female ? 1.15 : 1;
-      for (const [f, q, g] of [[R(850, 1050) * scale, 6, 1], [R(1350, 1700) * scale, 8, 0.6], [2900 * scale, 10, 0.25]]) {
-        const bp = this._filter(v, out, 'bandpass', f, q);
-        const gg = c.createGain(); gg.gain.value = g * 2.2; env.connect(gg).connect(bp); v.nodes.push(gg);
-      }
-      const breath = this._gain(v, this._filter(v, out, 'highpass', 2200), 0.06);
-      const bg = c.createGain(); this._env(bg.gain, t, 0.05, 1, dur); bg.connect(breath); v.nodes.push(bg);
-      this._noise(v, bg, this.white, t, dur);
-      osc.start(t); vib.start(t); osc.stop(t + dur + 0.05); vib.stop(t + dur + 0.05);
-      v.srcs.push(osc, vib); v.nodes.push(osc, vib, vg, env, rasp);
-      return dur;
     });
   }
 

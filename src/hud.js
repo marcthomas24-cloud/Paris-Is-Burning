@@ -82,6 +82,9 @@ export class HUD {
     hb.style.width = p.health + '%';
     hb.style.background = p.health < 30 ? 'var(--red)' : p.health < 60 ? 'var(--amber)' : 'var(--green)';
     $('stamina-bar').firstElementChild.style.width = p.stamina + '%';
+    const mk = $('medkits');
+    if (mk.dataset.n !== String(p.medkits)) { mk.dataset.n = p.medkits; mk.textContent = '✚ ' + p.medkits; mk.classList.toggle('empty', !p.medkits); }
+    mk.classList.toggle('healing', p.healT > 0);
 
     // objective panel
     const info = m.hudInfo();
@@ -247,6 +250,7 @@ export class HUD {
       <div class="row"><span>Arrests</span><span>${s.arrests}</span></div>
       <div class="row"><span>Petrol bombs prevented</span><span>${s.bombsStopped} / ${s.bombsStopped + s.bombsThrown}</span></div>
       <div class="row"><span>Peaceful demonstrators struck</span><span style="color:${s.peaceful ? 'var(--red)' : 'inherit'}">${s.peaceful}</span></div>
+      <div class="row"><span>Downed suspects struck</span><span style="color:${s.downed ? 'var(--red)' : 'inherit'}">${s.downed}</span></div>
       <div class="row"><span>Phases completed</span><span>${m.completed.filter(Boolean).length} / 3</span></div>
       <div class="row"><span>Mission time</span><span>${Math.floor(m.t / 60)}:${String(Math.floor(m.t % 60)).padStart(2, '0')}</span></div>
       <div class="row total"><span>SCORE</span><span>${m.score.toLocaleString('fr-FR')}</span></div>

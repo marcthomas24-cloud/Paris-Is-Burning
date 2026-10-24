@@ -147,7 +147,7 @@ export function installDev(game) {
   // count how often each sound is requested and how often the voice limiter admits it
   window.__audioEvents = (seconds = 30) => new Promise((resolve) => {
     const a = game.audio, counts = {}, admitted = {};
-    const names = ['explosion', 'molotov', 'glass', 'impact', 'swing', 'shout', 'chant', 'whistle', 'roar', 'crash', 'shutter', 'firework', 'distantBang', 'footstep', 'hurt', 'thump', 'adhan', 'alarm', 'scream'];
+    const names = ['explosion', 'molotov', 'glass', 'impact', 'swing', 'shout', 'chant', 'whistle', 'roar', 'crash', 'shutter', 'firework', 'distantBang', 'footstep', 'hurt', 'thump', 'adhan', 'alarm'];
     const orig = {};
     for (const n of names) { orig[n] = a[n]; a[n] = function (...args) { counts[n] = (counts[n] || 0) + 1; return orig[n].apply(this, args); }; }
     const admit = a._admit;

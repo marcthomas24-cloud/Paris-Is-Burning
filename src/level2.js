@@ -338,7 +338,7 @@ export class Level2 extends Missions {
     this.stage = 'done'; // the world keeps updating until the results screen appears
     this.markerPos = null;
     this.game.events.setHazards(false);
-    if (this.stats.peaceful === 0) this.addScore(500, 'Proportionate force');
+    if (this.stats.peaceful === 0 && !this.stats.downed) this.addScore(500, 'Proportionate force');
     this.game.endGame(true);
   }
 
@@ -377,6 +377,7 @@ export class Level2 extends Missions {
         ['Le Patron', fmt(this.bossTimes.leader)],
         ['Strikes blocked by a guard / dodges', `${s.blocked} / ${s.dodges}`],
         ['Peaceful people struck', s.peaceful],
+        ['Downed suspects struck', s.downed || 0],
         ['Mission time', t],
       ],
       hook: win ? HOOK : '',

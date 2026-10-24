@@ -14,6 +14,8 @@ export class CameraRig {
     this.smoothPivot = null;
     this.extraH = 0;
     this.fov = 62;
+    this.sens = 1;        // mouse sensitivity multiplier (options screen)
+    this.invertY = false;
   }
 
   // opening establishing shot: starts high and wide, eases into the shoulder view
@@ -31,8 +33,8 @@ export class CameraRig {
   kick(deg) { this.fovKick = Math.min(10, (this.fovKick || 0) + deg); }
 
   rotate(dx, dy) {
-    this.yaw -= dx * 0.0024;
-    this.pitch = Math.max(-0.95, Math.min(0.5, this.pitch - dy * 0.002));
+    this.yaw -= dx * 0.0026 * this.sens;
+    this.pitch = Math.max(-0.95, Math.min(0.5, this.pitch - dy * 0.0021 * this.sens * (this.invertY ? -1 : 1)));
   }
 
   update(dt, player, crowdDensity) {

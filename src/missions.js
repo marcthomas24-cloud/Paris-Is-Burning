@@ -38,7 +38,7 @@ export class Missions {
     this.t = 0;
     this.stageT = 0;
     this.score = 0;
-    this.stats = { neutralized: 0, arrests: 0, peaceful: 0, bombsStopped: 0, bombsThrown: 0, damage: 0 };
+    this.stats = { neutralized: 0, arrests: 0, peaceful: 0, downed: 0, bombsStopped: 0, bombsThrown: 0, damage: 0 };
     this.line = 100;
     this.officers = 100;
     this.hostiles1 = [];
@@ -76,6 +76,14 @@ export class Missions {
     this.stats.peaceful++;
     this.addScore(-150, 'Excessive force');
     this.game.hud.alert('EXCESSIVE FORCE — that demonstrator was not a threat', 'bad', 3);
+    this.game.audio.ui('bad');
+  }
+  // a suspect already on the ground (or cuffed) was struck again
+  onDownedStruck(n, brutality) {
+    this.stats.downed++;
+    if (brutality) return; // police-brutality option: no misconduct penalty
+    this.addScore(-100, 'Excessive force');
+    this.game.hud.alert('EXCESSIVE FORCE — the suspect was already down', 'bad', 2.5, 'downed');
     this.game.audio.ui('bad');
   }
   onPoliceLineHit(dmg, cop) {
@@ -329,7 +337,7 @@ export class Missions {
     this._phaseDone(2, 1000, 'Officers extracted');
     const bonus = Math.round(Math.max(0, this.timer) * 4);
     if (bonus > 0) this.addScore(bonus, 'Time bonus');
-    if (this.stats.peaceful === 0) this.addScore(500, 'Proportionate force');
+    if (this.stats.peaceful === 0 && this.stats.downed === 0) this.addScore(500, 'Proportionate force');
     this.game.events.setHazards(false);
     this.game.endGame(true);
   }

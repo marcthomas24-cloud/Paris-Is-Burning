@@ -34,11 +34,12 @@ Before publishing commercially, read "Assets and licences" below.
 |---|---|
 | W A S D | Move (relative to the camera) |
 | Shift | Sprint (uses stamina) |
-| Mouse | Rotate the camera (pointer lock). Arrow keys also work |
+| Mouse | Rotate the camera (pointer lock). If the browser refuses the lock, moving the mouse over the game still turns, and resting the cursor at the left/right edge keeps turning. Arrow keys also work. Sensitivity and invert are under Options |
 | Left mouse | Baton strike: wind-up, strike, then recovery, with a cooldown |
 | Right mouse (hold) | Shield stance. Blocks frontal hits and projectiles, and lets you push through crowds |
 | Space | Dodge / quick step (brief invulnerability) |
 | E | Arrest a downed aggressor, or extract the officers at the objective |
+| Q | First aid: restores 40 health over 1.6 s (3 kits per run). Health also regenerates after 5 s without damage |
 | H | Toggle control hints |
 | M | Mute / unmute |
 | Esc | Pause |

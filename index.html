@@ -35,13 +35,13 @@
 
       <div id="bottom-left">
         <canvas id="minimap" width="200" height="200"></canvas>
-        <div class="bar-row"><div class="bar-label">SANTÉ</div><div id="health-bar" class="bar"><div></div></div></div>
+        <div class="bar-row"><div class="bar-label">SANTÉ</div><div id="health-bar" class="bar"><div></div></div><div id="medkits" title="First-aid kits (Q)">✚ 3</div></div>
         <div class="bar-row"><div class="bar-label">ENDURANCE</div><div id="stamina-bar" class="bar thin"><div></div></div></div>
       </div>
 
       <div id="controls-hint" class="panel">
         <div><b>WASD</b> move · <b>Shift</b> sprint · <b>Space</b> dodge</div>
-        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest</div>
+        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest · <b>Q</b> first aid</div>
         <div><b>Esc</b> pause · <b>H</b> hide hints</div>
       </div>
 
@@ -64,6 +64,7 @@
         <div id="stick-base"><div id="stick-knob"></div></div>
         <div id="touch-buttons">
           <button data-k="ShiftLeft" class="tb toggle" id="tb-sprint" aria-label="Sprint (toggle)">SPRINT</button>
+          <button data-k="KeyQ" class="tb" id="tb-medkit" aria-label="First aid">✚ AID</button>
           <button data-k="Space" class="tb" id="tb-dodge" aria-label="Dodge">DODGE</button>
           <button data-k="Mouse2" class="tb" id="tb-shield" aria-label="Shield (hold)">SHIELD</button>
           <button data-k="Mouse0" class="tb" id="tb-strike" aria-label="Baton strike">STRIKE</button>
@@ -94,6 +95,7 @@
         <div><b>RMB</b><span>Shield stance</span></div>
         <div><b>Space</b><span>Dodge</span></div>
         <div><b>E</b><span>Arrest / respond</span></div>
+        <div><b>Q</b><span>First aid (3 kits)</span></div>
         <div><b>Esc</b><span>Pause</span></div>
       </div>
       <p class="dim">Striking peaceful demonstrators costs points. Arrest downed aggressors <span class="desk-only">with E</span><span class="touch-only">by tapping the prompt</span>.</p>
@@ -117,7 +119,7 @@
           <button data-action="play" class="primary">PLAY</button>
           <button data-action="level" data-level="2" class="hidden">LEVEL 2 · NUIT</button>
           <button data-action="controls">CONTROLS</button>
-          <button data-action="audio">AUDIO</button>
+          <button data-action="audio">OPTIONS</button>
           <button data-action="restart">RESTART</button>
         </div>
         <div id="loading" class="dim small">Building the city…</div>
@@ -131,16 +133,18 @@
         <table class="ctrl-table">
           <tr><td>W A S D</td><td>Move (camera relative)</td></tr>
           <tr><td>Shift</td><td>Sprint (uses stamina)</td></tr>
-          <tr><td>Mouse</td><td>Rotate camera (arrow keys also work)</td></tr>
+          <tr><td>Mouse</td><td>Rotate camera (arrow keys also work). Click the game to capture the mouse; if your browser refuses, move the mouse over the game or rest it at the screen edge to turn. Sensitivity is under Options</td></tr>
           <tr><td>Left mouse</td><td>Baton strike — wind-up, strike, recovery</td></tr>
           <tr><td>Right mouse (hold)</td><td>Shield stance — blocks frontal hits &amp; projectiles, push through crowds</td></tr>
           <tr><td>Space</td><td>Dodge / quick step</td></tr>
           <tr><td>E</td><td>Arrest a downed aggressor · respond to incident</td></tr>
+          <tr><td>Q</td><td>First aid — restores 40 health (3 kits per run)</td></tr>
           <tr><td>H</td><td>Toggle control hints</td></tr>
           <tr><td>M</td><td>Mute / unmute sound</td></tr>
           <tr><td>Esc</td><td>Pause</td></tr>
         </table>
         <p class="dim touch-only">Touch: drag on the left of the screen to move, drag on the right to look. STRIKE, SHIELD (hold), DODGE and SPRINT (toggle) are bottom right; tap the on-screen prompt to arrest or respond.</p>
+        <p class="dim">The baton locks on to the nearest aggressor in the direction you are looking or moving; one right on top of you is hit whichever way you face.</p>
         <p class="dim">Threats are determined by behaviour, never appearance. Aggressors show a red ring when acting violently.</p>
         <p class="dim small credits">Sound recordings via Wikimedia Commons: French sirens by Manotechnologie (CC BY-SA 4.0) · protest chanting by Hardouin (CC BY 3.0) · football crowd by Torsten Nilsson and bonfire by Werstas, Work With Sounds (CC BY 4.0) · glass breaking and punches by Gravity Sound (CC BY 4.0) · call to prayer by Fraguando (CC BY-SA 4.0) · metal clanging by Camshaft64 (CC BY-SA 4.0) · "Bobbypfeife" by Christoph Waghubinger (CC BY-SA 3.0 AT) · crowds by eguobyte and unfa, referee whistle by SpliceSound (CC0) · street, fireworks, fire, helicopter, yelling, explosions and grunts by cori, ezwa, stephan, tcpp, Fg2 and stilgar (public domain). Impact sounds by Kenney (CC0). Characters: Mixamo (Adobe), Ready Player Me, Microsoft Rocketbox.</p>
         <div class="menu-buttons"><button data-action="back" class="primary">BACK</button></div>
@@ -149,13 +153,17 @@
 
     <div id="audio-screen" class="screen hidden">
       <div class="menu-inner">
-        <h2>AUDIO</h2>
+        <h2>OPTIONS</h2>
         <div class="audio-settings">
           <label for="vol-master">Master</label><input type="range" id="vol-master" min="0" max="100" step="1" /><output id="vol-master-out" for="vol-master"></output>
           <label for="vol-ambience">Ambience</label><input type="range" id="vol-ambience" min="0" max="100" step="1" /><output id="vol-ambience-out" for="vol-ambience"></output>
           <label for="vol-effects">Effects</label><input type="range" id="vol-effects" min="0" max="100" step="1" /><output id="vol-effects-out" for="vol-effects"></output>
           <label for="vol-music">Music</label><input type="range" id="vol-music" min="0" max="100" step="1" /><output id="vol-music-out" for="vol-music"></output>
           <label for="vol-mute">Mute</label><input type="checkbox" id="vol-mute" /><span class="dim small desk-only">M key</span>
+          <label for="opt-sens">Mouse sensitivity</label><input type="range" id="opt-sens" min="30" max="250" step="5" /><output id="opt-sens-out" for="opt-sens"></output>
+          <label for="opt-invert">Invert look</label><input type="checkbox" id="opt-invert" /><span></span>
+          <label for="opt-brutality">Police brutality</label><input type="checkbox" id="opt-brutality" /><span></span>
+          <span class="dim small opt-note">On: downed and cuffed suspects can be struck with no score penalty. Off: they still react, but it counts as excessive force.</span>
         </div>
         <p class="dim small">Settings are saved on this device.</p>
         <div class="menu-buttons"><button data-action="back" class="primary">BACK</button></div>
@@ -167,7 +175,7 @@
         <h2>PAUSED</h2>
         <div class="menu-buttons">
           <button data-action="resume" class="primary">RESUME</button>
-          <button data-action="audio">AUDIO</button>
+          <button data-action="audio">OPTIONS</button>
           <button data-action="controls">CONTROLS</button>
           <button data-action="restart">RESTART</button>
         </div>

@@ -45,6 +45,8 @@ export class Player {
     this.lastStepPhase = 0;
     this.rig.pose = newPose();
     this.surgePush = 0;
+    this.medkits = 3;  // first-aid kits per run (Q)
+    this.healT = 0;
   }
 
   forward() { return new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading)); }
@@ -87,19 +89,35 @@ export class Player {
     return amount;
   }
 
-  _findTarget(dirHint) {
-    // soft lock: closest agent in a forward cone, preferring active threats
+  // who the baton may land on: scripted characters off-fight never; during a boss fight
+  // only the boss; cuffed suspects only with the police-brutality option on
+  _strikeable(n) {
+    const g = this.game;
+    if (n.id === undefined || n.untargetable || n.state === 'gone') return false;
+    if (n.state === 'arrested' && !(g.prefs && g.prefs.brutality)) return false;
+    if (g.crowd.arena && n !== g.crowd.arena.boss) return false;
+    if (n.script && n.script.onBaton && this._grounded(n)) return false; // a downed boss is handled by its script
+    return true;
+  }
+  _grounded(n) { return n.state === 'down' || n.state === 'recover' || n.state === 'surrender' || n.state === 'arrested'; }
+
+  _findTarget(aims) {
+    // soft lock: the best agent near the camera aim or the movement direction, preferring
+    // active threats; an aggressor right on top of you is picked whichever way you face,
+    // and people already on the ground only when nobody standing is in reach
     const crowd = this.game.crowd;
-    const list = crowd.query(this.pos.x, this.pos.z, 3.4, []);
+    const list = crowd.query(this.pos.x, this.pos.z, 3.6, []);
     let best = null, bs = Infinity;
     for (const n of list) {
-      if (n.id === undefined || n.untargetable || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue;
-      if (crowd.arena && n !== crowd.arena.boss) continue; // boss fight: the baton only goes for the boss
+      if (!this._strikeable(n)) continue;
       const dx = n.pos.x - this.pos.x, dz = n.pos.z - this.pos.z;
-      const d = Math.hypot(dx, dz);
-      const ang = Math.acos(Math.max(-1, Math.min(1, (dx * dirHint.x + dz * dirHint.z) / (d || 1))));
-      if (ang > 0.85) continue;
-      const score = d + ang * 1.5 - (crowd.isThreat(n) ? 1.2 : 0);
+      const d = Math.hypot(dx, dz) || 1e-3;
+      let ang = Math.PI;
+      for (const a of aims) ang = Math.min(ang, Math.acos(Math.max(-1, Math.min(1, (dx * a.x + dz * a.z) / d))));
+      const threat = crowd.isThreat(n), grounded = this._grounded(n);
+      if (grounded) { if (ang > 0.9 || d > 2.6) continue; }
+      else if (ang > 1.25 && !(threat && d < 1.7 + n.radius)) continue;
+      const score = d * 0.8 + ang * 1.1 - (threat ? 1.6 : 0) + (grounded ? 3 : 0);
       if (score < bs) { bs = score; best = n; }
     }
     return best;
@@ -133,7 +151,9 @@ export class Player {
     const canAttack = !this.dead && this.staggerT <= 0 && this.dodgeT <= 0 && (!this.attack || (this.attack.phase === 'recover' && this.attack.t > 0.14));
     if (this.attackBuffer > 0 && canAttack) {
       this.attackBuffer = 0;
-      const target = this._findTarget(camF);
+      const aims = [camF];
+      if (wish.lengthSq() > 0.04) aims.push(wish.clone().normalize());
+      const target = this._findTarget(aims);
       this.attack = { phase: 'windup', t: 0, target, hit: false };
       // the whoosh peaks as the baton comes down, just before the impact
       g.audio.swing(this.pos);
@@ -189,7 +209,20 @@ export class Player {
     // stamina & health regen
     if (this.sprinting) this.stamina = Math.max(0, this.stamina - dt * 16);
     else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 14));
-    if (this.sinceDamage > 6 && !this.dead) this.health = Math.min(100, this.health + dt * 2.5);
+    if (this.sinceDamage > 5 && !this.dead) this.health = Math.min(100, this.health + dt * 4);
+
+    // first aid (Q): restores 40 health over 1.6 s, three kits per run
+    if (!this.dead && input.pressed('KeyQ')) {
+      if (this.medkits > 0 && this.health < 100 && this.healT <= 0) {
+        this.medkits--; this.healT = 1.6;
+        g.hud.alert(`First aid +40 · ${this.medkits} kit${this.medkits === 1 ? '' : 's'} left`, 'good', 1.8, 'medkit');
+        g.audio.ui('good');
+      } else if (this.medkits <= 0) g.hud.alert('No first-aid kits left', 'warn', 1.5, 'medkit');
+    }
+    if (this.healT > 0) {
+      this.healT -= dt;
+      if (!this.dead) this.health = Math.min(100, this.health + dt * 25);
+    }
 
     // petrol fire damage (no blocking flames)
     if (!this.dead && g.effects.inFire(this.pos)) {
@@ -202,9 +235,13 @@ export class Player {
     // --- facing
     let want = this.heading;
     if (this.blocking) want = Math.atan2(camF.x, camF.z);
-    else if (this.attack) want = this.heading;
+    else if (this.attack && this.attack.target && this.attack.phase !== 'recover') {
+      // keep turning onto the locked target through wind-up and strike
+      const tp = this.attack.target.pos;
+      want = Math.atan2(tp.x - this.pos.x, tp.z - this.pos.z);
+    } else if (this.attack) want = this.heading;
     else if (this.speed > 0.3 && this.dodgeT <= 0) want = Math.atan2(this.vel.x, this.vel.z);
-    const turnRate = this.blocking ? 14 : this.sprinting ? 8 : 11;
+    const turnRate = this.attack ? 24 : this.blocking ? 14 : this.sprinting ? 9 : 13;
     this.heading = angleLerp(this.heading, want, 1 - Math.exp(-dt * turnRate));
 
     this._animate(dt, g.time);
@@ -213,25 +250,34 @@ export class Player {
   _resolveStrike() {
     const g = this.game;
     const fwd = this.forward();
-    const list = g.crowd.query(this.pos.x, this.pos.z, 2.6, []);
-    let best = null, bs = Infinity;
-    for (const n of list) {
-      if (n.id === undefined || n.untargetable || n.state === 'down' || n.state === 'arrested' || n.state === 'gone') continue; // scripted characters off-fight are not targets
-      if (g.crowd.arena && n !== g.crowd.arena.boss) continue; // boss fight: bystanders are never struck
-      const dx = n.pos.x - this.pos.x, dz = n.pos.z - this.pos.z;
-      const d = Math.hypot(dx, dz);
-      if (d > 2.05 + n.radius * 0.5) continue;
-      const cos = (dx * fwd.x + dz * fwd.z) / (d || 1);
-      if (cos < 0.55) continue; // ~56 degree half-angle
-      const score = d - cos * 0.8 + (n === this.attack.target ? -0.6 : 0);
-      if (score < bs) { bs = score; best = n; }
+    const reach = (n, d) => d <= 2.15 + n.radius * 0.5;
+    let best = null;
+    // the locked target is hit if it is still in reach, wherever it stepped
+    const t = this.attack.target;
+    if (t && this._strikeable(t)) {
+      const d = Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z);
+      if (reach(t, d - 0.25)) best = t;
+    }
+    if (!best) {
+      let bs = Infinity;
+      for (const n of g.crowd.query(this.pos.x, this.pos.z, 2.6, [])) {
+        if (!this._strikeable(n)) continue;
+        const dx = n.pos.x - this.pos.x, dz = n.pos.z - this.pos.z;
+        const d = Math.hypot(dx, dz);
+        if (!reach(n, d)) continue;
+        const cos = (dx * fwd.x + dz * fwd.z) / (d || 1);
+        if (cos < 0.4) continue; // ~66 degree half-angle
+        const score = d - cos * 0.8 + (this._grounded(n) ? 2 : 0);
+        if (score < bs) { bs = score; best = n; }
+      }
     }
     if (best) {
       const dir = new THREE.Vector3(best.pos.x - this.pos.x, 0, best.pos.z - this.pos.z).normalize();
       this.attack.hit = true;
+      const low = this._grounded(best);
       if (g.crowd.onBatonHit(best, dir, this.pos) === 'blocked') return; // a shield took it; the crowd plays the block
       g.audio.impact(best.pos, false);
-      g.effects.impact(best.pos.clone().setY(best.pos.y + 1.3));
+      g.effects.impact(best.pos.clone().setY(best.pos.y + (low ? 0.35 : 1.3)));
       g.hitStop(0.07);
       g.cameraRig.shake(0.22);
       g.hud.hitMarker();
@@ -258,7 +304,10 @@ export class Player {
     if (this.attack) {
       const a = this.attack;
       if (a.phase === 'windup') { rate = 30; P.shRX = -2.6; P.shRZ = -0.45; P.elR = -1.35; P.spY = -0.45; P.spX = -0.05; }
-      else if (a.phase === 'strike') { rate = 34; P.shRX = -0.55; P.shRZ = 0.32; P.elR = -0.15; P.spY = 0.5; P.spX = 0.25; P.hpLX = -0.55; P.knL = 0.35; P.hpRX = 0.3; }
+      else if (a.phase === 'strike') {
+        rate = 34; P.shRX = -0.55; P.shRZ = 0.32; P.elR = -0.15; P.spY = 0.5; P.spX = 0.25; P.hpLX = -0.55; P.knL = 0.35; P.hpRX = 0.3;
+        if (a.target && this._grounded(a.target)) { P.spX = 0.65; P.shRX = -0.2; P.knL = P.knR = 0.45; P.y = -0.1; } // stoop to someone on the ground
+      }
       else { rate = 10; P.shRX = -0.6; P.elR = -0.6; P.spY = 0.15; }
     }
     if (this.dodgeT > 0) { P.spX = 0.35; P.knL = P.knR = 0.6; P.y = -0.12; }

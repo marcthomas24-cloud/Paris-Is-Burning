@@ -103,7 +103,6 @@ export class Crowd {
   reset() {
     this.time = 0;
     const gps = this.world.gatherPoints;
-    this.lastScream = -9;
     for (const c of this.crews) { if (c.reserve && !this.reserveOn) continue; c.z0 = c.home; this._placeCrew(c); c.burns = 0; c.burnT = 8 + this.rng() * 25; }
     this.npcs.forEach((n, i) => {
       if (n.special) { this.retire(n); return; } // scripted characters are placed by their level
@@ -122,7 +121,7 @@ export class Crowd {
       n.state = 'act'; n.st = 0; n.dur = 4 + this.rng() * 8;
       n.fear = 0; n.courage = 0.45 + this.rng() * 0.5;
       n.stimuli.length = 0;
-      n.hp = 2; n.threat = false; n.lastAggro = -99; n.neutralized = false; n.arrested = false; n.surrendered = false;
+      n.hp = 2; n.flinchT = 0; n.threat = false; n.lastAggro = -99; n.neutralized = false; n.arrested = false; n.surrendered = false;
       n.speedMul = 0.85 + this.rng() * 0.3;
       n.thinkT = this.rng() * 0.3; n.animAcc = 0; n.cool = 0; n.targetRef = null;
       n.script = null; n.surge = null; n.hitCount = 0; n.fallDir = -1;
@@ -362,25 +361,17 @@ export class Crowd {
     return best;
   }
 
-  _scream(n) {
-    if (this.time - this.lastScream < 0.7 || n.distToPlayer > 45) return;
-    this.lastScream = this.time;
-    this.game.audio.scream(n.pos, n.outfit.gender === 'f');
-  }
-
   _thinkCivilian(n, player, dt) {
     const s = n.state;
     if (DISABLED.has(s) || s === 'surrender') return;
     const danger = this._nearestDanger(n);
     if (s === 'flee') {
       if (danger) n.fleeFrom.set(danger.x, 0, danger.z);
-      if (this.rng() < dt * 0.35) this._scream(n);
       return;
     }
     if (danger) {
       n.fleeFrom = V().set(danger.x, 0, danger.z);
       this.setState(n, 'flee', 3 + this.rng() * 3);
-      this._scream(n);
       return;
     }
     // well out of sight: rejoin the scene near another crew
@@ -524,6 +515,7 @@ export class Crowd {
   onBatonHit(n, dir, attackerPos) {
     const g = this.game;
     if (n.script && n.script.onBaton) return n.script.onBaton(n, dir, attackerPos); // bosses handle their own hits
+    if (['down', 'recover', 'surrender', 'arrested'].includes(n.state)) return this._hitGrounded(n, dir);
     if (this.guards(n, attackerPos)) {
       // blocked: no damage; both sides are pushed apart and the officer recoils
       n.guardBlocks++;
@@ -566,6 +558,22 @@ export class Crowd {
     setRingVisible(n.rig, false);
     clearItem(n.rig);
     if (n.surge) n.surge = null;
+  }
+
+  // A strike on someone already down, getting up, kneeling with hands up or cuffed:
+  // they curl up and cry out, get knocked flat again, and onlookers react to it.
+  _hitGrounded(n, dir) {
+    const g = this.game;
+    n.knock.copy(dir).multiplyScalar(1.4);
+    n.flinchT = 0.7;
+    n.hitCount++;
+    if (n.state === 'arrested') n.st = 0;
+    else if (n.state === 'down') n.dur = Math.max(n.dur, n.st + 2.5 + this.rng());
+    else this.setState(n, 'down', 3 + this.rng() * 1.5);
+    g.audio.hurt(false);
+    g.effects.dust(n.pos.clone().setY(0.15), 5);
+    this.disturb(n.pos, 9, 0.8, 'violence', n);
+    g.onDownedStruck(n);
   }
 
   // ------------------------------------------------------------------ update
@@ -712,7 +720,6 @@ export class Crowd {
       const already = n.state === 'flee';
       n.fleeFrom = s.pos.clone();
       this.setState(n, 'flee', 3 + this.rng() * 3 + s.k * 2);
-      if (!already && n.temperament === 'civilian') this._scream(n);
       if (n.surge) n.surge = null;
       // panic is contagious, but weakens as it spreads
       if (!already && s.k > 0.3 && this.rng() < 0.65) this.disturb(n.pos, 6, s.k * 0.55, 'panic', n);
@@ -1188,6 +1195,16 @@ export class Crowd {
       else if (s === 'stagger') { P.mouth = 0.85; P.brow = -1; }
       else if (s === 'down' || s === 'recover') { P.mouth = 0.3 + jit * 0.2; P.brow = -0.8; }
       else if (s === 'surrender') { P.mouth = 0.15; P.brow = -0.6; }
+    }
+    if (n.flinchT > 0) {
+      // struck on the ground: curl up, knees in, arms over the head, body jolting
+      n.flinchT -= dt;
+      const k = Math.min(1, n.flinchT / 0.35), j = Math.sin(n.flinchT * 40) * 0.12 * k;
+      rate = 22;
+      P.knL = P.knR = 1.3 * k + P.knL * (1 - k); P.hpLX = P.hpRX = -1.1 * k;
+      P.shLX = P.shRX = -2.3 * k; P.elL = P.elR = -2.0 * k; P.shLZ = 0.3 * k; P.shRZ = -0.3 * k;
+      P.spX += 0.35 * k + j; P.hdX += 0.4 * k;
+      if (P.mouth !== undefined) { P.mouth = 0.9; P.brow = -1; }
     }
     if (n.script && n.script.pose) { const r = n.script.pose(n, P, dt, t); if (r) rate = r; } // bosses pose themselves
     applyPose(rig, P, dt, rate);
