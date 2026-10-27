@@ -1,0 +1,37 @@
+{
+  "build": "production (dist/, vite preview :5176), quality pass final build",
+  "url": "http://localhost:5176/?dev&seed=3",
+  "command": "await __runToEnd()  (makeHostile wrapped to count activations)",
+  "runs": [
+    {
+      "viewport": "900x640",
+      "t": 106.45,
+      "score": 4862,
+      "crowdSum": [
+        "210.769",
+        "3408.137"
+      ],
+      "title": "MISSION COMPLETE",
+      "minHp": 90,
+      "errors": []
+    },
+    {
+      "viewport": "1280x720",
+      "t": 106.45,
+      "score": 4862,
+      "crowdSum": [
+        "210.769",
+        "3408.137"
+      ],
+      "title": "MISSION COMPLETE",
+      "minHp": 90,
+      "errors": []
+    }
+  ],
+  "attackerActivations": {
+    "count": 15,
+    "breakdown": "3 at the line (auto) + 2 in the surge (auto) + 6 against the officer (player) + 4 in the final wave (officers; 3 or 4 by design)",
+    "note": "all counts are fixed in missions.js; a larger crowd only means the picks never come up short"
+  },
+  "verdict": "PASS (completes, no errors, identical at two window sizes)"
+}

@@ -5,6 +5,7 @@ import { World } from './world.js';
 import { Effects } from './effects.js';
 import { Audio } from './audio.js';
 import { Crowd } from './crowd.js';
+import { Brawls } from './brawls.js';
 import { Player } from './player.js';
 import { CameraRig } from './camera.js';
 import { LEVELS, LIGHTING, Progress } from './levels.js';
@@ -93,7 +94,8 @@ class Game {
     loading.textContent = 'Populating the boulevard…';
     await new Promise((r) => setTimeout(r, 30));
     this.player = new Player(this);
-    this.crowd = new Crowd(this, 150);
+    this.crowd = new Crowd(this, 320);
+    this.brawls = new Brawls(this);
     this.events = new IncidentScheduler(this);
     // wet, reflective street surfaces
     for (const k of ['road', 'roadPlain', 'cobble']) { const m = this.world.materials[k]; m.envMap = Humans.envMap; m.envMapIntensity = 0.32; m.roughness = 0.66; m.metalness = 0.05; }
@@ -291,6 +293,7 @@ class Game {
     $('app').classList.remove('ended');
     this.player.reset();
     this.crowd.reset();
+    this.brawls.reset();
     this.missions.reset();
     this.effects.reset();
     this.events.reset();
@@ -386,7 +389,7 @@ class Game {
     const c = this.manualStep ? null : this.crowd;
     if (ms > 21 && pr > 0.85) pr = Math.max(0.85, pr - 0.1);
     else if (ms > 21 && c && c.maxSkinned > 12) c.maxSkinned -= 2; // then trade crowd detail
-    else if (ms < 15 && c && c.maxSkinned < 20) c.maxSkinned += 2;
+    else if (ms < 15 && c && c.maxSkinned < 24) c.maxSkinned += 2;
     else if (ms < 13 && pr < this.maxPR) pr = Math.min(this.maxPR, pr + 0.1);
     if (pr !== this.pr) {
       this.pr = pr;
@@ -420,6 +423,7 @@ class Game {
     if (drift) {
       this.cameraRig.yaw += dt * 0.04;
       this.crowd.update(dt, this.player);
+      this.brawls.update(dt, this.time);
       this.effects.update(dt, this.time, this.camera.position);
       this.world.update(dt, this.time);
       this.cameraRig.update(dt, this.player, 0);
@@ -499,6 +503,7 @@ class Game {
 
     this.player.update(dt, this.cinematic ? NULL_INPUT : input, this.cameraRig.yaw);
     this.crowd.update(dt, this.player);
+    this.brawls.update(dt, this.time);
     this.missions.update(dt);
     this.events.update(dt);
     this.effects.update(dt, this.time, this.camera.position);

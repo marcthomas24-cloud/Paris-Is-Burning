@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vehicle viewer</title>
+<style>html, body { margin: 0; height: 100%; background: #6d737a; overflow: hidden; } #info { position: fixed; left: 8px; top: 6px; font: 12px Arial; color: #fff; }</style>
+</head>
+<body>
+<div id="info">Vehicle viewer (dev only): ?view=front|side|rear|top</div>
+<script type="module">
+// Dev-only turntable for the procedural vehicles (src/vehicles.js). Served by the
+// Vite dev server at /tools/vehicles.html; not part of the game build.
+import * as THREE from 'three';
+import { carParts, vanParts } from '../src/vehicles.js';
+import * as T from '../src/textures.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio); renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8a9097);
+const pm = new THREE.PMREMGenerator(renderer);
+scene.environment = pm.fromScene(new (await import('three/examples/jsm/environments/RoomEnvironment.js')).RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.HemisphereLight(0xdfe8f2, 0x3a3631, 0.9));
+const sun = new THREE.DirectionalLight(0xfff2dd, 2.2); sun.position.set(8, 14, 10); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20 });
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ color: 0x3b3d40, roughness: 0.9 }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const std = (o) => new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, ...o });
+const M = {
+  glass: std({ color: 0x1a2128, roughness: 0.15, metalness: 0.8 }), tyre: std({ color: 0x141414 }), charred: std({ color: 0x1c1a19, roughness: 1 }),
+  rust: std({ color: 0x4a3426, roughness: 1 }), headlight: std({ color: 0xffffff, emissive: 0xfff2d0, emissiveIntensity: 0.6 }),
+  taillight: std({ color: 0x550000, emissive: 0xff1010, emissiveIntensity: 0.5 }), amber: std({ color: 0x7a4a00, emissive: 0xff9a20, emissiveIntensity: 0.25 }),
+  plastic: std({ color: 0x1c1d20, roughness: 0.75 }), rim: std({ color: 0xa9adb3, roughness: 0.3, metalness: 0.85 }),
+  plate: std({ map: T.plateTexture(), roughness: 0.5 }), burntGlass: std({ color: 0x0b0a09, roughness: 1 }),
+  vanBody: std({ color: 0xe9ecef, roughness: 0.5 }), fireRed: std({ color: 0x8e1414, roughness: 0.4, metalness: 0.3 }),
+  cars: [0x8b8f94, 0x1d1f22, 0xe2e2df, 0x3a4a5e, 0x6e1a1a, 0x2f3b33, 0xb5a98e, 0x50555c].map((c) => std({ color: c, roughness: 0.35, metalness: 0.55 })),
+};
+const mat = (k) => { const [a, b] = k.split(':'); return b === undefined ? M[a] : M[a][+b]; };
+const place = (parts, x, z) => { for (const [k, g] of parts) { const m = new THREE.Mesh(g, mat(k)); m.position.set(x, 0, z); m.castShadow = m.receiveShadow = true; scene.add(m); } };
+
+const view = new URLSearchParams(location.search).get('view') || 'front';
+const only = new URLSearchParams(location.search).get('only');
+const list = [['city', 'cars:6'], ['hatch', 'cars:4'], ['sedan', 'cars:3'], ['estate', 'cars:2'], ['hatch', 'burnt'], ['van', 'vanBody'], ['vanciv', 'cars:1']].filter(([t]) => !only || only === t);
+list.forEach(([t, b], i) => {
+  const parts = t === 'van' ? vanParts('service', b).parts : t === 'vanciv' ? vanParts('civ', b).parts : carParts(t, b === 'burnt' ? { burnt: true } : { body: b }).parts;
+  // side view: nose to tail along z, seen from +x
+  if (view === 'side') place(parts, 0, -15 + i * 5.2); else place(parts, -10 + i * 3.6, 0);
+});
+
+const cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.1, 200);
+const P = { front: [3, 3.2, 16], side: [3, 2.2, 0], rear: [-3, 3.2, -16], top: [1, 20, 6] }[view];
+if (view === 'side') { cam.position.set(only ? 9 : 40, 1.6, only ? -15 : 0.6); cam.lookAt(0, 1.0, only ? -15 : 0.6); }
+else { cam.position.set(...P); cam.lookAt(0.5, 0.8, 0); }
+renderer.render(scene, cam);
+window.__ok = true;
+</script>
+</body>
+</html>

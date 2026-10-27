@@ -1,0 +1,14 @@
+{
+  "build": "production (dist/, vite preview :5176), vehicles + animation + crowd + street-fight pass, bystanders back off from fights",
+  "url": "http://localhost:5176/?dev&level=2&seed=12",
+  "command": "await __auditRun({ watch: true })  (makeHostile wrapped to count activations)",
+  "result": {"level":2,"ended":true,"t":188.67,"score":9575,"scoreSum":9575,"title":"LEVEL 2 COMPLETE","hook":true,
+    "stats":{"neutralized":40,"arrests":11,"peaceful":2,"downed":0,"bombsStopped":1,"bombsThrown":0,"damage":0,"blocked":3,"dodges":10},
+    "bossTimes":{"enforcer":19.9,"leader":38.6},"shortfall":0,
+    "cines":[["glimpse",12.2],["enforcer",63.4],["leader",143.3],["victory",182]],
+    "sections":[[0,0.1],[1,30.3],[2,63.4],[3,83.3],[4,143.3]],
+    "minHp":57,"crowdSum":["815.271","5811.026"],"encountersStarted":13,"maxHit":20,"maxHitFrom":"boss unblockable","errors":[],"issues":[]},
+  "attackerActivations": {"count": 37, "kinds": ["looter"], "note": "equals the sum of the Level 2 encounter tables (7 + 13 + 17); unchanged by the crowd increase"},
+  "earlierFailure": {"note": "Before the bystander fix the same audit ended MISSION FAILED at 50.5 s in section 1 (minHp 0): with the larger crowd, peaceful people pressed in round the officer during the fight at the (0, -45) gathering point; a skipped-cinematics diagnostic run showed 7 melee hits in 4 s while the officer was hemmed in. Fix: peaceful people within 3.2 m step back while anyone is fighting the officer (crowd.js fightNear)."},
+  "verdict": "PASS"
+}

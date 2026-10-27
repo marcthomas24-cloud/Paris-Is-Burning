@@ -449,6 +449,15 @@ export function vanTexture() {
   return tex(c, { repeat: false });
 }
 
+export function plateTexture() {
+  // French number plate: white with the blue EU band on the left
+  const [c, ctx] = canvas(256, 56);
+  ctx.fillStyle = '#f4f4f0'; ctx.fillRect(0, 0, 256, 56);
+  ctx.fillStyle = '#1f3fa0'; ctx.fillRect(0, 0, 26, 56); ctx.fillRect(230, 0, 26, 56);
+  ctx.fillStyle = '#111'; ctx.font = 'bold 34px Arial'; ctx.textAlign = 'center'; ctx.fillText('AB-123-CD', 128, 40);
+  return tex(c, { repeat: false });
+}
+
 export function softSpriteTexture() {
   const [c, ctx] = canvas(128, 128);
   const rnd = mulberry(77);

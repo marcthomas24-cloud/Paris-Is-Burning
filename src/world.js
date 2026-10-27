@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as T from './textures.js';
+import { carParts, carTypeAt, vanParts } from './vehicles.js';
 
 export const LAYOUT = {
   roadHalf: 9,
@@ -86,8 +87,13 @@ export class World {
     m.vanSide = std({ map: T.vanTexture(), roughness: 0.5 });
     m.vanBody = std({ color: 0xe9ecef, roughness: 0.5 });
     m.vanBlue = std({ color: 0x16337a, roughness: 0.5 });
-    m.headlight = std({ color: 0xffffff, emissive: 0xfff2d0, emissiveIntensity: 0.6 });
+    m.headlight = std({ color: 0xd8dde2, emissive: 0xfff2d0, emissiveIntensity: 0.12, roughness: 0.2, metalness: 0.3 }); // parked: lamps off, glass catches the light
     m.taillight = std({ color: 0x550000, emissive: 0xff1010, emissiveIntensity: 0.5 });
+    m.amber = std({ color: 0x7a4a00, emissive: 0xff9a20, emissiveIntensity: 0.25 });
+    m.plastic = std({ color: 0x1c1d20, roughness: 0.75 });
+    m.rim = std({ color: 0xa9adb3, roughness: 0.3, metalness: 0.85 });
+    m.plate = std({ map: T.plateTexture(), roughness: 0.5 });
+    m.burntGlass = std({ color: 0x0b0a09, roughness: 1 });
     m.lightA = new THREE.MeshStandardMaterial({ color: 0x0a1a66, emissive: 0x2a5cff, emissiveIntensity: 0 });
     m.lightB = new THREE.MeshStandardMaterial({ color: 0x0a1a66, emissive: 0x2a5cff, emissiveIntensity: 0 });
     m.lamp = std({ color: 0xfff1cc, emissive: 0xffd9a0, emissiveIntensity: 0.4 });
@@ -658,30 +664,12 @@ export class World {
 
   // ---------------------------------------------------------------- vehicles
   _car(x, z, ry, color, state = 'ok') {
-    const mat = state === 'burnt' ? 'charred' : `cars:${color}`;
-    const glass = state === 'burnt' ? 'rust' : 'glass';
+    const { parts, W, L, H } = carParts(carTypeAt(x, z), { body: `cars:${color}`, burnt: state === 'burnt' });
     const rz = state === 'flipped' ? Math.PI : state === 'side' ? Math.PI / 2 : 0;
-    const lift = state === 'flipped' ? 1.45 : state === 'side' ? 0.9 : 0;
-    const B = (m, w, h, d, ox, oy, oz) => {
-      const g = new THREE.BoxGeometry(w, h, d);
-      g.translate(ox, oy, oz);
-      g.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0, ry, rz, 'YXZ')));
-      g.translate(x, lift, z);
-      this.add(m, g);
-    };
-    B(mat, 1.78, 0.62, 4.2, 0, 0.62, 0);
-    B(mat, 1.6, 0.5, 2.2, 0, 1.18, -0.2);
-    B(glass, 1.62, 0.42, 2.0, 0, 1.18, -0.2);
-    B(glass, 1.5, 0.38, 0.05, 0, 1.2, 0.92);
-    if (state !== 'burnt') { B('headlight', 0.35, 0.12, 0.05, 0.6, 0.72, 2.1); B('headlight', 0.35, 0.12, 0.05, -0.6, 0.72, 2.1); B('taillight', 0.3, 0.12, 0.05, 0.62, 0.75, -2.1); B('taillight', 0.3, 0.12, 0.05, -0.62, 0.75, -2.1); }
-    for (const wx of [-0.82, 0.82]) for (const wz of [-1.35, 1.35]) {
-      const g = new THREE.CylinderGeometry(0.33, 0.33, 0.24, 12);
-      g.rotateZ(Math.PI / 2); g.translate(wx, 0.33, wz);
-      g.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0, ry, rz, 'YXZ')));
-      g.translate(x, lift, z);
-      this.add(state === 'burnt' ? 'rust' : 'tyre', g);
-    }
-    this.addColliderRotated(x, z, state === 'side' ? 1.6 : 1.9, 4.3, ry, 1.6);
+    const lift = state === 'flipped' ? H : state === 'side' ? W / 2 + 0.08 : 0;
+    const M = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0, ry, rz, 'YXZ'));
+    for (const [m, g] of parts) { g.applyMatrix4(M); g.translate(x, lift, z); this.add(m, g); }
+    this.addColliderRotated(x, z, state === 'side' ? 1.6 : W + 0.12, L + 0.1, ry, 1.6);
   }
 
   _van(x, z, ry, police, variant = police ? 'police' : 'civ') {
@@ -694,42 +682,30 @@ export class World {
     };
     const body = variant === 'fire' ? 'fireRed' : variant === 'samu' ? 'vanBody' : police ? 'vanBody' : `cars:${Math.floor(rnd() * 8)}`;
     if (variant === 'fire' || variant === 'samu') police = false;
-    B(body, 2.1, 2.2, 5.6, 0, 1.45, -0.3);
-    B(body, 2.0, 1.1, 1.0, 0, 0.95, 2.9);
-    B('glass', 1.9, 0.75, 0.9, 0, 1.9, 2.45);
+    const V = vanParts(police || variant === 'fire' || variant === 'samu' ? 'service' : 'civ', body);
+    for (const [m, g] of V.parts) { g.rotateY(ry); g.translate(x, 0, z); this.add(m, g); }
+    const barZ = 0.55; // roof light bar, just behind the windscreen
     if (police) {
-      // side livery panels
+      // side livery panels over the load area
       for (const s of [-1, 1]) {
-        const g = new THREE.PlaneGeometry(5.2, 1.9);
-        g.rotateY(s * Math.PI / 2); g.translate(s * 1.056, 1.5, -0.4);
+        const g = new THREE.PlaneGeometry(3.3, 1.24);
+        g.rotateY(s * Math.PI / 2); g.translate(s * (V.W / 2 + 0.008), 1.5, -1.0);
         g.rotateY(ry); g.translate(x, 0, z);
         this.add('vanSide', g);
       }
-      B('vanBlue', 2.12, 0.3, 1.02, 0, 0.6, 2.9);
-      B('darkMetal', 1.9, 0.4, 0.3, 0, 0.7, 3.45); // bull bar
-      // roof light bar: two halves that alternate
-      for (const [i, s] of [[0, -1], [1, 1]]) {
-        const g = new THREE.BoxGeometry(0.75, 0.16, 0.3);
-        g.translate(s * 0.42, 2.66, 1.8); g.rotateY(ry); g.translate(x, 0, z);
-        const mesh = new THREE.Mesh(g, i ? this.materials.lightB : this.materials.lightA);
-        this.scene.add(mesh);
-      }
-      this.lightBars.push(new THREE.Vector3(x, 2.9, z).add(new THREE.Vector3(0, 0, 1.8).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry)));
+      B('vanBlue', V.W + 0.02, 0.3, 1.0, 0, 0.62, V.f - 0.5);
+      B('darkMetal', 1.9, 0.4, 0.3, 0, 0.72, V.f + 0.16); // bull bar
     }
-    if (variant === 'fire' || variant === 'samu') {
-      if (variant === 'samu') { B('samuStripe', 2.13, 0.28, 5.62, 0, 1.0, -0.3); B('samuStripe', 2.13, 0.12, 5.62, 0, 1.55, -0.3); }
-      else { B('white', 2.13, 0.1, 5.62, 0, 1.1, -0.3); B('darkMetal', 1.6, 0.12, 4.6, 0, 2.62, -0.6); }
+    if (variant === 'samu') { B('samuStripe', V.W + 0.03, 0.28, 5.3, 0, 1.0, -0.05); B('samuStripe', V.W + 0.03, 0.12, 4.2, 0, 1.6, -0.6); }
+    else if (variant === 'fire') { B('white', V.W + 0.03, 0.1, 5.3, 0, 1.1, -0.05); B('darkMetal', 1.6, 0.12, 4.0, 0, 2.58, -0.8); }
+    if (police || variant === 'fire' || variant === 'samu') {
+      // roof light bar: two halves that alternate
       for (const [i, sgn] of [[0, -1], [1, 1]]) {
         const g = new THREE.BoxGeometry(0.75, 0.16, 0.3);
-        g.translate(sgn * 0.42, 2.66, 1.8); g.rotateY(ry); g.translate(x, 0, z);
+        g.translate(sgn * 0.42, V.H + 0.1, barZ); g.rotateY(ry); g.translate(x, 0, z);
         this.scene.add(new THREE.Mesh(g, i ? this.materials.lightB : this.materials.lightA));
       }
-      this.lightBars.push(new THREE.Vector3(x, 2.9, z).add(new THREE.Vector3(0, 0, 1.8).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry)));
-    }
-    for (const wx of [-0.95, 0.95]) for (const wz of [-2.0, 2.4]) {
-      const g = new THREE.CylinderGeometry(0.38, 0.38, 0.26, 12);
-      g.rotateZ(Math.PI / 2); g.translate(wx, 0.38, wz); g.rotateY(ry); g.translate(x, 0, z);
-      this.add('tyre', g);
+      this.lightBars.push(new THREE.Vector3(x, V.H + 0.3, z).add(new THREE.Vector3(0, 0, barZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry)));
     }
     this.addColliderRotated(x, z + Math.cos(ry) * 0.1, 2.2, 6.6, ry, 2.6);
   }

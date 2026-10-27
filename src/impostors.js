@@ -51,7 +51,7 @@ function classify(kind, meshName, boneName, rgb, y, top) {
   return 5;
 }
 
-function bake(kind, clipAlias, time) {
+function bake(kind, clipAlias, time, cell = 0.06) {
   const T = Humans.templates[kind];
   const model = T.scene; // template is posed temporarily, then restored
   const mixer = new THREE.AnimationMixer(model);
@@ -95,7 +95,7 @@ function bake(kind, clipAlias, time) {
   mixer.stopAllAction(); mixer.uncacheRoot(model);
   model.traverse((o) => { if (o.isBone && o.userData.bindQ) o.quaternion.copy(o.userData.bindQ); });
   T.holder.updateMatrixWorld(true);
-  return decimate(pos, col, part, 0.06);
+  return decimate(pos, col, part, cell);
 }
 
 // Vertex clustering: snap to a grid, merge, drop collapsed triangles.
@@ -156,13 +156,14 @@ function impostorMaterial() {
 }
 
 export class FarCrowd {
-  constructor(scene, capacity = 420) {
+  // cell: decimation grid (m); the distant background uses a coarser one
+  constructor(scene, capacity = 420, cell = 0.06) {
     this.scene = scene;
     this.sets = {};
     this.capacity = capacity;
     const mat = impostorMaterial();
     for (const kind of CIV_KINDS) for (const pose of ['idle', 'walk']) {
-      const geo = bake(kind, pose === 'idle' ? 'idle' : 'walk', pose === 'idle' ? 0.4 : 0.25);
+      const geo = bake(kind, pose === 'idle' ? 'idle' : 'walk', pose === 'idle' ? 0.4 : 0.25, cell);
       const n = capacity;
       const attrs = {};
       for (const a of ['iSkin', 'iTop', 'iBottom', 'iShoes', 'iHair']) { attrs[a] = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); geo.setAttribute(a, attrs[a]); }

@@ -1,0 +1,16 @@
+{
+  "build": "production (dist/, vite preview :5176), quality pass final build",
+  "url": "http://localhost:5176/?dev&level=2&seed=77",
+  "commands": ["__lintBosses()", "await __testTransitions(10)", "await __testFeints(400)", "await __testCheckpoint('enforcer' | 'leader')", "await __testChargeWindow()", "await __testWallStun()", "await __fuzzBoss(name, 60, 0.05 | 0.2 | 0.5)", "await __probeMemory(10)"],
+  "results": {
+    "lint": {"enforcer": [], "leader": []},
+    "transitions": {"passed": 20, "trials": 20, "failures": []},
+    "feints": {"safeAfterFeint": 6, "realAttacksAfterFeint": 6, "chopHitsTaken": 0},
+    "checkpoints": {"enforcer": "pass", "leader": "pass"},
+    "chargeWindow_launchToContact_s": [0.53, 0.65, 0.72, 0.82, 1.03],
+    "wallStun": "pass",
+    "fuzz": {"enforcer_0.05": "defeated, no issues", "enforcer_0.2": "defeated, no issues", "enforcer_0.5": "defeated, no issues", "leader_0.05": "defeated, no issues", "leader_0.2": "defeated, no issues", "leader_0.5": "defeated, no issues"},
+    "memory_heapMB_geometries_textures_sceneObjects": [[219.6,226,592,613],[220.2,226,592,610],[296.6,226,592,610],[255.7,226,592,610],[224.2,226,592,610],[225.3,226,592,610],[221.8,226,592,610],[219,226,592,610],[303.8,226,592,610],[297.9,226,592,610],[225.8,226,592,610]]
+  },
+  "verdict": "PASS (all). Heap is ~220 MB (was ~150 MB) because of the larger crowd; it oscillates with garbage collection and does not grow across retries. GPU geometries and textures are flat."
+}

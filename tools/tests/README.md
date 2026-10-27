@@ -33,6 +33,12 @@ Then open `http://localhost:5176/?dev&seed=3` (Level 1) or `http://localhost:517
 | `__hudLayout()` | Visible HUD panels that overlap or leave the screen at the current viewport |
 | `await __auditAppearance({ seeds: 30, level: 2 })` | Appearance of selected attackers versus their pool |
 
+## Vehicle viewer
+
+`npm run dev`, then open `http://localhost:5173/tools/vehicles.html` (`?view=front|side|rear|top`,
+`&only=city|hatch|sedan|estate|van|vanciv`) to inspect the procedural vehicles in `src/vehicles.js`
+under neutral light. Dev server only; it is not part of the build.
+
 ## Reference results
 
 Seeded results are reproducible for a given build and seed, at any window size (since the

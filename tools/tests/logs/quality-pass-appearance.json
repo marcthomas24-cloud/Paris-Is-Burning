@@ -1,0 +1,7 @@
+{
+  "build": "production (dist/, vite preview :5176), quality pass final build (crowd 320, street-fight characters from the shared outfit pool)",
+  "commands": ["await __auditAppearance({ seeds: 30, level: 1 })", "await __auditAppearance({ seeds: 30, level: 2 })"],
+  "level1": {"selections": 537, "verdict": "no material appearance skew detected", "carriedProps": "no skew", "largestZ": ["frenchFlag", -2.26], "zCritical": 2.94, "selfTest": {"z": 8.38, "detected": true}, "hostility": {"outfitsChangedByMakeHostile": 0, "meleeFlagCarriersSelected": 69, "flagsKept": 69}},
+  "level2": {"selections": 1140, "verdict": "no material appearance skew detected", "carriedProps": "no skew", "largestZ": ["balaclava", -1.19], "zCritical": 2.94, "selfTest": {"z": 10.34, "detected": true}, "flags": "too rare to assess (looting crews carry no flags; role-linked, as approved)"},
+  "verdict": "PASS"
+}

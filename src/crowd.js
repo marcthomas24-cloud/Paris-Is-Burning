@@ -9,7 +9,7 @@ import { FarCrowd, outfitColors } from './impostors.js';
 
 const LOD_FAR = 34;   // beyond this, agents are drawn as instanced impostors
 const LOD_MID = 20;   // beyond this, skeletal animation runs at a reduced rate
-const MAX_SKINNED = 20; // hard cap on fully rigged agents drawn at once
+const MAX_SKINNED = 24; // hard cap on fully rigged agents drawn at once
 
 const V = () => new THREE.Vector3();
 const tmp = V(), tmp2 = V();
@@ -60,6 +60,7 @@ export class Crowd {
     this.time = 0;
     this.count = count;
     this.maxSkinned = MAX_SKINNED;
+    this.keepOut = []; // {x, z, r}: ground the crowd walks round (street fights)
     for (let i = 0; i < count; i++) this._spawn(randomOutfit(this.rng));
     // looting crews, and passers-by caught up in the violence
     this.crews = LOOT_SITES.map(([side, z], i) => ({ id: i, side, z0: z, home: z, door: V(), rally: V(), members: [] }));
@@ -68,6 +69,7 @@ export class Crowd {
     // far-distance instanced crowd (distant agents + background population)
     if (Humans.ready) {
       this.far = new FarCrowd(this.scene, 640);
+      this.bgFar = new FarCrowd(this.scene, 640, 0.12); // static background: refilled only when the camera moves
       this._buildBackground();
       if (this.world.impostors) this.world.impostors.mesh.visible = false;
     }
@@ -108,9 +110,14 @@ export class Crowd {
       if (n.special) { this.retire(n); return; } // scripted characters are placed by their level
       if (n.crew && n.crew.reserve && !this.reserveOn) { this.retire(n); n.temperament = 'reserve'; return; } // Level 2 crews
       // first third clusters near the police line so the player starts with a crowd in view
-      const gp = i < 34 ? gps[i % 3] : gps[3 + (i % (gps.length - 3))];
-      n.anchor.set(gp.x + (this.rng() - 0.5) * (i < 34 ? 16 : 9), 0, gp.z + (this.rng() - 0.5) * (i < 34 ? 12 : 9));
+      const nearLine = i < Math.round(this.count * 0.23);
+      const gp = nearLine ? gps[i % 3] : gps[3 + (i % (gps.length - 3))];
+      n.anchor.set(gp.x + (this.rng() - 0.5) * (nearLine ? 20 : 12), 0, gp.z + (this.rng() - 0.5) * (nearLine ? 14 : 12));
       if (this.world.blocked(n.anchor.x, n.anchor.z, 0.4)) n.anchor.set(gp.x, 0, gp.z);
+      for (const K of this.keepOut) {
+        const kx = n.anchor.x - K.x, kz = n.anchor.z - K.z, kd = Math.hypot(kx, kz);
+        if (kd < K.r + 0.5) { const k = (K.r + 0.6) / (kd || 1); n.anchor.x = K.x + (kd ? kx : 1) * k; n.anchor.z = K.z + kz * k; }
+      }
       n.pos.copy(n.anchor);
       n.vel.set(0, 0, 0); n.knock.set(0, 0, 0);
       n.heading = this.rng() * 6.28;
@@ -408,10 +415,10 @@ export class Crowd {
       [[11.5, 100], [11.5, 60], [11.8, 20], [11.5, -10], [-11.5, -10], [-11.8, 30], [-11.5, 90]],
     ];
     this.marches = paths.map((path, gi) => ({ path: path.map(([x, z]) => new THREE.Vector3(x, 0, z)), idx: 1, pos: new THREE.Vector3(path[0][0], 0, path[0][1]), dir: new THREE.Vector3(0, 0, -1), speed: 0.85 + gi * 0.12, wait: 0 }));
-    const free = this.npcs.filter((n) => n.id >= 34 && n.temperament === 'peaceful');
+    const free = this.npcs.filter((n) => n.id >= Math.round(this.count * 0.23) && n.temperament === 'peaceful');
     let k = 0;
     this.marches.forEach((g, gi) => {
-      const size = gi === 2 ? 5 : 8;
+      const size = gi === 2 ? 8 : 14;
       for (let i = 0; i < size && k < free.length; i++, k++) {
         const n = free[k];
         n.march = g;
@@ -581,6 +588,8 @@ export class Crowd {
     this.time += dt;
     const t = this.time;
     this._rebuildGrid();
+    // someone is fighting the officer (distances from the previous frame)
+    this.fightNear = this.npcs.some((n) => n.distToPlayer < 6 && this.isThreat(n));
     this._updateMarches(dt);
     this._updateCrews(dt);
     const ppos = player.pos;
@@ -645,7 +654,7 @@ export class Crowd {
       const telegraph = n.attackKind === 'bash' && n.state === 'atk_wind';
       setRingVisible(n.rig, (!!threat || looting) && !DISABLED.has(n.state), looting || telegraph || (n.script && n.script.amber) ? 'amber' : 'red');
     }
-    if (this.far) { this._drawBackground(t); this.far.end(); }
+    if (this.far) { this._drawBackground(); this.far.end(); }
     this._updatePolice(dt, t, player);
   }
 
@@ -657,21 +666,21 @@ export class Crowd {
     const R = (a, b) => a + (b - a) * rng();
     for (const s of LAYOUT.crossStreets) for (const xs of [-1, 1]) {
       // groups clustered around a few centres
-      for (let gI = 0; gI < 7; gI++) {
+      for (let gI = 0; gI < 13; gI++) {
         const cx = xs * (63.5 + Math.pow(rng(), 1.7) * 52), cz = s.z + R(-s.half + 1.5, s.half - 1.5), n = 6 + Math.floor(rng() * 10);
         for (let i = 0; i < n; i++) spots.push([cx + R(-3, 3), Math.max(s.z - s.half + 0.6, Math.min(s.z + s.half - 0.6, cz + R(-2.5, 2.5)))]);
       }
     }
     // dense crowd held behind the northern barricade, and gathering just in front of it
-    for (let gI = 0; gI < 5; gI++) {
+    for (let gI = 0; gI < 9; gI++) {
       const cx = R(-11, 11), cz = R(-163, -146), n = 8 + Math.floor(rng() * 8);
       for (let i = 0; i < n; i++) spots.push([Math.max(-13, Math.min(13, cx + R(-3, 3))), cz + R(-3, 3)]);
     }
-    for (let gI = 0; gI < 12; gI++) {
+    for (let gI = 0; gI < 20; gI++) {
       const cx = R(-12, 12), cz = R(-214, -172), n = 10 + Math.floor(rng() * 12);
       for (let i = 0; i < n; i++) spots.push([Math.max(-14, Math.min(14, cx + R(-4, 4))), cz + R(-4, 4)]);
     }
-    for (let i = 0; i < 14; i++) spots.push([R(-12, 12), R(186, 200)]);
+    for (let i = 0; i < 40; i++) spots.push([R(-12, 12), R(186, 204)]);
     // looting gangs along the shop fronts of the side streets and at the far barricade
     const gangs = [];
     for (const s of LAYOUT.crossStreets) for (const xs of [-1, 1]) for (let gI = 0; gI < 3; gI++) {
@@ -686,17 +695,24 @@ export class Crowd {
       const o = randomOutfit(rng);
       return { x, z, h: rng() * 6.28, ph: rng() * 6.28, kind: o.base || (o.gender === 'f' ? 'michelle' : 'male'), scale: o.height, colors: outfitColors(o), pat: o.shellPattern === 1, walk: rng() < 0.15 };
     };
-    this.bg = spots.slice(0, 560).map(([x, z]) => mk(x, z)).concat(gangs.map(([x, z]) => mk(x, z)));
+    this.bg = spots.slice(0, 1200).map(([x, z]) => mk(x, z)).concat(gangs.map(([x, z]) => mk(x, z)));
   }
 
-  _drawBackground(t) {
+  _drawBackground() {
+    // the background population stands still in places the player cannot reach, so its
+    // instances are rebuilt only after the camera has moved (culling radius 180 m)
     const cam = this.game.camera.position;
+    if (this.bgAt && (this.bgAt.x - cam.x) ** 2 + (this.bgAt.z - cam.z) ** 2 < 15 * 15) return;
+    this.bgAt = { x: cam.x, z: cam.z };
+    const F = this.bgFar;
+    F.begin();
     for (const b of this.bg) {
-      if ((b.x - cam.x) ** 2 + (b.z - cam.z) ** 2 > 180 * 180) continue;
-      const bob = Math.max(0, Math.sin(t * 3.1 + b.ph)) * 0.05;
-      this.far.add(b.kind, b.walk, { x: b.x, y: 0, z: b.z, heading: b.h + Math.sin(t * 0.4 + b.ph) * 0.4, scale: b.scale, bob, colors: b.colors, pat: b.pat });
+      if ((b.x - cam.x) ** 2 + (b.z - cam.z) ** 2 > 195 * 195) continue;
+      F.add(b.kind, b.walk, { x: b.x, y: 0, z: b.z, heading: b.h, scale: b.scale, colors: b.colors, pat: b.pat });
     }
+    F.end();
   }
+
 
   _react(n, s) {
     if (DISABLED.has(n.state) || n.arrested || n.state === 'surrender') return;
@@ -760,8 +776,9 @@ export class Crowd {
         else if (n.pos.z < 128) n.focus.set(n.pos.x * 0.5, 0, 135);
         else n.focus.set(0, 0, 100);
       } else n.lookT -= dt;
-      // stay out of the officer's way when he walks through (personal space)
-      if (n.distToPlayer < 1.6 && player.speed > 1.5) n.yield = 0.6;
+      // stay out of the officer's way when he walks through (personal space), and back
+      // off from a fight going on around him
+      if ((n.distToPlayer < 1.6 && player.speed > 1.5) || (this.fightNear && n.distToPlayer < 3.2)) n.yield = 0.6;
     }
     if (n.temperament === 'hostile' && !n.neutralized && !n.script) this._thinkHostile(n, player);
     if (n.state === 'calm' && n.st > 2) {
@@ -964,6 +981,10 @@ export class Crowd {
       const R = A.r + 0.3; // margin: crowd separation afterwards can nudge a few centimetres
       if (ad < R) { const k = R / (ad || 1); n.pos.x = A.x + ax * k; n.pos.z = A.z + az * k; }
     }
+    for (const K of this.keepOut) {
+      const kx = n.pos.x - K.x, kz = n.pos.z - K.z, kd2 = kx * kx + kz * kz;
+      if (kd2 < K.r * K.r) { const kd = Math.sqrt(kd2) || 1, k = K.r / kd; n.pos.x = K.x + kx * k; n.pos.z = K.z + kz * k; }
+    }
     n.pos.y += (this.world.groundHeight(n.pos.x, n.pos.z) - n.pos.y) * Math.min(1, dt * 12);
     // heading
     const sp = Math.hypot(n.vel.x, n.vel.z);
@@ -972,8 +993,9 @@ export class Crowd {
     else n.stuckT = 0;
     let want = n.heading;
     if (s === 'down' || s === 'recover' || s === 'arrested') want = n.heading;
-    else if ((s.startsWith('atk') || s.startsWith('throw') || s === 'circle' || s === 'bomb_wind' || s === 'bomb_throw') && n.targetRef) want = headingTo(n.pos, n.targetRef.pos);
-    else if (sp > 0.35 && s !== 'stagger' && !(s === 'act' && n.yield > 0)) want = Math.atan2(n.vel.x, n.vel.z);
+    else if ((s.startsWith('atk') || s.startsWith('throw') || s === 'bomb_wind' || s === 'bomb_throw') && n.targetRef) want = headingTo(n.pos, n.targetRef.pos);
+    else if (sp > 0.35 && s !== 'stagger') want = Math.atan2(n.vel.x, n.vel.z); // walk where they go (only idle/walk/run clips: no strafing)
+    else if (s === 'circle' && n.targetRef) want = headingTo(n.pos, n.targetRef.pos);
     else if (s === 'act' || s === 'surrender' || s === 'loot_smash' || s === 'loot_grab' || s.startsWith('arson')) want = headingTo(n.pos, n.focus);
     if (n.script && n.script.heading) n.heading = n.script.heading(n, dt); // scripted facing (bosses)
     else if (n.attackStyle === 'shield' && n.targetRef && (s === 'pursue' || s === 'circle' || s === 'atk_wind')) {
@@ -1032,15 +1054,28 @@ export class Crowd {
     const s = n.state;
     const k01 = (x) => Math.max(0, Math.min(1, x));
     let rate = 12;
-    baseLayer(P, rig, n.speed, t, dt, s === 'pursue' || s === 'circle');
+    // squared up for a fight only when close to the target; further off they move normally
+    const tgt = n.targetRef && (s === 'pursue' || s === 'circle') ? n.targetRef.pos : null;
+    const guard = tgt ? k01((4.2 - Math.hypot(tgt.x - n.pos.x, tgt.z - n.pos.z)) / 2) : 0;
+    baseLayer(P, rig, n.speed, t, dt, guard > 0.5);
+    if (tgt) {
+      // head and shoulders keep track of the target while walking round it
+      let rel = headingTo(n.pos, tgt) - n.heading;
+      while (rel > Math.PI) rel -= Math.PI * 2;
+      while (rel < -Math.PI) rel += Math.PI * 2;
+      rel = Math.max(-1.3, Math.min(1.3, rel));
+      P.spY = rel * 0.3; P.hdY = rel * 0.55;
+    }
     const ph = t * 1.0 + n.id * 0.37;
     const act = s === 'act' || s === 'walk' || s === 'surge' || s === 'calm';
     if (act) {
       const role = n.role;
       if (role === 'chant' || (s === 'surge' && n.id % 3 === 0)) {
-        const beat = Math.sin(t * 5.2 + (n.group || 0)) ;
-        P.shRX = -2.4 + beat * 0.35; P.elR = -0.5 - beat * 0.3; P.shRZ = -0.15;
-        P.hdX = -0.15; P.y += Math.max(0, beat) * 0.03;
+        // fist pumped in bursts with the chant, then lowered for a while
+        const beat = Math.sin(t * 5.2 + (n.group || 0));
+        const on = k01((Math.sin(t * 0.45 + n.id * 1.3) + 0.15) * 3);
+        P.shRX = (-2.4 + beat * 0.35) * on; P.elR = (-0.5 - beat * 0.3) * on - 0.15 * (1 - on); P.shRZ = -0.15 * on;
+        P.hdX = -0.15 * on; P.y += Math.max(0, beat) * 0.008 * on;
       } else if (role === 'flag') {
         P.shRX = -2.5; P.elR = -0.25; P.shRZ = -0.1 + Math.sin(t * 4 + n.id) * 0.45;
         P.itemZ = Math.sin(t * 4 + n.id) * 0.25;
@@ -1050,14 +1085,16 @@ export class Crowd {
         P.spZ = sw * 0.12; P.itemZ = sw * 0.45; P.spX = -0.05;
       } else if (role === 'placard') {
         const b = Math.sin(t * 3 + n.id);
-        P.shRX = -2.75 + b * 0.1; P.elR = -0.15; P.shLX = -2.4; P.elL = -0.9; P.shLZ = -0.35; P.y += b * 0.01;
+        if (n.id % 2) { P.shRX = -2.75 + b * 0.1; P.elR = -0.15; P.shLX = -2.4; P.elL = -0.9; P.shLZ = -0.35; } // held aloft
+        else { P.shRX = P.shLX = -0.75; P.elR = P.elL = -1.0; P.shLZ = -0.2; P.shRZ = 0.2; }                     // held at the chest
       } else if (role === 'film') {
         P.shRX = -1.45; P.elR = -0.85; P.shRZ = 0.12; P.hdX = 0.05;
       } else if (role === 'banner') {
         P.shRX = P.shLX = -1.0; P.elR = P.elL = -0.6; P.shLZ = 0.2; P.shRZ = -0.2;
       } else if (role === 'shout') {
         const b = Math.sin(t * 6 + n.id);
-        P.shRX = -1.6 + b * 0.25; P.elR = -0.15; P.spX += 0.12; P.hdX = -0.2;
+        const on = k01((Math.sin(t * 0.6 + n.id * 2.1) + 0.3) * 3); // pointing and yelling in bursts
+        P.shRX = (-1.6 + b * 0.25) * on; P.elR = -0.15 * on - 0.2 * (1 - on); P.spX += 0.12 * on; P.hdX = -0.2 * on;
       } else if (role === 'watch') {
         // bystander: arms folded, weight on one leg, head turning
         P.shLX = P.shRX = -0.55; P.elL = P.elR = -2.0; P.shLZ = -0.42; P.shRZ = 0.42; P.hdY = Math.sin(t * 0.4 + n.id) * 0.5;
@@ -1096,7 +1133,7 @@ export class Crowd {
         rig.item.rotation.set(rig.item.rotation.x + (sp[1].x - rig.item.rotation.x) * k, rig.item.rotation.y + (sp[1].y - rig.item.rotation.y) * k, rig.item.rotation.z + (sp[1].z - rig.item.rotation.z) * k);
       }
     } else if (s === 'pursue' || s === 'circle') {
-      P.elR = P.elL = -1.6; P.shRX = P.shLX = -0.5; P.shLZ = 0.2; P.shRZ = -0.2;
+      P.elR = P.elL = -1.6 * guard - 0.2; P.shRX = P.shLX = -0.5 * guard; P.shLZ = 0.2 * guard; P.shRZ = -0.2 * guard;
       if (n.attackStyle === 'thrower' && rig.itemType !== 'none') { P.shRX = -0.2; P.elR = -0.4; }
     } else if (s === 'atk_wind') {
       rate = 16;
@@ -1122,8 +1159,9 @@ export class Crowd {
       rate = 18;
       const b = n.staggerBack ? -1 : 1;
       P.spX = 0.4 * b; P.hdX = 0.4 * b; P.shLZ = 0.9; P.shRZ = -0.9; P.shLX = -0.6; P.shRX = -0.4;
-      P.elL = P.elR = -0.6; P.knL = 0.3 + Math.sin(n.st * 18) * 0.2; P.knR = 0.3 - Math.sin(n.st * 18) * 0.2;
-      P.hpLX = Math.sin(n.st * 14) * 0.4; P.hpRX = -P.hpLX;
+      // a single stumbling step to catch the balance
+      const st = Math.sin(Math.min(1, n.st / Math.max(0.2, n.dur || 0.5)) * Math.PI);
+      P.elL = P.elR = -0.6; P.hpLX = -0.45 * st * b; P.knL = 0.25 + 0.3 * st; P.hpRX = 0.15 * st * b; P.knR = 0.2; P.y = -0.04 * st;
     } else if (s === 'down') {
       rate = n.st < 0.5 ? 9 : 4;
       lying(P, n.fallDir, 1, t);

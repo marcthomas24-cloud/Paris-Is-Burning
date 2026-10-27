@@ -939,13 +939,15 @@ export function updateHuman(rig, P, dt, full = true) {
   const A = rig.actions;
   const lying = Math.abs(P.tiltX) > 0.3 || P.y < -0.25;
   const wIdle = lying ? 1 : 1 - THREE.MathUtils.smoothstep(s, 0.15, 1.0);
-  const wRun = lying ? 0 : THREE.MathUtils.smoothstep(s, 2.4, 4.0);
+  // walk up to a brisk pace, then a jog: a walk clip sped far past its natural pace
+  // reads as prancing, and a run clip slowed too far slides its feet
+  const wRun = lying ? 0 : THREE.MathUtils.smoothstep(s, 1.9, 3.0);
   const wWalk = lying ? 0 : Math.max(0, 1 - wIdle - wRun);
   A.idle.setEffectiveWeight(wIdle);
   A.walk.setEffectiveWeight(wWalk);
   A.run.setEffectiveWeight(wRun);
-  A.walk.timeScale = THREE.MathUtils.clamp(s / rig.walkRef, 0.6, 1.7);
-  A.run.timeScale = THREE.MathUtils.clamp(s / rig.runRef, 0.75, 1.5);
+  A.walk.timeScale = THREE.MathUtils.clamp(s / rig.walkRef, 0.4, 1.45);
+  A.run.timeScale = THREE.MathUtils.clamp(s / rig.runRef, 0.6, 1.4);
   rig.mixer.update(dt);
 
   // root & body (tilt for knockdowns, vertical offset for crouches)

@@ -177,7 +177,9 @@ Who becomes aggressive is chosen at random from the crowd, independently of clot
 | Mid | 20–34 m | Skeletal animation at a reduced rate, no shadows |
 | Far | over 34 m | Each model is baked into idle and walking poses, decimated by vertex clustering, coloured per garment region from the original textures, and drawn as instanced meshes with per-instance clothing colours |
 
-The same far system draws about 300 background people beyond the police cordons and at the end of the boulevard. In total there are 150 AI agents (at most 20 fully rigged at once, dropping to 12 automatically on slower GPUs) plus about 560 background people. Bystanders and photographers stand on the pavements, and CRS squads hold the line and the vans. Marching groups move along the boulevard and slow down at bottlenecks.
+The same far system (with a coarser bake) draws about 1,300 background people beyond the police cordons and at the end of the boulevard; their instances are rebuilt only when the camera has moved. In total there are about 370 AI agents (320 in the crowd, plus looting crews and passers-by; at most 24 fully rigged at once, dropping to 12 automatically on slower GPUs). The number of people who turn on the officer is set per encounter and does not grow with the crowd. Bystanders and photographers stand on the pavements, back away from a fight around the officer, and CRS squads hold the line and the vans. Marching groups of up to 14 move along the boulevard and slow down at bottlenecks.
+
+**Street fights** (`brawls.js`): ten set pieces along the boulevard in both levels: rioters kicking a CRS officer who has gone down, officers beating a rioter on the ground, and rioters smashing shop windows. Rioters scatter when the officer comes within 8 m and a scene starts again once the officer is well away; the crowd walks round them.
 
 **Smoke, fire and explosions.**
 - Layered noise-puff smoke columns: dark at the base, greying and expanding as they rise, lit from below near fires, and all pushed by a consistent wind.
@@ -258,8 +260,10 @@ src/
                  debris, fire lights
   events.js      Ambient incident scheduler (molotovs, mortars, volleys, flare-ups, car fires)
   post.js        Bloom, colour grade, vignette / grain
-  world.js       Procedural Paris: buildings, streets, props, vehicles (CRS, pompiers, SAMU),
-                 barricades, fires, puddles, colliders
+  world.js       Procedural Paris: buildings, streets, props, barricades, fires, puddles, colliders
+  vehicles.js    Procedural cars (city car, hatchback, saloon, estate; burnt-out shells) and vans
+                 (CRS, pompiers, SAMU, civilian): extruded profiles, wheel arches, glazing, trim
+  brawls.js      Background street-fight set pieces
   player.js, camera.js, missions.js, hud.js, audio.js, input.js, textures.js
   levels.js      Level definitions (mission script, lighting preset, player start), lighting presets,
                  progression / unlocks

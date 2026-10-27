@@ -1,0 +1,114 @@
+{
+  "description": "Adopted seeded reference runs (approved 2026-10-26). Seeded results are reproducible for a given build at any window size, but change whenever a build alters how many random numbers are drawn (including three.js object creation), so each entry names the commit it belongs to. Compare a build only against the entry for that build; a new entry is recorded whenever gameplay, characters or geometry change.",
+  "runs": [
+    {
+      "commit": "ece8e57",
+      "date": "2026-10-26",
+      "environment": "production build (vite preview :5176), Claude desktop built-in Chromium 152, Windows 11, AMD Radeon integrated GPU",
+      "level1_seed3": {
+        "command": "?dev&seed=3, await __runToEnd()",
+        "result": {
+          "t": 101.34,
+          "score": 6388,
+          "title": "MISSION COMPLETE",
+          "stats": {
+            "neutralized": 15,
+            "arrests": 12,
+            "peaceful": 1,
+            "downed": 0,
+            "bombsStopped": 1,
+            "bombsThrown": 1,
+            "damage": 0
+          },
+          "minHp": 87,
+          "crowdSum": [
+            "-6.951",
+            "3075.043"
+          ],
+          "errors": []
+        }
+      },
+      "level2_seed12": {
+        "command": "?dev&level=2&seed=12, await __auditRun({ watch: true })",
+        "result": {
+          "t": 181.05,
+          "score": 9575,
+          "scoreSum": 9575,
+          "title": "LEVEL 2 COMPLETE",
+          "bossTimes": {
+            "enforcer": 24.4,
+            "leader": 38.2
+          },
+          "encountersStarted": 13,
+          "shortfall": 0,
+          "maxHit": 10,
+          "minHp": 33,
+          "crowdSum": [
+            "-63.228",
+            "2527.908"
+          ],
+          "errors": [],
+          "issues": []
+        }
+      }
+    },
+    {
+      "commit": "vehicle / animation / crowd / street-fight quality pass (the commit after ece8e57; bundle index-*.js built from it)",
+      "date": "2026-10-26",
+      "environment": "production build (vite preview :5176), Claude desktop built-in Chromium 152, Windows 11, AMD Radeon integrated GPU",
+      "why_it_differs": "new vehicle geometry, 170 more crowd agents, street-fight characters and bystander behaviour change both the simulation and the number of random values drawn (three.js object creation draws from Math.random)",
+      "level1_seed3": {
+        "command": "?dev&seed=3, await __runToEnd()",
+        "result": {
+          "t": 106.45,
+          "score": 4862,
+          "title": "MISSION COMPLETE",
+          "stats": {
+            "neutralized": 17,
+            "arrests": 5,
+            "peaceful": 1,
+            "downed": 0,
+            "bombsStopped": 0,
+            "bombsThrown": 2,
+            "damage": 0
+          },
+          "minHp": 90,
+          "crowdSum": [
+            "210.769",
+            "3408.137"
+          ],
+          "errors": []
+        },
+        "reproducedAt": [
+          "900x640",
+          "1280x720"
+        ],
+        "attackerActivations": 15
+      },
+      "level2_seed12": {
+        "command": "?dev&level=2&seed=12, await __auditRun({ watch: true })",
+        "result": {
+          "t": 188.67,
+          "score": 9575,
+          "scoreSum": 9575,
+          "title": "LEVEL 2 COMPLETE",
+          "bossTimes": {
+            "enforcer": 19.9,
+            "leader": 38.6
+          },
+          "encountersStarted": 13,
+          "shortfall": 0,
+          "maxHit": 20,
+          "minHp": 57,
+          "crowdSum": [
+            "815.271",
+            "5811.026"
+          ],
+          "errors": [],
+          "issues": []
+        },
+        "attackerActivations": 37
+      }
+    }
+  ]
+}
