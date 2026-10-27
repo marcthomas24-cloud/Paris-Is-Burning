@@ -128,7 +128,7 @@ export class Crowd {
       n.state = 'act'; n.st = 0; n.dur = 4 + this.rng() * 8;
       n.fear = 0; n.courage = 0.45 + this.rng() * 0.5;
       n.stimuli.length = 0;
-      n.hp = 2; n.flinchT = 0; n.threat = false; n.lastAggro = -99; n.neutralized = false; n.arrested = false; n.surrendered = false;
+      n.hp = 2; n.flinchT = 0; n.gasT = 0; n.threat = false; n.lastAggro = -99; n.neutralized = false; n.arrested = false; n.surrendered = false;
       n.speedMul = 0.85 + this.rng() * 0.3;
       n.thinkT = this.rng() * 0.3; n.animAcc = 0; n.cool = 0; n.targetRef = null;
       n.script = null; n.surge = null; n.hitCount = 0; n.fallDir = -1;
@@ -726,6 +726,8 @@ export class Crowd {
     if (n.temperament === 'hostile' && !n.neutralized) {
       // aggressors are hard to scare; explosions they caused don't matter to them
       if (s.type === 'explosion' && s.k > 0.9 && n.attackStyle !== 'bomber') n.fear += 0.3;
+      // thick gas does not scare them off, but they cough and slow down for a moment
+      if (s.type === 'teargas' && s.k > 0.45 && !n.script) { n.gasT = 1.6 + this.rng(); n.flinchT = Math.max(n.flinchT || 0, 0.4); }
       return;
     }
     if (n.script && n.script.active) return;
@@ -964,6 +966,7 @@ export class Crowd {
         if (!found) speed *= 0.2;
       }
     }
+    if (n.gasT > 0) { n.gasT -= dt; speed *= 0.55; }
     if (DISABLED.has(s) || s === 'surrender' || s.startsWith('atk') || s.startsWith('throw') || s.startsWith('bomb') || s === 'loot_smash' || s === 'loot_grab' || s.startsWith('arson')) speed = s === 'atk_strike' ? 1.5 : 0;
     if (s === 'atk_strike' && n.targetRef) desired.set(n.targetRef.pos.x - n.pos.x, 0, n.targetRef.pos.z - n.pos.z).normalize();
     // integrate with acceleration limits

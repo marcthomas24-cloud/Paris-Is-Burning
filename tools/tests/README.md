@@ -30,6 +30,7 @@ Then open `http://localhost:5176/?dev&seed=3` (Level 1) or `http://localhost:517
 | `await __fuzzBoss(name, seconds, hitRate)` | Random hits and positions: no stuck state, no extended invulnerability, health only falls |
 | `await __probeMemory(8)` | Heap (Chrome) and GPU object counts across repeated boss retries |
 | `await __frameTimes('leader', 300)` | Per-frame simulation and render cost (p50 / p95 / max) |
+| `await __testGas()` | Officer's tear gas: lands near the aim point, crowd reacts, supply empties and refills per section, refused in a boss fight |
 | `__hudLayout()` | Visible HUD panels that overlap or leave the screen at the current viewport |
 | `await __auditAppearance({ seeds: 30, level: 2 })` | Appearance of selected attackers versus their pool |
 

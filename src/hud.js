@@ -85,6 +85,8 @@ export class HUD {
     const mk = $('medkits');
     if (mk.dataset.n !== String(p.medkits)) { mk.dataset.n = p.medkits; mk.textContent = '✚ ' + p.medkits; mk.classList.toggle('empty', !p.medkits); }
     mk.classList.toggle('healing', p.healT > 0);
+    const gn = $('gasnades'), gas = p.gear.gas;
+    if (gn.dataset.n !== String(gas)) { gn.dataset.n = gas; gn.textContent = 'GAS ' + gas; gn.classList.toggle('empty', !gas); }
 
     // objective panel
     const info = m.hudInfo();

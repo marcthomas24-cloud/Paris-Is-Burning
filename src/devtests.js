@@ -11,6 +11,7 @@
 //   await __probeMemory(8)                  heap / GPU objects across retries
 //   await __frameTimes('leader', 300)       per-frame cost during a fight
 //   __hudLayout()                           overlapping HUD panels at this viewport
+//   await __testGas()                       officer's tear-gas grenade: cloud, crowd reaction, supply, boss lock-out
 import { ENFORCER, LEADER } from './boss.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -275,6 +276,42 @@ export function installTests(game) {
   };
 
   // HUD panels that overlap each other at the current viewport (only visible ones).
+  // Officer's tear gas: a grenade aimed at a peaceful group lands near it as an officer cloud,
+  // the group reacts, supply runs out at GAS.perPhase, refills on the next section, and a
+  // boss fight refuses it without spending a grenade.
+  window.__testGas = async ({ seed = 7 } = {}) => {
+    const out = {};
+    game.skipCinematics = true;
+    window.__level(1); window.__start({ audio: false, seed }); step(3);
+    const p = game.player, gear = p.gear, rig = game.cameraRig, crowd = game.crowd;
+    const target = crowd.npcs.find((n) => n.temperament === 'peaceful' && n.state === 'act' && !n.script && Math.abs(n.pos.x) < 9);
+    const D = 9;
+    p.pos.set(target.pos.x, 0, target.pos.z + D); p.vel.set(0, 0, 0);
+    rig.yaw = 0; rig.pitch = (D - 10) / 12 - 0.12; // looking north (-z), range D
+    const gas0 = gear.gas, fear0 = target.fear || 0, aim = target.pos.clone(); // the target runs, so measure from where it stood
+    out.thrown = gear.tryGas();
+    step(2.5);
+    const c = game.events.gasClouds.find((k) => k.source === 'officer');
+    out.cloud = !!c;
+    out.landedFromTarget = c ? +Math.hypot(c.pos.x - aim.x, c.pos.z - aim.z).toFixed(2) : null;
+    out.spent = gas0 - gear.gas; out.statGas = game.missions.stats.gas;
+    out.targetReacted = target.state === 'flee' || (target.fear || 0) > fear0;
+    out.fledNearby = crowd.npcs.filter((n) => n.state === 'flee' && c && Math.hypot(n.pos.x - c.pos.x, n.pos.z - c.pos.z) < 14).length;
+    for (let k = 0; k < 12 && gear.gas > 0; k++) { p.health = 100; p.staggerT = 0; gear.tryGas(); step(0.6); }
+    out.emptyRefused = gear.tryGas() === false;
+    // supply refills when the next section starts (Level 2)
+    window.__level(2); step(1.5); gear.gas = 0; window.__jump(1); step(0.1);
+    out.refilled = gear.gas;
+    // no gas in a boss fight, and none is spent
+    window.__boss('enforcer'); step(0.3);
+    const before = gear.gas, clouds = game.events.gasClouds.length;
+    out.bossRefused = gear.tryGas() === false && gear.gas === before;
+    step(1); out.bossNoCloud = game.events.gasClouds.length <= clouds;
+    game.skipCinematics = false;
+    out.pass = out.thrown && out.cloud && out.landedFromTarget < 2.5 && out.spent === 1 && out.statGas >= 1 && out.targetReacted && out.emptyRefused && out.refilled === 3 && out.bossRefused && out.bossNoCloud;
+    return out;
+  };
+
   window.__hudLayout = () => {
     const ids = ['objective', 'compass', 'score-panel', 'bottom-left', 'minimap', 'boss-bar', 'controls-hint', 'hud-buttons', 'touch-buttons', 'stick-base', 'alerts'];
     const rects = ids.map((id) => { const el = document.getElementById(id); if (!el) return null; const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return cs.display === 'none' || cs.visibility === 'hidden' || r.width === 0 || r.height === 0 || el.closest('.hidden') ? null : { id, l: r.left, t: r.top, r: r.right, b: r.bottom }; }).filter(Boolean);

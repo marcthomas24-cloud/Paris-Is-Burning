@@ -40,6 +40,7 @@ Before publishing commercially, read "Assets and licences" below.
 | Space | Dodge / quick step (brief invulnerability) |
 | E | Arrest a downed aggressor, or extract the officers at the objective |
 | Q | First aid: restores 40 health over 1.6 s (3 kits per run). Health also regenerates after 5 s without damage |
+| G | Throw a tear-gas grenade where the camera looks; aim higher to throw further (4–15 m, stopping short of walls). 3 per phase (Level 1) or section (Level 2), refilled when the next one starts; not available during boss fights. It lands as the same cloud as the CRS volleys: peaceful people and looting crews scatter, aggressors in thick gas cough and slow down for a moment but keep coming |
 | H | Toggle control hints |
 | M | Mute / unmute |
 | Esc | Pause |
@@ -54,6 +55,7 @@ Before publishing commercially, read "Assets and licences" below.
 | SHIELD (hold) | Shield stance |
 | DODGE | Dodge |
 | SPRINT | Toggle sprint |
+| GAS | Throw a tear-gas grenade |
 | Tap the on-screen prompt | Arrest / respond (E) |
 | ❚❚ and 🔊 (top right) | Pause and mute |
 

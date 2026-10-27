@@ -139,6 +139,12 @@ export class Level2 extends Missions {
     this.reset();
   }
 
+  // switching level mid-fight: end the fight so its arena and script do not carry over
+  dispose() {
+    if (this.boss) { this.boss.stop(); this.boss = null; }
+    super.dispose();
+  }
+
   reset() {
     super.reset();
     this.completed = SECTIONS.map(() => false);

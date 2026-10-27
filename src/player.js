@@ -2,6 +2,7 @@
 // shield stance, damage & reactions.
 import * as THREE from 'three';
 import { buildCharacter, addPoliceGear, newPose, baseLayer, applyPose, updateShield } from './characters.js';
+import { Gear, GAS } from './gear.js';
 
 const WINDUP = 0.13, STRIKE = 0.12, RECOVER = 0.3;
 
@@ -20,6 +21,7 @@ export class Player {
     game.scene.add(this.rig.root);
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
+    this.gear = new Gear(game, this);
     this.reset();
   }
 
@@ -47,6 +49,7 @@ export class Player {
     this.surgePush = 0;
     this.medkits = 3;  // first-aid kits per run (Q)
     this.healT = 0;
+    this.gear.reset();
   }
 
   forward() { return new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading)); }
@@ -148,7 +151,7 @@ export class Player {
     this.blocking = !this.dead && input.mouse(2) && !this.attack && this.dodgeT <= 0;
     this.blockK += ((this.blocking ? 1 : 0) - this.blockK) * Math.min(1, dt * 14);
     if (input.pressed('Mouse0')) this.attackBuffer = 0.22;
-    const canAttack = !this.dead && this.staggerT <= 0 && this.dodgeT <= 0 && (!this.attack || (this.attack.phase === 'recover' && this.attack.t > 0.14));
+    const canAttack = !this.dead && this.staggerT <= 0 && this.dodgeT <= 0 && this.gear.throwT <= 0 && (!this.attack || (this.attack.phase === 'recover' && this.attack.t > 0.14));
     if (this.attackBuffer > 0 && canAttack) {
       this.attackBuffer = 0;
       const aims = [camF];
@@ -184,6 +187,7 @@ export class Player {
     this.sprinting = shift && wish.lengthSq() > 0 && !this.blocking && !this.attack && this.stamina > 1;
     let maxSpeed = this.blocking ? 1.9 : this.sprinting ? 6.6 : 4.0;
     if (this.attack) maxSpeed = this.attack.phase === 'strike' ? 2.2 : 1.0;
+    if (this.gear.throwT > 0) maxSpeed = Math.min(maxSpeed, 1.6);
     if (this.staggerT > 0) maxSpeed = 0.8;
     if (this.dead) maxSpeed = 0;
     const target = wish.clone().multiplyScalar(maxSpeed);
@@ -210,6 +214,9 @@ export class Player {
     if (this.sprinting) this.stamina = Math.max(0, this.stamina - dt * 16);
     else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 14));
     if (this.sinceDamage > 5 && !this.dead) this.health = Math.min(100, this.health + dt * 4);
+
+    // tear-gas grenades (G): see gear.js
+    this.gear.update(dt, input);
 
     // first aid (Q): restores 40 health over 1.6 s, three kits per run
     if (!this.dead && input.pressed('KeyQ')) {
@@ -239,7 +246,7 @@ export class Player {
       // keep turning onto the locked target through wind-up and strike
       const tp = this.attack.target.pos;
       want = Math.atan2(tp.x - this.pos.x, tp.z - this.pos.z);
-    } else if (this.attack) want = this.heading;
+    } else if (this.attack || this.gear.throwT > 0) want = this.heading;
     else if (this.speed > 0.3 && this.dodgeT <= 0) want = Math.atan2(this.vel.x, this.vel.z);
     const turnRate = this.attack ? 24 : this.blocking ? 14 : this.sprinting ? 9 : 13;
     this.heading = angleLerp(this.heading, want, 1 - Math.exp(-dt * turnRate));
@@ -309,6 +316,11 @@ export class Player {
         if (a.target && this._grounded(a.target)) { P.spX = 0.65; P.shRX = -0.2; P.knL = P.knR = 0.45; P.y = -0.1; } // stoop to someone on the ground
       }
       else { rate = 10; P.shRX = -0.6; P.elR = -0.6; P.spY = 0.15; }
+    }
+    if (this.gear.throwT > 0) {
+      // grenade: arm back, then an overarm lob
+      if (GAS.dur - this.gear.throwT < GAS.windup) { rate = 24; P.shRX = -2.7; P.shRZ = -0.3; P.elR = -1.5; P.spY = -0.4; }
+      else { rate = 30; P.shRX = -1.0; P.shRZ = 0.2; P.elR = -0.2; P.spY = 0.35; P.spX = 0.15; }
     }
     if (this.dodgeT > 0) { P.spX = 0.35; P.knL = P.knR = 0.6; P.y = -0.12; }
     if (this.staggerT > 0) {

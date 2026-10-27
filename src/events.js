@@ -62,14 +62,21 @@ export class IncidentScheduler {
         const from = V(R(-8, 8), 2.2, 125);
         const to = V(R(-9, 9), 0.1, R(86, 108));
         g.audio.thump(from);
-        g.effects.throwProjectile(from, to, 'stone', (pos) => {
-          const ground = pos.clone().setY(g.world.groundHeight(pos.x, pos.z) + 0.1);
-          this.gasClouds.push({ pos: ground, t: 0, life: R(12, 16) });
-          g.crowd.disturb(ground, 9, 0.8, 'teargas');
-          g.audio.impact(ground, false, false, 'stone');
-        }, R(1.1, 1.5));
+        g.effects.throwProjectile(from, to, 'stone', (pos) => this.gasCloud(pos), R(1.1, 1.5));
       });
     }
+  }
+
+  // a canister lands: a lingering cloud that keeps people away (police volleys and the
+  // officer's own grenades share this, so both read and react the same way)
+  gasCloud(pos, source = 'police') {
+    const g = this.game;
+    const ground = pos.clone().setY(g.world.groundHeight(pos.x, pos.z) + 0.1);
+    const c = { pos: ground, t: 0, life: R(12, 16), source };
+    this.gasClouds.push(c);
+    g.crowd.disturb(ground, 9, 0.8, 'teargas');
+    g.audio.impact(ground, false, false, 'stone');
+    return c;
   }
 
   // a petrol bomb thrown from the crowd to land at (or near) a given point

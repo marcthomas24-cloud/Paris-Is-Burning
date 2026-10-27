@@ -33,12 +33,13 @@ export class Missions {
   dispose() { this.game.scene.remove(this.marker); }
 
   reset() {
+    this.game.crowd.clearArena(); // a run never starts inside a boss arena (switching levels mid-fight)
     this.stage = 'intro';
     this.phase = 0;
     this.t = 0;
     this.stageT = 0;
     this.score = 0;
-    this.stats = { neutralized: 0, arrests: 0, peaceful: 0, downed: 0, bombsStopped: 0, bombsThrown: 0, damage: 0 };
+    this.stats = { neutralized: 0, arrests: 0, peaceful: 0, downed: 0, bombsStopped: 0, bombsThrown: 0, damage: 0, gas: 0 };
     this.line = 100;
     this.officers = 100;
     this.hostiles1 = [];

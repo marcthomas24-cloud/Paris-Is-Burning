@@ -292,6 +292,7 @@ export class Effects {
     const vel = new THREE.Vector3((to.x - from.x) / T, (to.y - from.y + 0.5 * g * T * T) / T, (to.z - from.z) / T);
     let mesh;
     if (type === 'petrol') mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.22, 8), new THREE.MeshStandardMaterial({ color: 0x2f6a3a, roughness: 0.2, transparent: true, opacity: 0.85 }));
+    else if (type === 'canister') mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.16, 8), new THREE.MeshStandardMaterial({ color: 0x3c4a3a, roughness: 0.5, metalness: 0.4 }));
     else if (type === 'bottle') mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.22, 6), new THREE.MeshStandardMaterial({ color: 0x4a3a1a, roughness: 0.2 }));
     else mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.07), new THREE.MeshStandardMaterial({ color: 0x6a6660 }));
     mesh.castShadow = true;
@@ -398,6 +399,8 @@ export class Effects {
         this.fire.spawn({ pos: p.mesh.position, vel: new THREE.Vector3(0, 0.6, 0), size: 0.32, life: 0.28, alpha: 1, color: C(1, 0.7, 0.3), color2: C(0.9, 0.2, 0), drag: 1, frame: 0 });
         if (Math.random() < 0.5) this.smoke.spawn({ pos: p.mesh.position, vel: new THREE.Vector3(0, 0.4, 0), size: 0.3, grow: 4, life: 1.6, alpha: 0.45, color: C(0.12, 0.11, 0.1), drag: 1 });
       }
+      // a gas canister already fuming in flight
+      if (p.type === 'canister' && Math.random() < 0.6) this.smoke.spawn({ pos: p.mesh.position, vel: new THREE.Vector3(0, 0.3, 0), size: 0.25, grow: 3, life: 1.4, alpha: 0.3, color: C(0.7, 0.72, 0.7), drag: 1 });
       const pos = p.mesh.position;
       const hitGround = pos.y <= this.world.groundHeight(pos.x, pos.z) + 0.05;
       const hitWall = this.world.blocked(pos.x, pos.z, 0.05) && pos.y < 3;
