@@ -87,6 +87,13 @@ export class HUD {
     mk.classList.toggle('healing', p.healT > 0);
     const gn = $('gasnades'), gas = p.gear.gas;
     if (gn.dataset.n !== String(gas)) { gn.dataset.n = gas; gn.textContent = 'GAS ' + gas; gn.classList.toggle('empty', !gas); }
+    const br = $('barriers'), bh = p.gear.barrierHand;
+    if (br.dataset.n !== String(bh)) { br.dataset.n = bh; br.textContent = 'BAR ' + bh; br.classList.toggle('empty', !bh); }
+    br.classList.toggle('placing', p.gear.placing);
+    // touch: the barrier button reads PICK UP beside one of your barriers, PLACE while previewing
+    const tb = $('tb-barrier'), near = !p.gear.placing && !!p.gear.nearBarrier();
+    const label = p.gear.placing ? 'PLACE' : near ? 'PICK UP' : 'BARRIER';
+    if (tb.textContent !== label) { tb.textContent = label; tb.classList.toggle('near', near); }
 
     // objective panel
     const info = m.hudInfo();
@@ -213,6 +220,12 @@ export class HUD {
       ctx.fillStyle = threat ? '#ff3b3b' : n.arrested ? '#e9e6df' : n.state === 'flee' ? 'rgba(255,200,120,0.75)' : 'rgba(190,186,176,0.6)';
       const r = threat ? 3.6 : 2;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    // placed barriers
+    ctx.strokeStyle = '#ffbe5a'; ctx.lineWidth = 2;
+    for (const b of g.player.gear.barriers) {
+      const o = b.col.obb, a = tr(o.cx - o.c * o.hw, o.cz + o.s * o.hw), e = tr(o.cx + o.c * o.hw, o.cz - o.s * o.hw);
+      ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...e); ctx.stroke();
     }
     ctx.fillStyle = '#3d7bff';
     for (const c of crowd.police) { const [x, y] = tr(c.pos.x, c.pos.z); ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill(); }

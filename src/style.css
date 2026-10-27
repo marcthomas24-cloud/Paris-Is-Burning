@@ -76,6 +76,9 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0c0e; col
 #medkits { position: absolute; right: 0; top: -2px; font-size: 11px; font-weight: 800; letter-spacing: 0.1em; color: var(--green); }
 #medkits.empty { color: var(--dim); opacity: 0.6; }
 #gasnades { position: absolute; right: 0; top: -4px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--text); }
+#barriers { position: absolute; right: 52px; top: -4px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--text); }
+#barriers.empty { color: var(--dim); opacity: 0.6; }
+#barriers.placing { color: var(--green); }
 #gasnades.empty { color: var(--dim); opacity: 0.6; }
 #medkits.healing { color: var(--text); text-shadow: 0 0 8px var(--green); }
 .bar-label { font-size: 10px; letter-spacing: 0.2em; color: var(--dim); margin-bottom: 3px; }
@@ -205,6 +208,8 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 #tb-sprint { right: 104px; bottom: 76px; width: 52px; height: 52px; font-size: 9px; }
 #tb-sprint.on { background: var(--amber); color: #111; }
 #tb-gas { right: 120px; bottom: 136px; width: 46px; height: 46px; font-size: 9px; border-color: rgba(200,205,190,0.6); }
+#tb-barrier { right: 168px; bottom: 112px; width: 46px; height: 46px; font-size: 7px; border-color: rgba(255,190,90,0.6); }
+#tb-barrier.near { background: rgba(255,190,90,0.35); }
 #tb-medkit { right: 68px; bottom: 120px; width: 46px; height: 46px; font-size: 9px; border-color: rgba(80,200,120,0.6); }
 
 .touch #hud-buttons { display: flex; gap: 8px; position: absolute; top: calc(env(safe-area-inset-top, 0px) + 8px); right: calc(env(safe-area-inset-right, 0px) + 112px); }

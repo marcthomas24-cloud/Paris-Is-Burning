@@ -403,7 +403,7 @@ export class Effects {
       if (p.type === 'canister' && Math.random() < 0.6) this.smoke.spawn({ pos: p.mesh.position, vel: new THREE.Vector3(0, 0.3, 0), size: 0.25, grow: 3, life: 1.4, alpha: 0.3, color: C(0.7, 0.72, 0.7), drag: 1 });
       const pos = p.mesh.position;
       const hitGround = pos.y <= this.world.groundHeight(pos.x, pos.z) + 0.05;
-      const hitWall = this.world.blocked(pos.x, pos.z, 0.05) && pos.y < 3;
+      const hitWall = this.world.blocked(pos.x, pos.z, 0.05, pos.y) && pos.y < 3;
       const hitCustom = p.alive && p.check ? p.check(pos) : false;
       if (hitGround || hitWall || hitCustom || p.age > 5) {
         this.scene.remove(p.mesh);

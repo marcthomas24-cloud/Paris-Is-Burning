@@ -12,6 +12,7 @@
 //   await __frameTimes('leader', 300)       per-frame cost during a fight
 //   __hudLayout()                           overlapping HUD panels at this viewport
 //   await __testGas()                       officer's tear-gas grenade: cloud, crowd reaction, supply, boss lock-out
+//   await __testBarriers()                  police barriers: preview and placing, refusals, crowd walks round, pick-up, arenas
 import { ENFORCER, LEADER } from './boss.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -309,6 +310,83 @@ export function installTests(game) {
     step(1); out.bossNoCloud = game.events.gasClouds.length <= clouds;
     game.skipCinematics = false;
     out.pass = out.thrown && out.cloud && out.landedFromTarget < 2.5 && out.spent === 1 && out.statGas >= 1 && out.targetReacted && out.emptyRefused && out.refilled === 3 && out.bossRefused && out.bossNoCloud;
+    return out;
+  };
+
+  // Police barriers: the B preview places with B or a click (and the click is no baton
+  // strike), bad spots are refused, someone walking through its line goes round it without
+  // ever entering it, B beside it picks it up, and a boss fight clears barriers from its arena.
+  window.__testBarriers = async ({ seed = 7 } = {}) => {
+    const out = {};
+    game.skipCinematics = true;
+    window.__level(2); window.__start({ audio: false, seed }); step(1.5);
+    const p = game.player, gear = p.gear, w = game.world, crowd = game.crowd, rig = game.cameraRig, inp = game.input;
+    const press = (code) => { inp.setButton(code, true); step(1 / 60); inp.setButton(code, false); step(1 / 60); };
+    const cols0 = w.colliders.length;
+    // an open stretch of road: room for the barrier and for a walk through its line
+    let spot = null;
+    for (let z = -96; z < -60 && !spot; z += 1) for (let x = -6; x <= 6 && !spot; x += 1) {
+      if (gear.placeProblem(x, z, 0)) continue;
+      let clear = true;
+      for (let dz = -4; dz <= 4 && clear; dz += 1) for (let dx = -3; dx <= 3; dx += 1) if (w.blocked(x + dx, z + dz, 0.4) && Math.abs(dz) > 0.5) { clear = false; break; }
+      if (clear) spot = { x, z };
+    }
+    out.spot = spot;
+    // preview, then place with a click: no baton strike from that click
+    p.pos.set(spot.x, 0, spot.z + 2.4); p.vel.set(0, 0, 0); rig.yaw = 0;
+    for (const n of crowd.query(spot.x, spot.z, 4, [])) if (n.id !== undefined) n.pos.set(n.pos.x + 9, 0, n.pos.z);
+    step(0.1);
+    press('KeyB'); out.previewShown = gear.placing && gear.ghost.visible;
+    out.previewGreen = gear.ghost.material.color.getHex() === 0x50c878;
+    inp.setButton('Mouse0', true); step(1 / 60); inp.setButton('Mouse0', false);
+    out.placedByClick = gear.barriers.length === 1 && !gear.placing && !gear.ghost.visible;
+    out.clickNoStrike = !p.attack;
+    step(0.3);
+    const b = gear.barriers[0], o = b && b.col.obb;
+    out.blocksCentre = !!b && w.blocked(o.cx, o.cz, 0.1);
+    out.projectileOver = !!b && !w.blocked(o.cx, o.cz, 0.05, 1.6);
+    // refusals: inside a building, on top of someone
+    out.refuseWall = !!gear.placeProblem(-30, spot.z, 0);
+    const someone = crowd.npcs.find((n) => n.temperament === 'peaceful' && n.state !== 'gone');
+    out.refusePerson = !!gear.placeProblem(someone.pos.x, someone.pos.z, 0);
+    // someone walks straight through the barrier's line: they go round, never into it
+    const walker = crowd.npcs.find((n) => n.temperament === 'peaceful' && !n.script && n.state !== 'gone' && n !== someone);
+    const dest = { x: o.cx, y: 0, z: o.cz - 3.5 };
+    walker.pos.set(o.cx + 0.2, 0, o.cz + 3.5); walker.vel.set(0, 0, 0); walker.march = null; walker.surge = null;
+    crowd.setState(walker, 'walk');
+    walker.script = { move: () => ({ speed: 1.6, dest }) };
+    let inside = 0, reached = -1;
+    for (let i = 0; i < 60 * 10 && reached < 0; i++) {
+      p.pos.set(spot.x + 6, 0, spot.z); // out of the way
+      step(1 / 60);
+      const dx = walker.pos.x - o.cx, dz = walker.pos.z - o.cz;
+      if (Math.abs(o.c * dx - o.s * dz) < o.hw && Math.abs(o.s * dx + o.c * dz) < o.hd) inside++;
+      if (Math.hypot(walker.pos.x - dest.x, walker.pos.z - dest.z) < 1.0) reached = +(i / 60).toFixed(1);
+    }
+    walker.script = null;
+    out.walkerReachedS = reached; out.walkerInsideFrames = inside;
+    // pick it up again with B beside it
+    p.pos.set(o.cx, 0, o.cz + 1.0); step(0.1);
+    out.nearFound = !!gear.nearBarrier();
+    press('KeyB');
+    out.pickedUp = gear.barriers.length === 0 && gear.barrierHand === 4 && !w.blocked(o.cx, o.cz, 0.1) && w.colliders.length === cols0;
+    // carried limit
+    for (let k = 0; k < 4; k++) gear.barriers.length < 4 && gear.placeBarrier(spot.x - 4.5 + k * 2.6, spot.z - 6, 0);
+    out.limit = gear.barrierHand === 0 && gear.barriers.length === 4;
+    press('KeyB'); p.pos.set(spot.x + 6, 0, spot.z + 4); step(0.1); press('KeyB');
+    out.emptyRefused = !gear.placing;
+    // boss fight: barriers inside the arena go back to the officer, and none can be placed
+    window.__level(2); step(0.5);
+    const placed = gear.placeBarrier(-4, -12, 0);
+    window.__jump(2); step(0.5);
+    out.arenaCleared = !!placed && gear.barriers.length === 0 && gear.barrierHand === 4;
+    out.arenaRefused = gear.placeProblem(0, -20, 0) === 'No barriers in this fight';
+    // a restart removes everything
+    window.__level(1); step(0.2);
+    out.resetClean = gear.barriers.length === 0 && gear.barrierHand === 4 && !w.colliders.some((c) => c.tag === 'placed');
+    game.skipCinematics = false;
+    out.pass = !!spot && out.previewShown && out.previewGreen && out.placedByClick && out.clickNoStrike && out.blocksCentre && out.projectileOver && out.refuseWall && out.refusePerson
+      && out.walkerReachedS > 0 && out.walkerInsideFrames === 0 && out.nearFound && out.pickedUp && out.limit && out.emptyRefused && out.arenaCleared && out.arenaRefused && out.resetClean;
     return out;
   };
 

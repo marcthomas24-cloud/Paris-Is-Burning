@@ -41,6 +41,7 @@ Before publishing commercially, read "Assets and licences" below.
 | E | Arrest a downed aggressor, or extract the officers at the objective |
 | Q | First aid: restores 40 health over 1.6 s (3 kits per run). Health also regenerates after 5 s without damage |
 | G | Throw a tear-gas grenade where the camera looks; aim higher to throw further (4–15 m, stopping short of walls). 3 per phase (Level 1) or section (Level 2), refilled when the next one starts; not available during boss fights. It lands as the same cloud as the CRS volleys: peaceful people and looting crews scatter, aggressors in thick gas cough and slow down for a moment but keep coming |
+| B | Police barrier (4 carried). The first press shows a see-through barrier 2.4 m ahead, across your view: green where it fits, red where it would hit a wall, a person or another barrier. B again or left mouse places it; right mouse or G cancels. B beside one of your barriers picks it back up. Placed barriers are real obstacles: the crowd, aggressors and you walk round them, and they stop low projectiles. None in a boss fight; barriers inside an arena go back to you when the fight starts. They show as amber lines on the minimap |
 | H | Toggle control hints |
 | M | Mute / unmute |
 | Esc | Pause |
@@ -56,6 +57,7 @@ Before publishing commercially, read "Assets and licences" below.
 | DODGE | Dodge |
 | SPRINT | Toggle sprint |
 | GAS | Throw a tear-gas grenade |
+| BARRIER | Show the barrier preview; tap STRIKE to place it (SHIELD cancels). Reads PICK UP beside one of your barriers |
 | Tap the on-screen prompt | Arrest / respond (E) |
 | ❚❚ and 🔊 (top right) | Pause and mute |
 

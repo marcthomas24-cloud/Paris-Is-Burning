@@ -22,6 +22,25 @@ const rnd = T.mulberry(1234);
 const R = (a, b) => a + (b - a) * rnd();
 const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
 
+// push a circle out of an oriented box (see World.addObstacle)
+function resolveObb(p, r, o) {
+  const dx = p.x - o.cx, dz = p.z - o.cz;
+  const lx = o.c * dx - o.s * dz, lz = o.s * dx + o.c * dz; // into the box's frame
+  const cx = Math.max(-o.hw, Math.min(lx, o.hw)), cz = Math.max(-o.hd, Math.min(lz, o.hd));
+  let ex = lx - cx, ez = lz - cz;
+  const d2 = ex * ex + ez * ez;
+  if (d2 >= r * r) return false;
+  let nx, nz;
+  if (d2 > 1e-8) { const d = Math.sqrt(d2), k = (r - d) / d; nx = lx + ex * k; nz = lz + ez * k; }
+  else {
+    // centre inside: out along the shallowest side
+    const px = o.hw - Math.abs(lx), pz = o.hd - Math.abs(lz);
+    if (px < pz) { nx = Math.sign(lx || 1) * (o.hw + r); nz = lz; } else { nx = lx; nz = Math.sign(lz || 1) * (o.hd + r); }
+  }
+  p.x = o.cx + o.c * nx + o.s * nz; p.z = o.cz - o.s * nx + o.c * nz; // back to world
+  return true;
+}
+
 export class World {
   constructor(scene, renderer) {
     this.scene = scene;
@@ -207,6 +226,41 @@ export class World {
         this.grid.get(k).push(c);
       }
     return c;
+  }
+
+  // Removable oriented box (police barriers placed by the officer). The grid holds its
+  // bounding box; collision and blocking tests use the rotated rectangle itself.
+  addObstacle(cx, cz, w, d, ry, h, tag = 'placed') {
+    const c = Math.cos(ry), s = Math.sin(ry), hw = w / 2, hd = d / 2;
+    const ex = Math.abs(hw * c) + Math.abs(hd * s), ez = Math.abs(hw * s) + Math.abs(hd * c);
+    const col = this.addCollider(cx - ex, cz - ez, cx + ex, cz + ez, h, tag);
+    col.obb = { cx, cz, hw, hd, c, s };
+    return col;
+  }
+
+  removeCollider(col) {
+    const i = this.colliders.indexOf(col);
+    if (i < 0) return;
+    this.colliders.splice(i, 1);
+    const cs = this.cell;
+    for (let gx = Math.floor(col.minX / cs); gx <= Math.floor(col.maxX / cs); gx++)
+      for (let gz = Math.floor(col.minZ / cs); gz <= Math.floor(col.maxZ / cs); gz++) {
+        const l = this.grid.get(gx * 10007 + gz);
+        if (l) { const j = l.indexOf(col); if (j >= 0) l.splice(j, 1); }
+      }
+  }
+
+  // a 2 m metal crowd barrier as one geometry at the origin (same parts as _vauban)
+  barrierGeometry() {
+    const parts = [];
+    const B = (w, h, d, ox, oy) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(ox, oy, 0); parts.push(g); };
+    B(2.0, 0.05, 0.05, 0, 1.08); B(2.0, 0.05, 0.05, 0, 0.25);
+    for (let k = -0.95; k <= 0.96; k += 0.16) B(0.025, 0.85, 0.025, k, 0.66);
+    B(0.06, 1.1, 0.06, -1.0, 0.55); B(0.06, 1.1, 0.06, 1.0, 0.55);
+    B(0.06, 0.04, 0.7, -0.9, 0.02); B(0.06, 0.04, 0.7, 0.9, 0.02);
+    const g = mergeGeometries(parts, false);
+    parts.forEach((p) => p.dispose());
+    return g;
   }
 
   addColliderRotated(cx, cz, w, d, ry, h) {
@@ -946,6 +1000,7 @@ export class World {
   resolveCircle(p, r) {
     let hit = false;
     for (const c of this.near(p.x, p.z, r + 1)) {
+      if (c.obb) { if (resolveObb(p, r, c.obb)) hit = true; continue; }
       const cx = Math.max(c.minX, Math.min(p.x, c.maxX));
       const cz = Math.max(c.minZ, Math.min(p.z, c.maxZ));
       let dx = p.x - cx, dz = p.z - cz;
@@ -969,8 +1024,16 @@ export class World {
     return hit;
   }
 
-  blocked(x, z, r) {
+  // y: the height being tested (a projectile in flight); placed barriers lower than it
+  // do not block it
+  blocked(x, z, r, y) {
     for (const c of this.near(x, z, r + 1)) {
+      if (c.obb) {
+        if (y !== undefined && y > c.h) continue;
+        const o = c.obb, dx = x - o.cx, dz = z - o.cz;
+        if (Math.abs(o.c * dx - o.s * dz) < o.hw + r && Math.abs(o.s * dx + o.c * dz) < o.hd + r) return true;
+        continue;
+      }
       if (x + r > c.minX && x - r < c.maxX && z + r > c.minZ && z - r < c.maxZ) return true;
     }
     const B = LAYOUT.bounds;

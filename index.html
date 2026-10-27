@@ -36,12 +36,12 @@
       <div id="bottom-left">
         <canvas id="minimap" width="200" height="200"></canvas>
         <div class="bar-row"><div class="bar-label">SANTÉ</div><div id="health-bar" class="bar"><div></div></div><div id="medkits" title="First-aid kits (Q)">✚ 3</div></div>
-        <div class="bar-row"><div class="bar-label">ENDURANCE</div><div id="stamina-bar" class="bar thin"><div></div></div><div id="gasnades" title="Tear-gas grenades this phase (G)">GAS 3</div></div>
+        <div class="bar-row"><div class="bar-label">ENDURANCE</div><div id="stamina-bar" class="bar thin"><div></div></div><div id="barriers" title="Police barriers carried (B)">BAR 4</div><div id="gasnades" title="Tear-gas grenades this phase (G)">GAS 3</div></div>
       </div>
 
       <div id="controls-hint" class="panel">
         <div><b>WASD</b> move · <b>Shift</b> sprint · <b>Space</b> dodge</div>
-        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest · <b>Q</b> first aid · <b>G</b> tear gas</div>
+        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest · <b>Q</b> first aid · <b>G</b> tear gas · <b>B</b> barrier</div>
         <div><b>Esc</b> pause · <b>H</b> hide hints</div>
       </div>
 
@@ -66,6 +66,7 @@
           <button data-k="ShiftLeft" class="tb toggle" id="tb-sprint" aria-label="Sprint (toggle)">SPRINT</button>
           <button data-k="KeyQ" class="tb" id="tb-medkit" aria-label="First aid">✚ AID</button>
           <button data-k="KeyG" class="tb" id="tb-gas" aria-label="Throw tear gas">GAS</button>
+          <button data-k="KeyB" class="tb" id="tb-barrier" aria-label="Place or pick up a barrier">BARRIER</button>
           <button data-k="Space" class="tb" id="tb-dodge" aria-label="Dodge">DODGE</button>
           <button data-k="Mouse2" class="tb" id="tb-shield" aria-label="Shield (hold)">SHIELD</button>
           <button data-k="Mouse0" class="tb" id="tb-strike" aria-label="Baton strike">STRIKE</button>
@@ -86,6 +87,7 @@
         <div><b>DODGE</b><span>Quick step</span></div>
         <div><b>SPRINT</b><span>Toggle</span></div>
         <div><b>GAS</b><span>Throw tear gas</span></div>
+        <div><b>BARRIER</b><span>Preview, then tap STRIKE</span></div>
         <div><b>Prompt</b><span>Tap to arrest</span></div>
         <div><b>❚❚</b><span>Pause</span></div>
       </div>
@@ -99,6 +101,7 @@
         <div><b>E</b><span>Arrest / respond</span></div>
         <div><b>Q</b><span>First aid (3 kits)</span></div>
         <div><b>G</b><span>Tear gas (3 per phase)</span></div>
+        <div><b>B</b><span>Place / pick up barrier</span></div>
         <div><b>Esc</b><span>Pause</span></div>
       </div>
       <p class="dim">Striking peaceful demonstrators costs points. Arrest downed aggressors <span class="desk-only">with E</span><span class="touch-only">by tapping the prompt</span>.</p>
@@ -142,6 +145,7 @@
           <tr><td>Space</td><td>Dodge / quick step</td></tr>
           <tr><td>E</td><td>Arrest a downed aggressor · respond to incident</td></tr>
           <tr><td>G</td><td>Throw a tear-gas grenade where the camera looks (aim higher to throw further). 3 per phase, none during boss fights</td></tr>
+          <tr><td>B</td><td>Police barrier: shows a preview in front of you (green where it fits); B again or left mouse places it, right mouse or G cancels. B beside one of your barriers picks it up. 4 carried; the crowd walks round them</td></tr>
           <tr><td>Q</td><td>First aid — restores 40 health (3 kits per run)</td></tr>
           <tr><td>H</td><td>Toggle control hints</td></tr>
           <tr><td>M</td><td>Mute / unmute sound</td></tr>

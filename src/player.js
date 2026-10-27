@@ -147,10 +147,13 @@ export class Player {
     }
     if (wish.lengthSq() > 1) wish.normalize();
 
+    // barriers (B) and tear-gas grenades (G): see gear.js
+    this.gear.update(dt, input);
+
     // --- stance & attacks
     this.blocking = !this.dead && input.mouse(2) && !this.attack && this.dodgeT <= 0;
     this.blockK += ((this.blocking ? 1 : 0) - this.blockK) * Math.min(1, dt * 14);
-    if (input.pressed('Mouse0')) this.attackBuffer = 0.22;
+    if (input.pressed('Mouse0') && !this.gear.ateClick && !this.gear.placing) this.attackBuffer = 0.22;
     const canAttack = !this.dead && this.staggerT <= 0 && this.dodgeT <= 0 && this.gear.throwT <= 0 && (!this.attack || (this.attack.phase === 'recover' && this.attack.t > 0.14));
     if (this.attackBuffer > 0 && canAttack) {
       this.attackBuffer = 0;
@@ -214,9 +217,6 @@ export class Player {
     if (this.sprinting) this.stamina = Math.max(0, this.stamina - dt * 16);
     else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 14));
     if (this.sinceDamage > 5 && !this.dead) this.health = Math.min(100, this.health + dt * 4);
-
-    // tear-gas grenades (G): see gear.js
-    this.gear.update(dt, input);
 
     // first aid (Q): restores 40 health over 1.6 s, three kits per run
     if (!this.dead && input.pressed('KeyQ')) {
