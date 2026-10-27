@@ -198,6 +198,7 @@ export class Level2 extends Missions {
   update(dt) {
     const g = this.game;
     this.t += dt; this.stageT += dt;
+    this.tension.update(dt);
     switch (this.stage) {
       case 'intro':
         if (this.stageT > 1.2) { this._startSection(0); g.hud.titleCard('NUIT', 'Boulevard de la République · 01h12'); }
@@ -383,6 +384,7 @@ export class Level2 extends Missions {
         ['Le Patron', fmt(this.bossTimes.leader)],
         ['Strikes blocked by a guard / dodges', `${s.blocked} / ${s.dodges}`],
         ['Peaceful people struck', s.peaceful],
+        ['Crowd tension · peak', `${Math.round(this.tension.peak)} / 100`],
         ['Downed suspects struck', s.downed || 0],
         ['Mission time', t],
       ],

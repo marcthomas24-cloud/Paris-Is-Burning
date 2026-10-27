@@ -103,6 +103,7 @@ export class Gear {
       this.thrown.push({ t: g.time, pos: c.pos });
       const m = g.missions;
       if (m && m.stats.gas !== undefined) m.stats.gas++;
+      if (m && m.tension) m.tension.onGasLanded(c.pos, this.thrown);
     });
   }
 
@@ -157,6 +158,16 @@ export class Gear {
     g.audio.impact(V(x, 0.5, z), false, false, 'metal');
     g.hud.alert(`Barrier placed · ${this.barrierHand} left`, 'info', 1.4, 'barrier');
     return b;
+  }
+
+  // crowd steering turned a bystander away from this barrier (see Crowd._move)
+  onDeflect(col, n) {
+    const b = this.barriers.find((k) => k.col === col);
+    if (!b || n.lastDeflect === b) return; // each person counts once per barrier
+    n.lastDeflect = b;
+    b.deflected = (b.deflected || 0) + 1;
+    const m = this.game.missions;
+    if (m && m.tension) m.tension.onBarrierDeflect(b);
   }
 
   _removeBarrier(b) {

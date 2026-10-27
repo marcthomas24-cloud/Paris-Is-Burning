@@ -12,6 +12,7 @@
 // random from the free members of the looting crews (the Leader's people). Peaceful
 // people are never recruited; if too few crew members are free, the group is smaller
 // (counted in `shortfall`). Appearance is never read (see __auditAppearance).
+// Crowd tension (tension.js) can add one more member, drawn the same way.
 import * as THREE from 'three';
 
 export class EncounterRunner {
@@ -40,11 +41,11 @@ export class EncounterRunner {
     return free && n.temperament === 'looter';
   }
 
-  _pick(count) {
+  _pick(count, counted = true) {
     const crowd = this.game.crowd;
     const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     const picked = shuffle(crowd.npcs.filter((n) => this.eligible(n))).slice(0, count);
-    this.shortfall += count - picked.length;
+    if (counted) this.shortfall += count - picked.length;
     return picked;
   }
 
@@ -62,8 +63,12 @@ export class EncounterRunner {
       return;
     }
     const people = this._pick(e.members.length);
+    // a tense crowd: one more joins in, from the same pool (not counted as a shortfall if none is free)
+    const extra = g.missions.tension ? g.missions.tension.extraMembers() : 0;
+    if (extra) people.push(...this._pick(extra, false));
     people.forEach((n, i) => {
-      const m = e.members[i];
+      const base = e.members[Math.min(i, e.members.length - 1)];
+      const m = i < e.members.length ? base : { style: 'melee', at: [base.at[0] + 1.5, base.at[1] + 1.5] };
       // enter from just outside the officer's view where possible (side streets, behind barricades)
       let x = m.at[0], z = m.at[1];
       for (let k = 0; k < 8 && g.world.blocked(x, z, 0.4); k++) { x += (Math.random() - 0.5) * 2; z += (Math.random() - 0.5) * 2; }

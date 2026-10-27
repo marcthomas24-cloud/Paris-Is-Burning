@@ -13,6 +13,7 @@
 //   __hudLayout()                           overlapping HUD panels at this viewport
 //   await __testGas()                       officer's tear-gas grenade: cloud, crowd reaction, supply, boss lock-out
 //   await __testBarriers()                  police barriers: preview and placing, refusals, crowd walks round, pick-up, arenas
+//   await __testTension()                   crowd tension: what raises and lowers it, decay, HUD, and what it changes
 import { ENFORCER, LEADER } from './boss.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -21,7 +22,8 @@ export function installTests(game) {
   // The page pauses itself on blur / visibility / pointer-lock loss (common when the browser
   // window is in the background); a paused game does not advance, so every step resumes it.
   const resume = () => { if (game.state === 'paused') { game._screen(null); game.state = 'playing'; game.audio.setPaused(false); } };
-  const step = (s) => { resume(); window.__step(s); };
+  // fn(i) runs before each 1/60 s frame; prefer it to many short steps (each step call renders once)
+  const step = (s, fn) => { resume(); window.__step(s, fn); };
   const errors = [];
   addEventListener('error', (e) => errors.push('uncaught: ' + e.message));
   addEventListener('unhandledrejection', (e) => errors.push('rejection: ' + (e.reason && e.reason.message || e.reason)));
@@ -356,13 +358,12 @@ export function installTests(game) {
     crowd.setState(walker, 'walk');
     walker.script = { move: () => ({ speed: 1.6, dest }) };
     let inside = 0, reached = -1;
-    for (let i = 0; i < 60 * 10 && reached < 0; i++) {
+    step(10, (i) => {
       p.pos.set(spot.x + 6, 0, spot.z); // out of the way
-      step(1 / 60);
       const dx = walker.pos.x - o.cx, dz = walker.pos.z - o.cz;
       if (Math.abs(o.c * dx - o.s * dz) < o.hw && Math.abs(o.s * dx + o.c * dz) < o.hd) inside++;
-      if (Math.hypot(walker.pos.x - dest.x, walker.pos.z - dest.z) < 1.0) reached = +(i / 60).toFixed(1);
-    }
+      if (reached < 0 && Math.hypot(walker.pos.x - dest.x, walker.pos.z - dest.z) < 1.0) reached = +(i / 60).toFixed(1);
+    });
     walker.script = null;
     out.walkerReachedS = reached; out.walkerInsideFrames = inside;
     // pick it up again with B beside it
@@ -387,6 +388,82 @@ export function installTests(game) {
     game.skipCinematics = false;
     out.pass = !!spot && out.previewShown && out.previewGreen && out.placedByClick && out.clickNoStrike && out.blocksCentre && out.projectileOver && out.refuseWall && out.refusePerson
       && out.walkerReachedS > 0 && out.walkerInsideFrames === 0 && out.nearFound && out.pickedUp && out.limit && out.emptyRefused && out.arenaCleared && out.arenaRefused && out.resetClean;
+    return out;
+  };
+
+  // Crowd tension: each cause moves it by its amount through the real game paths, it drains
+  // over time, the HUD shows the band, and a high value brings more attackers (sooner, more
+  // at once, an extra crew member) while a calm one changes nothing.
+  window.__testTension = async ({ seed = 7 } = {}) => {
+    const out = {}, d = (f) => { const t = game.missions.tension, v = t.value; f(); return +(t.value - v).toFixed(2); };
+    game.skipCinematics = true;
+    window.__level(1); window.__start({ audio: false, seed }); step(2);
+    const m = game.missions, T = m.tension, crowd = game.crowd, p = game.player, gear = p.gear, rig = game.cameraRig;
+    out.start = [T.value, T.band()];
+    const peaceful = () => crowd.npcs.find((n) => n.temperament === 'peaceful' && n.state === 'act' && !n.script && !n.surge && n.distToPlayer > 6);
+    const hitFrom = (n) => { const at = n.pos.clone().add({ x: 0, y: 0, z: 1.2 }); return crowd.onBatonHit(n, n.pos.clone().sub(at).setY(0).normalize(), at); };
+    out.peaceful = d(() => hitFrom(peaceful()));
+    out.bandAfterOne = T.band();     // one mistake does not tip a calm crowd...
+    hitFrom(peaceful());
+    out.bandAfterPeaceful = T.band(); // ...two in quick succession do
+    step(0.1);
+    out.hudBand = document.getElementById('tension-band').textContent;
+    const victim = peaceful(); hitFrom(victim); hitFrom(victim); // knocked down...
+    out.downed = d(() => hitFrom(victim));                      // ...then struck on the ground
+    out.arrest = d(() => m.onArrest(victim));
+    // an aggressor stopped right after a peaceful person was struck: no credit; later, credit
+    const foe = () => { const n = peaceful(); crowd.makeHostile(n, 'melee', 'player'); return n; };
+    const stop = (n) => { for (let k = 0; k < 4 && !n.neutralized; k++) { hitFrom(n); n.state = 'pursue'; } };
+    out.stopSoonAfter = d(() => stop(foe()));
+    const v0 = T.value; step(12); out.decay12s = +(T.value - v0).toFixed(2);
+    out.stopClean = d(() => stop(foe()));
+    // gas into a calm crowd, then a third grenade inside 20 s
+    const calm = crowd.npcs.filter((n) => n.temperament === 'peaceful' && n.state === 'act' && !n.script && Math.abs(n.pos.x) < 9);
+    const target = calm.find((n) => calm.filter((o) => Math.hypot(o.pos.x - n.pos.x, o.pos.z - n.pos.z) < 5).length >= 4) || calm[0];
+    for (const n of crowd.npcs) if (crowd.isThreat(n) && Math.hypot(n.pos.x - target.pos.x, n.pos.z - target.pos.z) < 12) { n.neutralized = true; n.temperament = 'peaceful'; }
+    // the causes logged for each throw (the value itself may sit at the 100 cap by now)
+    const throwAt = () => { p.pos.set(target.pos.x, 0, target.pos.z + 9); p.health = 100; p.staggerT = 0; rig.yaw = 0; rig.pitch = -1 / 12 - 0.12; gear.gas = 3; T.value = 40; const n0 = T.log.length; gear.tryGas(); step(2.2); return T.log.slice(n0).map((e) => e.reason).filter((r) => r.startsWith('gas')); };
+    gear.thrown = [];
+    out.gasCalm = throwAt();
+    out.gasSecond = throwAt();
+    out.gasThirdIn20s = throwAt();
+    // effects: calm changes nothing, volatile brings attackers sooner and more at once
+    T.lock(10); out.calm = { rate: T.rate(), cap: T.ambientCap(), extra: [...Array(200)].reduce((a) => a + T.extraMembers(), 0) };
+    T.lock(100); out.volatile = { rate: +T.rate().toFixed(2), cap: T.ambientCap(), extra: [...Array(200)].reduce((a) => a + T.extraMembers(), 0) };
+    m.ambient = null; m.ambients = []; m._ambientThreat(); m._ambientThreat(); m._ambientThreat();
+    out.ambientAtOnce = m.ambients.filter((n) => crowd.isThreat(n)).length;
+    // Level 2: a volatile crowd sends bigger groups, drawn from the same crew pool
+    window.__level(2); window.__start({ audio: false, seed }); step(1.5);
+    const m2 = game.missions, enc = m2.enc;
+    m2.tension.lock(100);
+    let base = 0, sent = 0, peacefulSent = 0;
+    for (const e of enc.list) if (e.members) { enc.start(e); base += e.members.length; sent += enc.state[e.id].members.length; peacefulSent += enc.state[e.id].members.filter((n) => n.kind !== 'looter').length; step(0.2); }
+    out.level2 = { base, sent, peacefulSent };
+    // a barrier that turns a bystander away from a nearby fight lowers tension
+    window.__level(2); window.__start({ audio: false, seed: seed + 1 }); step(1.5);
+    const T2 = game.missions.tension, c2 = game.crowd, g2 = game.player.gear;
+    let spot = null;
+    for (let z = -96; z < -60 && !spot; z += 1) for (let x = -6; x <= 6 && !spot; x += 1) if (!g2.placeProblem(x, z, 0)) spot = { x, z };
+    const b = g2.placeBarrier(spot.x, spot.z, 0);
+    const fighter = c2.npcs.find((n) => n.kind === 'looter' && n.state !== 'gone' && !n.script);
+    c2.makeHostile(fighter, 'melee', 'player'); fighter.pos.set(spot.x + 5, 0, spot.z - 6); fighter.script = { move: () => ({ speed: 0 }) };
+    const walkers = c2.npcs.filter((n) => (n.temperament === 'peaceful') && !n.script && n.state !== 'gone').slice(0, 7);
+    const vb = T2.value; let walked = 0;
+    for (const w of walkers) {
+      const dest = { x: spot.x, y: 0, z: spot.z - 3.5 };
+      w.pos.set(spot.x + 0.1, 0, spot.z + 3.5); w.vel.set(0, 0, 0); w.march = null; w.surge = null;
+      c2.setState(w, 'walk'); w.script = { move: () => ({ speed: 1.6, dest }) };
+      step(4, () => { game.player.pos.set(spot.x - 7, 0, spot.z); game.player.health = 100; fighter.lastAggro = c2.time; });
+      w.script = null; walked++;
+    }
+    fighter.script = null;
+    out.barrier = { walked, deflected: b.deflected || 0, change: +(T2.value - vb).toFixed(2), credit: b.credit || 0 };
+    game.skipCinematics = false;
+    const near = (v, want) => Math.abs(v - want) < 0.5;
+    out.pass = out.start[1] === 'calm' && near(out.peaceful, 15) && out.bandAfterOne === 'calm' && out.bandAfterPeaceful === 'tense' && out.hudBand === 'TENSE' && near(out.downed, 10) && near(out.arrest, -8)
+      && out.stopSoonAfter >= 0 && out.decay12s < -3 && near(out.stopClean, -3) && out.gasCalm.includes('gas on a calm crowd') && !out.gasSecond.includes('gas overuse') && out.gasThirdIn20s.includes('gas overuse')
+      && out.calm.rate === 1 && out.calm.cap === 1 && out.calm.extra === 0 && out.volatile.rate > 2 && out.volatile.cap === 2 && out.volatile.extra > 120 && out.ambientAtOnce === 2
+      && out.level2.sent > out.level2.base && out.level2.peacefulSent === 0 && out.barrier.credit === 10 && out.barrier.deflected >= 5;
     return out;
   };
 

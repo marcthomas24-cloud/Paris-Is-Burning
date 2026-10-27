@@ -32,6 +32,8 @@ Then open `http://localhost:5176/?dev&seed=3` (Level 1) or `http://localhost:517
 | `await __frameTimes('leader', 300)` | Per-frame simulation and render cost (p50 / p95 / max) |
 | `await __testGas()` | Officer's tear gas: lands near the aim point, crowd reacts, supply empties and refills per section, refused in a boss fight |
 | `await __testBarriers()` | Police barriers: preview and place (a placing click is no strike), refusals, a walker goes round without entering it, pick-up, carried limit, boss arenas, restart |
+| `await __testTension()` | Crowd tension: each cause through the real game paths, decay, HUD band, ambient rate and cap, Level 2 extra members (never peaceful), barrier credit and its cap |
+| `await __auditAppearance({ level, tension: 100 })` | The appearance audit with tension held at 100, so the extra attackers it causes are audited too |
 | `__hudLayout()` | Visible HUD panels that overlap or leave the screen at the current viewport |
 | `await __auditAppearance({ seeds: 30, level: 2 })` | Appearance of selected attackers versus their pool |
 

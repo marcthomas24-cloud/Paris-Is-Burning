@@ -128,7 +128,7 @@ export class Crowd {
       n.state = 'act'; n.st = 0; n.dur = 4 + this.rng() * 8;
       n.fear = 0; n.courage = 0.45 + this.rng() * 0.5;
       n.stimuli.length = 0;
-      n.hp = 2; n.flinchT = 0; n.gasT = 0; n.threat = false; n.lastAggro = -99; n.neutralized = false; n.arrested = false; n.surrendered = false;
+      n.hp = 2; n.flinchT = 0; n.gasT = 0; n.lastDeflect = null; n.threat = false; n.lastAggro = -99; n.neutralized = false; n.arrested = false; n.surrendered = false;
       n.speedMul = 0.85 + this.rng() * 0.3;
       n.thinkT = this.rng() * 0.3; n.animAcc = 0; n.cool = 0; n.targetRef = null;
       n.script = null; n.surge = null; n.hitCount = 0; n.fallDir = -1;
@@ -956,7 +956,10 @@ export class Crowd {
     // obstacle avoidance: probe ahead, try rotated directions if blocked
     if (speed > 0.1) {
       const look = Math.min(1.6, 0.6 + speed * 0.3);
-      if (this.world.blocked(n.pos.x + desired.x * look, n.pos.z + desired.z * look, 0.3)) {
+      const wall = this.world.blockedBy(n.pos.x + desired.x * look, n.pos.z + desired.z * look, 0.3);
+      if (wall) {
+        // a bystander turned away by one of the officer's barriers (crowd tension credit)
+        if (wall.tag === 'placed' && (n.temperament === 'peaceful' || n.temperament === 'civilian')) this.game.player.gear.onDeflect(wall, n);
         let found = false;
         for (const a of [0.7, -0.7, 1.4, -1.4, 2.2, -2.2]) {
           const c = Math.cos(a), sn = Math.sin(a);

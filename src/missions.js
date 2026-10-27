@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { giveItem, clearItem } from './characters.js';
 import { beamTexture } from './textures.js';
+import { Tension } from './tension.js';
 
 const OBJECTIVE_POS = new THREE.Vector3(-3, 0, -112);
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -52,6 +53,8 @@ export class Missions {
     this.completed = [false, false, false];
     this.ambientT = 35;
     this.ambient = null;
+    this.ambients = []; // ambient attackers still active (more than one at once while volatile)
+    (this.tension || (this.tension = new Tension(this.game))).reset();
     this.markerPos = null;
     this.warning = false;
     this.ended = false;
@@ -71,17 +74,20 @@ export class Missions {
   onThreatNeutralized(n) {
     this.stats.neutralized++;
     this.addScore(100, 'Threat neutralised');
+    this.tension.onThreatNeutralized();
     this.game.hud.alert('Aggressor down — press E nearby to arrest', 'good', 2.5, 'down');
   }
   onPeacefulStruck(n) {
     this.stats.peaceful++;
     this.addScore(-150, 'Excessive force');
+    this.tension.onPeacefulStruck();
     this.game.hud.alert('EXCESSIVE FORCE — that demonstrator was not a threat', 'bad', 3);
     this.game.audio.ui('bad');
   }
   // a suspect already on the ground (or cuffed) was struck again
   onDownedStruck(n, brutality) {
     this.stats.downed++;
+    this.tension.onDownedStruck(); // the crowd sees it whatever the scoring option
     if (brutality) return; // police-brutality option: no misconduct penalty
     this.addScore(-100, 'Excessive force');
     this.game.hud.alert('EXCESSIVE FORCE — the suspect was already down', 'bad', 2.5, 'downed');
@@ -101,6 +107,7 @@ export class Missions {
   onArrest(n) {
     this.stats.arrests++;
     this.addScore(150, 'Arrest');
+    this.tension.onArrest();
     this.game.hud.alert('Suspect arrested', 'good', 2);
     this.game.audio.ui('good');
   }
@@ -317,12 +324,15 @@ export class Missions {
 
   _ambientThreat() {
     const g = this.game, crowd = g.crowd;
-    if (this.ambient && crowd.isThreat(this.ambient)) return;
+    // one at a time while calm or tense, two at once while the crowd is volatile
+    this.ambients = this.ambients.filter((n) => crowd.isThreat(n));
+    if (this.ambient && crowd.isThreat(this.ambient) && !this.ambients.includes(this.ambient)) this.ambients.push(this.ambient);
+    if (this.ambients.length >= this.tension.ambientCap()) return;
     const cands = crowd.npcs.filter((n) => n.temperament === 'peaceful' && !n.script && !n.surge && !n.arrested && n.state === 'act' && n.distToPlayer > 12 && n.distToPlayer < 28);
     if (!cands.length) return;
     const n = pick(cands);
     crowd.makeHostile(n, Math.random() < 0.6 ? 'thrower' : 'melee', 'player');
-    this.ambient = n;
+    this.ambient = n; this.ambients.push(n);
     g.hud.alert('An individual has turned violent nearby', 'warn', 2.5);
   }
 
@@ -407,9 +417,12 @@ export class Missions {
         break;
       }
     }
-    if (this.stage !== 'intro' && this.stage !== 'p1' && this.stage !== 'final') {
+    // ambient attackers: from phase 2 on, or already in phase 1 once the crowd is tense;
+    // they come sooner the higher the tension
+    this.tension.update(dt);
+    if (this.stage !== 'intro' && this.stage !== 'final' && (this.stage !== 'p1' || this.tension.band() !== 'calm')) {
       this.ambientT -= dt;
-      if (this.ambientT <= 0) { this.ambientT = 30 + Math.random() * 25; this._ambientThreat(); }
+      if (this.ambientT <= 0) { this.ambientT = (30 + Math.random() * 25) / this.tension.rate(); this._ambientThreat(); }
     }
     const a = crowd.arrestable(g.player.pos);
     if (a && !(this.extractReady && g.player.pos.distanceTo(OBJECTIVE_POS) < 4.5)) {

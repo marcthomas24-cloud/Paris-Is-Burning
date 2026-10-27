@@ -253,7 +253,9 @@ export function installDev(game) {
     return { zCrit: +zCrit.toFixed(2), rows };
   };
 
-  window.__auditAppearance = async ({ seeds = 20, selfTestMarker = 'keffiyeh', level = 1 } = {}) => {
+  // tension: hold crowd tension at this value (e.g. 100) so the extra attackers it causes are
+  // selected too, through the same code
+  window.__auditAppearance = async ({ seeds = 20, selfTestMarker = 'keffiyeh', level = 1, tension = null } = {}) => {
     const g = game, crowd = g.crowd, prevLevel = g.level.id;
     g.setLevel(level);
     const m = g.missions;
@@ -301,6 +303,7 @@ export function installDev(game) {
           for (const k of KEYS.slice(0, 12)) if (MARKERS[k](n)) roleCounts[role][k] = (roleCounts[role][k] || 0) + 1;
         }
         g.restart();
+        m.tension.lock(tension);
         if (level === 1) {
           m.stage = 'audit';
           step(1.0);
@@ -309,7 +312,7 @@ export function installDev(game) {
           m._startP3(); step(0.3);
           g.player.pos.set(0, 0, -10); m.stage = 'p3'; step(0.2); // real ambush trigger
           m.stage = 'audit';
-          for (let k = 0; k < 3; k++) { m.ambient = null; m._ambientThreat(); step(0.3); }
+          for (let k = 0; k < 3; k++) { m.ambient = null; m.ambients = []; m._ambientThreat(); if (tension !== null) m._ambientThreat(); step(0.3); }
           m._startFinal(); m.stage = 'audit';
         } else {
           // every street encounter of Level 2, section by section, through the real runner
@@ -324,6 +327,7 @@ export function installDev(game) {
     } finally {
       crowd.makeHostile = origMake; m._setupBomber = origBomber;
       if (origPick) m.enc._pick = origPick;
+      m.tension.lock(null);
       crowd.npcs.forEach((n, i) => { n.outfit = saved[i]; });
       Math.random = savedSeedRandom;
       g.setLevel(prevLevel);
@@ -356,7 +360,7 @@ export function installDev(game) {
     const flagged = skewed.filter((k) => !PROPS.includes(k));
     const propSkew = skewed.filter((k) => PROPS.includes(k));
     const result = {
-      level, seeds, selections: events.length, familywiseAlpha: 0.05, zCritical: real.zCrit,
+      level, seeds, tension, selections: events.length, familywiseAlpha: 0.05, zCritical: real.zCrit,
       verdict: flagged.length ? `appearance skew detected in: ${flagged.join(', ')}` : 'no material appearance skew detected (screening check; see minDetectablePts)',
       carriedProps: propSkew.length ? `role-linked: ${propSkew.map((k) => `${k} ${real.rows[k].selectedPct}% selected vs ${real.rows[k].poolPct}% in pool`).join('; ')}` : 'no skew',
       markers: real.rows,

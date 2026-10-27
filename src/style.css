@@ -79,6 +79,13 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0c0e; col
 #barriers { position: absolute; right: 52px; top: -4px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--text); }
 #barriers.empty { color: var(--dim); opacity: 0.6; }
 #barriers.placing { color: var(--green); }
+#tension-bar { position: relative; }
+#tension-bar > div { transition: width 0.3s, background 0.3s; }
+#tension-bar .mark { position: absolute; top: -1px; bottom: -1px; width: 1px; background: rgba(255,255,255,0.35); }
+#tension-band { position: absolute; right: 0; top: -4px; font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: var(--dim); }
+#tension-band.tense { color: var(--amber); }
+#tension-band.volatile { color: var(--red); animation: tension-pulse 0.9s ease-in-out infinite alternate; }
+@keyframes tension-pulse { from { opacity: 1; } to { opacity: 0.45; } }
 #gasnades.empty { color: var(--dim); opacity: 0.6; }
 #medkits.healing { color: var(--text); text-shadow: 0 0 8px var(--green); }
 .bar-label { font-size: 10px; letter-spacing: 0.2em; color: var(--dim); margin-bottom: 3px; }
@@ -266,7 +273,7 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
   .touch #rotate-hint { display: block; margin-top: 10px; color: var(--amber); }
   .touch #compass { display: none; }
   .touch #objective { width: calc(100% - 136px); }
-  .touch #hud-buttons { top: calc(env(safe-area-inset-top, 0px) + 200px); right: calc(env(safe-area-inset-right, 0px) + 8px); flex-direction: column; }
+  .touch #hud-buttons { top: calc(env(safe-area-inset-top, 0px) + 236px); /* below the minimap and three bar rows */ right: calc(env(safe-area-inset-right, 0px) + 8px); flex-direction: column; }
   .touch #alerts { top: 120px; max-width: 70vw; }
   .ob-grid { grid-template-columns: repeat(2, 1fr); }
 }

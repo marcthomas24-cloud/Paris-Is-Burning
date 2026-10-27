@@ -82,6 +82,20 @@ A complete run takes about 2–3 minutes. A fast, efficient run is around 1:45; 
 
 **Variety between runs:** who turns violent, the bomber locations, surge composition, the ambush side, the final-wave size, and the timing of ambient events (molotovs, mortars, projectile volleys, flare-ups, car fires, tear gas) all change.
 
+**Crowd tension** (`src/tension.js`): a 0–100 meter under the stamina bar, marked at 35 (*tense*) and 70 (*volatile*). It starts at 20 and drains slowly (0.3 a second) to a resting level of 10, so one mistake does not tip a calm crowd but two in quick succession do.
+
+| Event | Tension |
+|---|---|
+| A peaceful person struck | +15 |
+| Someone already on the ground struck (also with the police-brutality option) | +10 |
+| A grenade landing among three or more peaceful people with nobody violent within 9 m | +8 |
+| A third grenade within 20 s | +5 |
+| An arrest | −8 |
+| An aggressor stopped with no peaceful person struck in the previous 10 s | −3 |
+| A barrier turning a bystander away while an aggressor is within 12 m of it (once per person; at most −10 per barrier) | −2 |
+
+While the crowd is *tense* or *volatile*, ambient attackers come sooner (up to 2.2 times as often at 100). In Level 1 they also appear during phase 1, and two can be active at once while *volatile*. In Level 2 a street encounter brings one extra crew member (35% of the time when tense, 75% when volatile). Tension changes **how many** people turn violent and **how soon**, never **who**: the extra attackers come from the same random pools through the same selection code (see the fairness rule). Level 2 still never recruits peaceful people. The results screen shows the peak tension.
+
 **Scoring:**
 - Threat neutralised: +100
 - Arrest: +150
@@ -132,6 +146,8 @@ The bosses' looks are grey-box placeholders; their complexions come from the sha
 ## Fairness rule
 
 Who becomes aggressive is chosen at random from the crowd, independently of clothing, flags or appearance. Everyone on the street (demonstrators, looting crews and passers-by) is dressed from one shared clothing pool, so nothing a character wears says anything about their role, and becoming hostile never changes how someone looks. Threats are identified **only by behaviour**. While someone is acting violently (pursuing, punching, shoving, throwing, preparing a device), they show a red ground ring and a red minimap blip. Peaceful demonstrators keep chanting, filming and waving flags unless something credible happens near them, such as a strike, an explosion or a projectile.
+
+Crowd tension follows the same rule: it changes how many people turn violent and how soon, but the extra attackers come from the same random pools through the same selection code. `__auditAppearance({ level, tension: 100 })` audits those selections too.
 
 ## Characters, crowd and effects
 

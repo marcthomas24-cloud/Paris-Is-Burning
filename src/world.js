@@ -1026,18 +1026,21 @@ export class World {
 
   // y: the height being tested (a projectile in flight); placed barriers lower than it
   // do not block it
-  blocked(x, z, r, y) {
+  blocked(x, z, r, y) { return !!this.blockedBy(x, z, r, y); }
+
+  // the collider in the way (true for the edge of the map), or null
+  blockedBy(x, z, r, y) {
     for (const c of this.near(x, z, r + 1)) {
       if (c.obb) {
         if (y !== undefined && y > c.h) continue;
         const o = c.obb, dx = x - o.cx, dz = z - o.cz;
-        if (Math.abs(o.c * dx - o.s * dz) < o.hw + r && Math.abs(o.s * dx + o.c * dz) < o.hd + r) return true;
+        if (Math.abs(o.c * dx - o.s * dz) < o.hw + r && Math.abs(o.s * dx + o.c * dz) < o.hd + r) return c;
         continue;
       }
-      if (x + r > c.minX && x - r < c.maxX && z + r > c.minZ && z - r < c.maxZ) return true;
+      if (x + r > c.minX && x - r < c.maxX && z + r > c.minZ && z - r < c.maxZ) return c;
     }
     const B = LAYOUT.bounds;
-    return x < B.minX || x > B.maxX || z < B.minZ || z > B.maxZ;
+    return x < B.minX || x > B.maxX || z < B.minZ || z > B.maxZ ? true : null;
   }
 
   // 3D ray vs collider boxes (slab test). Returns distance or maxDist.

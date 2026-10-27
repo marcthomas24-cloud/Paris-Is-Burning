@@ -87,6 +87,18 @@ export class HUD {
     mk.classList.toggle('healing', p.healT > 0);
     const gn = $('gasnades'), gas = p.gear.gas;
     if (gn.dataset.n !== String(gas)) { gn.dataset.n = gas; gn.textContent = 'GAS ' + gas; gn.classList.toggle('empty', !gas); }
+    // crowd tension: bar with the tense / volatile marks, and the band as a word
+    const ten = m.tension;
+    if (ten) {
+      const band = ten.band(), tw = Math.round(ten.value) + '%';
+      const tb = $('tension-bar').firstElementChild;
+      if (tb.style.width !== tw) tb.style.width = tw;
+      if (this._band !== band) {
+        this._band = band;
+        tb.style.background = band === 'volatile' ? 'var(--red)' : band === 'tense' ? 'var(--amber)' : 'var(--dim)';
+        const lb = $('tension-band'); lb.textContent = band.toUpperCase(); lb.className = band;
+      }
+    }
     const br = $('barriers'), bh = p.gear.barrierHand;
     if (br.dataset.n !== String(bh)) { br.dataset.n = bh; br.textContent = 'BAR ' + bh; br.classList.toggle('empty', !bh); }
     br.classList.toggle('placing', p.gear.placing);
@@ -266,6 +278,7 @@ export class HUD {
       <div class="row"><span>Petrol bombs prevented</span><span>${s.bombsStopped} / ${s.bombsStopped + s.bombsThrown}</span></div>
       <div class="row"><span>Peaceful demonstrators struck</span><span style="color:${s.peaceful ? 'var(--red)' : 'inherit'}">${s.peaceful}</span></div>
       <div class="row"><span>Downed suspects struck</span><span style="color:${s.downed ? 'var(--red)' : 'inherit'}">${s.downed}</span></div>
+      <div class="row"><span>Crowd tension · peak</span><span style="color:${m.tension.peak >= 70 ? 'var(--red)' : 'inherit'}">${Math.round(m.tension.peak)} / 100</span></div>
       <div class="row"><span>Phases completed</span><span>${m.completed.filter(Boolean).length} / 3</span></div>
       <div class="row"><span>Mission time</span><span>${Math.floor(m.t / 60)}:${String(Math.floor(m.t % 60)).padStart(2, '0')}</span></div>
       <div class="row total"><span>SCORE</span><span>${m.score.toLocaleString('fr-FR')}</span></div>
