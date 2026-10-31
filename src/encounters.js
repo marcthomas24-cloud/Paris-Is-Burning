@@ -8,6 +8,13 @@
 // of travel. An encounter resolves when every member is neutralised, arrested or
 // no longer hostile.
 //
+// Level 3 adds trigger keys, and a trigger with several keys needs all of them:
+//   vanZ: the transfer van has passed that z · x: the officer has passed that x (+x)
+//   flag: the mission has raised that flag (missions.flags)
+// and per-encounter keys: route: 'A' | 'B' (skipped, as resolved, once the other route is
+// taken), atB: member positions when the route is B, and member styles 'breacher' (goes for
+// the van's doors, convoy.js), 'igniter' and 'fireworks' (hazard actors, hazards.js).
+//
 // Who takes part is decided by role and availability only: members are drawn at
 // random from the free members of the looting crews (the Leader's people). Peaceful
 // people are never recruited; if too few crew members are free, the group is smaller
@@ -16,9 +23,10 @@
 import * as THREE from 'three';
 
 export class EncounterRunner {
-  constructor(game, dir = 1) {
+  constructor(game, dir = 1, targetMode = 'player') {
     this.game = game;
     this.dir = dir; // +1: the officer advances towards +z
+    this.targetMode = targetMode; // what the members go for (Level 3: 'escort', officer or van)
     this.reset();
   }
 
@@ -66,8 +74,9 @@ export class EncounterRunner {
     // a tense crowd: one more joins in, from the same pool (not counted as a shortfall if none is free)
     const extra = g.missions.tension ? g.missions.tension.extraMembers() : 0;
     if (extra) people.push(...this._pick(extra, false));
+    const list = e.atB && g.missions.route === 'B' ? e.members.map((m, i) => ({ ...m, at: e.atB[i] || m.at })) : e.members;
     people.forEach((n, i) => {
-      const base = e.members[Math.min(i, e.members.length - 1)];
+      const base = list[Math.min(i, list.length - 1)];
       const m = i < e.members.length ? base : { style: 'melee', at: [base.at[0] + 1.5, base.at[1] + 1.5] };
       // enter from just outside the officer's view where possible (side streets, behind barricades)
       let x = m.at[0], z = m.at[1];
@@ -75,8 +84,10 @@ export class EncounterRunner {
       n.pos.set(x, 0, z); n.vel.set(0, 0, 0); n.knock.set(0, 0, 0);
       n.surge = null; n.march = null; n.stimuli.length = 0;
       n.heading = Math.atan2(g.player.pos.x - x, g.player.pos.z - z);
-      crowd.makeHostile(n, m.style, 'player');
+      const special = m.style === 'breacher' || m.style === 'igniter' || m.style === 'fireworks';
+      crowd.makeHostile(n, special ? 'melee' : m.style, m.style === 'breacher' ? 'vehicle' : this.targetMode);
       n.cool = 0.6 + Math.random() * 1.2 + i * 0.4; // staggered: the group does not all swing at once
+      if (special && g.missions.attachRole) g.missions.attachRole(n, m.style, e);
     });
     st.members = people;
     if (e.radio) g.missions.radio(e.radio);
@@ -99,8 +110,17 @@ export class EncounterRunner {
       const st = this.state[e.id];
       if (st.status === 'waiting') {
         if (this.game.cinematic) continue; // nothing starts while a cinematic plays
+        const m = this.game.missions;
+        if (e.route && m.route && m.route !== e.route) { st.status = 'resolved'; st.skipped = true; continue; } // the other route's group
+        if (e.route && !m.route) continue;
         const tr = e.trigger || { now: true };
-        const go = tr.now || (tr.z !== undefined && (p.z - tr.z) * this.dir >= 0) || (tr.after && this.state[tr.after] && this.state[tr.after].status === 'resolved');
+        const conds = [];
+        if (tr.z !== undefined) conds.push((p.z - tr.z) * this.dir >= 0);
+        if (tr.after) conds.push(!!this.state[tr.after] && this.state[tr.after].status === 'resolved');
+        if (tr.vanZ !== undefined) conds.push(!!m.van && m.van.pos.z >= tr.vanZ);
+        if (tr.x !== undefined) conds.push(p.x >= tr.x);
+        if (tr.flag) conds.push(!!(m.flags && m.flags[tr.flag]));
+        const go = tr.now || (conds.length > 0 && conds.every(Boolean));
         if (go) this.start(e);
       } else if (st.status === 'active') {
         st.t += dt;

@@ -56,10 +56,12 @@ export class CameraRig {
     const wantDist = (player.sprinting ? 3.9 : player.blocking ? 2.8 : this.dist) + this.extraH * 0.8;
     const back = fwd.clone().negate();
     const hit = this.world.raycast(pivot, back, wantDist + 0.3);
-    const allowed = Math.max(0.6, hit - 0.3);
+    const soft = this.world.rayTag === 'vehicle'; // a moving van crossing behind: ease in, no snap
+    const allowed = Math.max(soft ? 1.2 : 0.6, hit - 0.3);
     const target = Math.min(wantDist, allowed);
     // pull in instantly, ease back out
-    if (target < this.curDist) this.curDist = target;
+    if (target < this.curDist && soft) this.curDist += (target - this.curDist) * Math.min(1, dt * 7);
+    else if (target < this.curDist) this.curDist = target;
     else this.curDist += (target - this.curDist) * Math.min(1, dt * 3);
 
     const pos = pivot.clone().addScaledVector(back, this.curDist);

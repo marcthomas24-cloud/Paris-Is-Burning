@@ -983,6 +983,61 @@ export class Audio {
     });
   }
 
+  // Level 3 hazard tells and the transfer van (synthesised; no new recordings)
+  // a fuel tank cooking off: band-passed noise rising over the telegraph
+  hiss(pos, dur = 6) {
+    if (!this.enabled) return;
+    this._shot('misc', pos, 0.55, { ref: 6, max: 60 }, (out, t, p, v) => {
+      const f = this._filter(v, out, 'bandpass', 800, 3);
+      f.frequency.setValueAtTime(800, t); f.frequency.exponentialRampToValueAtTime(2400, t + dur);
+      const g = this.ctx.createGain(); g.connect(f); v.nodes.push(g);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.4); g.gain.linearRampToValueAtTime(0.9, t + dur); g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.1);
+      this._noise(v, g, this.white, t, dur + 0.1);
+      return dur + 0.1;
+    });
+  }
+
+  // a scaffold about to give way: slow resonant groans and a clank
+  creak(pos) {
+    if (!this.enabled) return;
+    this._shot('crash', pos, 0.7, { ref: 6, max: 70 }, (out, t, p, v) => {
+      const f = this._filter(v, out, 'bandpass', 260, 9);
+      f.frequency.setValueAtTime(260, t); f.frequency.linearRampToValueAtTime(420, t + 0.5); f.frequency.linearRampToValueAtTime(190, t + 1.1);
+      const g = this.ctx.createGain(); g.connect(f); v.nodes.push(g);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.9, t + 0.15); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      this._noise(v, g, this.white, t, 1.2);
+      const m = this._sprite('metal');
+      if (m) this._buf(v, out, m.buf, t + 0.6, { offset: m.off, dur: 0.5, rate: 0.7, gain: 0.5 });
+      return 1.2;
+    });
+  }
+
+  // the transfer van's horn: two square waves (people in its way)
+  horn(pos) {
+    if (!this.enabled) return;
+    this._shot('alarm', pos, 0.5, { ref: 8, max: 80 }, (out, t, p, v) => {
+      const f = this._filter(v, out, 'lowpass', 2200);
+      for (const hz of [392, 494]) {
+        const o = this.ctx.createOscillator(); o.type = 'square'; o.frequency.value = hz;
+        const g = this.ctx.createGain(); this._env(g.gain, t, 0.01, 0.18, 0.34);
+        o.connect(g).connect(f); o.start(t); o.stop(t + 0.4);
+        v.srcs.push(o); v.nodes.push(o, g);
+      }
+      return 0.4;
+    });
+  }
+
+  // a short burst of static before a radio line
+  squelch() {
+    if (!this.enabled) return;
+    const c = this.ctx, t = c.currentTime;
+    const s = c.createBufferSource(); s.buffer = this.white;
+    const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1800;
+    const g = c.createGain(); this._env(g.gain, t, 0.004, 0.08, 0.06);
+    s.connect(f).connect(g).connect(this.uiBus); s.start(t, Math.random()); s.stop(t + 0.08);
+    s.onended = () => { s.disconnect(); f.disconnect(); g.disconnect(); };
+  }
+
   // ------------------------------------------------------------ UI
   ui(kind = 'click') {
     if (!this.enabled) return;

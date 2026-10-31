@@ -203,10 +203,11 @@ class Game {
     this.brawls.setEnabled(def.brawls !== false);
     const moved = this.crowd.layoutDef !== def.crowdLayout;
     this.crowd.setLayout(def.crowdLayout);
-    const wasOn = this.crowd.reserveOn;
+    const wasOn = this.crowd.reserveOn, extraWas = !!this.crowd.extraOn;
     this.crowd.setReserve(!!def.reserveCrews);
+    this.crowd.setDistrictCrews(!!def.districtCrews);
     // bring the reserve crews in or out, or move everyone to the level's places
-    if (this.crowd.reserveOn !== !!wasOn || moved) this.crowd.reset();
+    if (this.crowd.reserveOn !== !!wasOn || !!this.crowd.extraOn !== extraWas || moved) this.crowd.reset();
     this.crowd.setPoliceOff(def.policeOff || []);
     this.events.hazardDir = def.hazardDir || -1;
     this.events.cfg = def.events || BOULEVARD_EVENTS;
@@ -490,7 +491,7 @@ class Game {
       if (threats) this._lastThreatT = this.time;
       const fighting = this.time - (this._lastThreatT ?? -99) < 4; // hold through short gaps
       a.music.setState(m.stage === 'victory' || (m.ended && this.pendingEnd && this.pendingEnd.win) ? 'victory'
-        : b && b.active ? (b.phaseIdx >= 2 ? 'boss3' : 'boss') : fighting ? 'combat' : 'calm');
+        : b && b.active ? (b.phaseIdx >= 2 ? 'boss3' : 'boss') : fighting || (m.van && m.van.underAttack()) ? 'combat' : 'calm');
     } else a.music.setState('off');
     a.update(dt, { intensity: Math.min(1, panic / 8 + threats / 5 + (this.missions.phase || 0) * 0.2), fires });
   }

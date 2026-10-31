@@ -570,7 +570,7 @@ class Builder {
     this.collider(-60, 233, -56, 247, 3, 'cordon'); this.collider(56, 233, 60, 247, 3, 'cordon');
     for (const x of [-56, 56]) for (let z = 234.5; z < 246; z += 2.1) this.w._vauban(x - Math.sign(x) * 1.5, z, Math.PI / 2, { collide: false });
     // lamps and the city sign pointing to the square
-    for (const x of [-40, -24, 24, 40]) this.streetLamp(x, 246.2, 0);
+    for (const x of [-40, -24, 24, 47]) this.streetLamp(x, 246.2, 0); // (not 40: the Passage's mouth)
     this.cyl('darkMetal', 0.06, 0.06, 3.2, -10.6, 1.6, 246.2, 6);
     this.plate(7, 2.2, 0.82, -10.6, 2.9, 246.25, 0); this.plate(7, 2.2, 0.82, -10.6, 2.9, 246.15, Math.PI);
     this.streetSign(-15.02, 234.3, 'RUE DES ATELIERS', Math.PI / 2); this.streetSign(15.02, 234.3, 'RUE DES ATELIERS', -Math.PI / 2);
@@ -590,15 +590,28 @@ class Builder {
     }
     // the roadblock: a burnt bus across the road, wrecks, a burning barricade; a gap on the east pavement
     this.bus(-2.2, 292, 0.12);
-    this.car(-9.5, 286, 0.9, 'burnt'); this.car(6.6, 297, -0.5, 'burnt');
+    this.car(-9.5, 286, 0.9, 'burnt'); this.car(-9.6, 303, 0.3, 'burnt');
     // fires kept few: four flickering lights serve the nearest fires, and a cluster turns everything orange
-    this.w._barricade(4.5, 288.5, 7, false);
+    // the barricade beside the bus: two halves the officer drags clear for the van (Level 3, Act 2)
+    this.D.roadblock = [this.removable(() => this.w._barricade(2.75, 288.5, 3.5, false)), this.removable(() => this.w._barricade(6.25, 288.5, 3.5, false))];
     this.w._binPyre(-6.5, 298, 0.8);
     this.fire(-2, 1.4, 292, 1.3, 2.6);
     this.w._vauban(-10.9, 289.6, 0); this.w._vauban(9.6, 289.4, 0.15);
     this.collider(-13, 287.6, -11.6, 296, 2, 'barricade'); // the west pavement is shut too
     this.plate(10, 2.0, 0.5, -2, 1.4, 286.6, Math.PI); this.plate(10, 2.0, 0.5, 4.5, 1.2, 287.3, Math.PI);
     this.floodMast(11.8, 278, 2, 286);
+  }
+
+  // geometry the mission can take away: built into its own group, its colliders returned
+  removable(build) {
+    const w = this.w, keep = w.buckets, n0 = w.colliders.length;
+    w.buckets = new Map();
+    build();
+    const group = new THREE.Group();
+    w._flush(group);
+    w.buckets = keep;
+    this.D.group.add(group);
+    return { group, cols: w.colliders.slice(n0) };
   }
 
   // a burnt-out bus: the blocked street's landmark (12 m, across the road)

@@ -133,10 +133,10 @@ export class Crowd {
     this.time = 0;
     const L = this.layout;
     const gps = L.gatherPoints || this.world.gatherPoints;
-    for (const c of this.crews) { if (c.reserve && !this.reserveOn) continue; c.z0 = c.home; this._placeCrew(c); c.burns = 0; c.burnT = 8 + this.rng() * 25; }
+    for (const c of this.crews) { if (this._offCrew(c)) continue; c.z0 = c.home; this._placeCrew(c); c.burns = 0; c.burnT = 8 + this.rng() * 25; }
     this.npcs.forEach((n, i) => {
       if (n.special) { this.retire(n); return; } // scripted characters are placed by their level
-      if (n.crew && n.crew.reserve && !this.reserveOn) { this.retire(n); n.temperament = 'reserve'; return; } // Level 2 crews
+      if (n.crew && this._offCrew(n.crew)) { this.retire(n); n.temperament = 'reserve'; return; } // Level 2 / Level 3 crews
       // first third clusters near the police line so the player starts with a crowd in view
       const nearLine = i < Math.round(this.count * 0.23);
       const gp = nearLine ? gps[i % 3] : gps[3 + (i % (gps.length - 3))];
@@ -276,7 +276,7 @@ export class Crowd {
 
   _updateCrews(dt) {
     for (const c of this.crews) {
-      if (c.reserve && !this.reserveOn) continue;
+      if (this._offCrew(c)) continue;
       c.burnT -= dt;
       if (c.burnT > 0) continue;
       c.burnT = 28 + this.rng() * 30;
@@ -833,13 +833,20 @@ export class Crowd {
     }
     if (n.surge) {
       if (n.state !== 'surge' && !DISABLED.has(n.state) && n.state !== 'flee') this.setState(n, 'surge');
-      if (n.pos.z > n.surge.endZ) { n.surge = null; n.anchor.copy(n.pos); this.setState(n, 'act', 0); n.dur = 2; }
+      if (n.surge.endX !== undefined ? n.pos.x > n.surge.endX : n.pos.z > n.surge.endZ) { n.surge = null; n.anchor.copy(n.pos); this.setState(n, 'act', 0); n.dur = 2; }
     }
   }
 
   _pickTarget(n, player) {
     // Aggressors go for the officer if he is close; otherwise the police line (incident 1)
     const pd = n.distToPlayer;
+    // Level 3: 'vehicle' goes for the transfer van; 'escort' goes for the officer, or for the
+    // van when the officer has left it (more than 12 m from it and not close to them)
+    if (n.targetMode === 'escort' || n.targetMode === 'vehicle') {
+      const v = this.game.missions.van;
+      if (v && v.targetable() && (n.targetMode === 'vehicle' || (pd > 10 && v.distTo(player.pos) > 12))) return v.targetFor(n);
+      return { pos: player.pos, isPlayer: true };
+    }
     if (n.targetMode === 'officers' && pd > 3.5) {
       let best = null, bd = Infinity;
       for (const p of this.police) if (!p.off && (p.role === 'guard' || p.role === 'injured')) { const d = p.pos.distanceToSquared(n.pos); if (d < bd) { bd = d; best = p; } }
@@ -909,7 +916,7 @@ export class Crowd {
             tg.cop.flinch = 0.4; g.onPoliceLineHit(n.attackKind === 'shove' ? 1 : 1.3, tg.cop); g.audio.impact(tg.cop.pos, false, true);
             // the line shoves back: attackers get pushed away and must re-engage
             if (this.rng() < 0.45) { n.knock.copy(dir).multiplyScalar(-3.5); this.setState(n, 'stagger', 0.5); n.staggerBack = true; }
-          }
+          } else if (tg.vehicle) tg.vehicle.hit(n.attackKind === 'bash' ? 'bash' : 'melee', n.pos);
         } else g.audio.swing(n.pos);
       }
       n.lastAggro = this.time;
@@ -935,6 +942,7 @@ export class Crowd {
         g.effects.dust(pos, 5);
         this.disturb(pos, 6, 0.4, 'projectile');
         if (!hitPlayer && tg.cop && pos.distanceTo(tg.cop.pos) < 1.8) { tg.cop.flinch = 0.4; g.onPoliceLineHit(1, tg.cop); }
+        if (!hitPlayer && g.missions.van) g.missions.van.projectileImpact(pos, from); // only where it actually struck the van
       });
       proj.check = (pos) => g.player.hitTest(pos);
       g.audio.swing(n.pos);
@@ -975,7 +983,8 @@ export class Crowd {
       speed = 1.6;
     } else if (s === 'surge' && n.surge) {
       desired.set(n.surge.dir.x, 0, n.surge.dir.z);
-      desired.x += (n.surge.laneX - n.pos.x) * 0.15;
+      if (n.surge.laneZ !== undefined) desired.z += (n.surge.laneZ - n.pos.z) * 0.15; // a surge across the square (Level 3)
+      else desired.x += (n.surge.laneX - n.pos.x) * 0.15;
       desired.normalize();
       speed = n.surge.speed * n.speedMul;
     } else if (s === 'act' && n.yield > 0) {
@@ -1311,6 +1320,21 @@ export class Crowd {
     }
   }
   setReserve(on) { this.reserveOn = !!on && !!this.reserveCrews; }
+
+  // Level 3's own crews (three more, at its extra shop fronts), added once and switched like
+  // the reserve. Off, they are retired before any random number is drawn for them.
+  addDistrictCrews(count = 3) {
+    if (this.districtCrews) return;
+    const rng = mulberry(9101);
+    this.districtCrews = [];
+    for (let i = 0; i < count; i++) {
+      const c = { id: this.crews.length, side: 1, z0: 0, home: 0, door: V(), rally: V(), members: [], extra: true };
+      this.crews.push(c); this.districtCrews.push(c);
+      for (let k = 0; k < CREW_SIZE; k++) { const n = this._spawn(randomOutfit(rng)); n.kind = 'looter'; n.crew = c; c.members.push(n); n.rig.pose = newPose(); this.retire(n); n.temperament = 'reserve'; }
+    }
+  }
+  setDistrictCrews(on) { this.extraOn = !!on && !!this.districtCrews; }
+  _offCrew(c) { return (c.reserve && !this.reserveOn) || (c.extra && !this.extraOn); }
 
   // Boss arena: nobody but the boss may stand inside; people already there are moved out.
   setArena(x, z, r, boss) {

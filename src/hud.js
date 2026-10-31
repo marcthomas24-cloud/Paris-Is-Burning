@@ -117,7 +117,7 @@ export class HUD {
     // phase count comes from the level (3 in Level 1, 5 in Level 2)
     const np = info.completed.length;
     $('mission-progress').textContent = `${Math.min(np, info.index + 1)} / ${np}`;
-    const pn = `PHASE ${info.index + 1} · ${info.phaseName}`;
+    const pn = `${info.label || 'PHASE'} ${info.index + 1} · ${info.phaseName}`;
     if (this._pn !== pn) { this._pn = pn; $('phase-name').textContent = pn; }
     const pipBox = $('progress-pips');
     if (pipBox.children.length !== np) pipBox.innerHTML = '<span></span>'.repeat(np);
@@ -127,7 +127,9 @@ export class HUD {
     bar.style.visibility = info.bar === null ? 'hidden' : 'visible';
     if (info.bar !== null) { bar.firstElementChild.style.width = info.bar * 100 + '%'; bar.firstElementChild.style.background = info.bar < 0.3 ? 'var(--red)' : 'var(--accent)'; }
 
-    $('threat-warning').classList.toggle('hidden', !m.warning);
+    const tw = $('threat-warning'), wt = m.warningText || '⚠ PETROL BOMB'; // Level 3 names its threat (doors, a car about to blow)
+    if (tw.textContent !== wt) tw.textContent = wt;
+    tw.classList.toggle('hidden', !m.warning);
 
     // boss bar: name, health with phase marks, and when the guard is down
     const bi = m.bossInfo ? m.bossInfo() : null;
@@ -244,6 +246,7 @@ export class HUD {
       const o = b.col.obb, a = tr(o.cx - o.c * o.hw, o.cz + o.s * o.hw), e = tr(o.cx + o.c * o.hw, o.cz - o.s * o.hw);
       ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...e); ctx.stroke();
     }
+    if (g.missions.mapExtras) g.missions.mapExtras(ctx, tr, scale); // Level 3: the transfer van, route chevrons
     ctx.fillStyle = '#3d7bff';
     for (const c of crowd.police) { const [x, y] = tr(c.pos.x, c.pos.z); ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill(); }
     // objective

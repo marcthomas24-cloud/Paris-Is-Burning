@@ -52,13 +52,13 @@ export const LEVELS = {
     music: true,                     // synthesised score (music.js); Level 1 keeps its original soundscape
     start: { x: -1.5, z: -100, heading: 0 },
   },
-  // Environment build only (no encounters yet): reachable through the developer shortcuts
-  // (?dev&level=3), never unlocked by finishing Level 2 until its mission is in.
+  // The escort mission (Level3). The Fixer's boss fight comes in the next phase, so it is still
+  // reached only through the developer shortcuts (?dev&level=3), never unlocked by Level 2.
   3: {
     id: 3, name: 'THE BREAKOUT', tag: 'Place du Château-d\'Eau · 02h20', devOnly: true,
     Missions: Level3, phases: L3_PHASES, lighting: 'night3', hazardDir: 1,
-    policeOff: ['injured', 'guard'], reserveCrews: true, music: true,
-    start: DISTRICT.start, bounds: DISTRICT.bounds,
+    policeOff: ['injured', 'guard'], reserveCrews: true, districtCrews: true, music: true,
+    start: { x: 4.2, z: 170.5, heading: 0 }, bounds: DISTRICT.bounds, // beside the transfer van, south of the CRS vans parked across the lane
     district: 'l3', cordonOpen: true, brawls: false,
     crowdLayout: L3_CROWD, events: L3_EVENTS, sirenLanes: [240, 395, 470],
   },

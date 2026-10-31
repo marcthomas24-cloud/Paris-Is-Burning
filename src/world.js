@@ -249,6 +249,28 @@ export class World {
     return col;
   }
 
+  // Move an oriented box from addObstacle (the Level 3 transfer van). The grid is re-filed
+  // only when the cells its bounding box covers change.
+  moveObstacle(col, cx, cz, ry) {
+    const c = Math.cos(ry), s = Math.sin(ry), o = col.obb;
+    const ex = Math.abs(o.hw * c) + Math.abs(o.hd * s), ez = Math.abs(o.hw * s) + Math.abs(o.hd * c);
+    const cs = this.cell, cells = (b) => [Math.floor(b.minX / cs), Math.floor(b.maxX / cs), Math.floor(b.minZ / cs), Math.floor(b.maxZ / cs)].join();
+    const next = { minX: cx - ex, minZ: cz - ez, maxX: cx + ex, maxZ: cz + ez };
+    const refile = cells(col) !== cells(next);
+    if (refile) this.removeCollider(col);
+    Object.assign(col, next);
+    o.cx = cx; o.cz = cz; o.c = c; o.s = s;
+    if (refile) {
+      this.colliders.push(col);
+      for (let gx = Math.floor(col.minX / cs); gx <= Math.floor(col.maxX / cs); gx++)
+        for (let gz = Math.floor(col.minZ / cs); gz <= Math.floor(col.maxZ / cs); gz++) {
+          const k = gx * 10007 + gz;
+          if (!this.grid.has(k)) this.grid.set(k, []);
+          this.grid.get(k).push(col);
+        }
+    }
+  }
+
   removeCollider(col) {
     const i = this.colliders.indexOf(col);
     if (i < 0) return;
@@ -1133,9 +1155,11 @@ export class World {
     return x < B.minX || x > B.maxX || z < B.minZ || z > B.maxZ ? true : null;
   }
 
-  // 3D ray vs collider boxes (slab test). Returns distance or maxDist.
+  // 3D ray vs collider boxes (slab test). Returns distance or maxDist; rayTag is the tag of
+  // the collider hit (null when nothing was), read by the camera.
   raycast(o, d, maxDist) {
     let best = maxDist;
+    this.rayTag = null;
     const steps = Math.ceil(maxDist / this.cell) + 1;
     const seen = new Set();
     for (let i = 0; i <= steps; i++) {
@@ -1143,7 +1167,7 @@ export class World {
       for (const c of this.near(o.x + d.x * t, o.z + d.z * t, this.cell)) {
         if (seen.has(c)) continue; seen.add(c);
         const hit = rayBox(o, d, c.minX - 0.15, -1, c.minZ - 0.15, c.maxX + 0.15, c.h + 0.15, c.maxZ + 0.15);
-        if (hit !== null && hit < best) best = hit;
+        if (hit !== null && hit < best) { best = hit; this.rayTag = c.tag; }
       }
     }
     return best;

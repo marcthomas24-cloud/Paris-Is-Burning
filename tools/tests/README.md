@@ -12,7 +12,9 @@ npm run build
 npm run preview -- --port 5176      # serves dist/
 ```
 
-Then open `http://localhost:5176/?dev&seed=3` (Level 1) or `http://localhost:5176/?dev&level=2&seed=12` (Level 2).
+Then open `http://localhost:5176/?dev&seed=3` (Level 1), `http://localhost:5176/?dev&level=2&seed=12` (Level 2) or `http://localhost:5176/?dev&level=3&seed=5` (Level 3).
+
+The Level 3 tests step the simulation in long synchronous stretches (a full routed run takes several minutes of wall time); start them from a timer and read the result afterwards, e.g. `setTimeout(() => __testRoutes().then((r) => (window.res = r)))`.
 
 ## Commands (browser console)
 
@@ -40,6 +42,12 @@ Then open `http://localhost:5176/?dev&seed=3` (Level 1) or `http://localhost:517
 | `await __npcNav(30, 90)` | Crowd agents sent 30-80 m across the level: arrivals, progress, stuck, inside colliders, out of bounds |
 | `await __worldPerf({ frames: 40 })` | Frame cost, draw calls and triangles at each named viewpoint of the current level |
 | `await __auditAppearance({ seeds: 30, level: 2 })` | Appearance of selected attackers versus their pool |
+| `__vanSweep()` | Level 3: the transfer van's footprint along both routes against every static collider (the barricade it waits behind excepted) |
+| `await __testVan()` | Level 3 van: waits for the officer, follows its path to the hold, stops for a person ahead (horn) and for an attacker, the damage table, x1.5 with the officer far away, the per-second cap, grace and the parked state; peaceful people, ambient incidents, stones on walls or over the roof and strikes from out of reach do nothing; failure and the retry's integrity floor |
+| `await __testHazards()` | Level 3 hazards: telegraph lengths, the cook-off at its centre (24, no more) and walked out of (0), crew takedowns (+150) with no bystander struck, the scaffold under it (18) and stepped out of (0), the petrol trail lit / burnt out / struck in time, the van holding before it, fireworks runners all peaceful, scene light count and shared materials |
+| `await __testRadio()` | Level 3 radio queue: urgent first, one at a time with a pause, no repeats, cooldowns |
+| `await __testL3Checkpoints()` | Level 3: fail in each of the six sections (both routes from the square on), RETRY SECTION, check section, route, van position and integrity (at least 60), score, flags, encounters, roadblock |
+| `await __testRoutes({ seed })` | Level 3: `__auditRun` on the Avenue and on the Passage; both must reach LEVEL 3 COMPLETE through all six sections with no audit issue and no shortfall |
 
 ## Vehicle viewer
 

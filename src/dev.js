@@ -2,7 +2,7 @@
 // step the simulation deterministically when the tab is not animating.
 //  ?dev&level=2         start in Level 2 (ignores the unlock)
 //  ?dev&level=2&stage=3 start Level 2 at section 3
-//  ?dev&level=3         start in Level 3 (the district; &stage=0-3 picks the act)
+//  ?dev&level=3         start in Level 3 (&stage=0-3 picks the act; &route=A|B the route the bot takes)
 //  ?seed=N              seeded run: __start({ audio: false }) then __step / __botRun replay exactly
 import { LEVELS, Progress } from './levels.js';
 import { randomOutfit } from './characters.js';
@@ -10,11 +10,13 @@ import { mulberry } from './textures.js';
 import { reseed, SEED } from './seed.js';
 import { lintBoss, ENFORCER, LEADER } from './boss.js';
 import { installTests } from './devtests.js';
+import { installTests3 } from './devtests3.js';
 import * as THREE from 'three';
 import { areaAt as DISTRICT_AREA, DISTRICT } from './district.js';
 
 export function installDev(game) {
   installTests(game); // regression and fairness checks (devtests.js)
+  installTests3(game); // Level 3: the van, hazards, radio, checkpoints, both routes (devtests3.js)
   // Fixed-step simulation. The first call hands the simulation to the harness:
   // the real-time loop then only renders (see Game.frame), so runs are reproducible.
   window.__step = (sec, fn) => {
@@ -67,7 +69,8 @@ export function installDev(game) {
   // A simple test bot that plays with normal controls only (no teleporting):
   // chases the nearest active threat, otherwise follows the objective marker,
   // arrests downed aggressors and extracts the officers at the end.
-  window.__bot = { log: [], stuckT: 0, side: 1, last: null };
+  window.__bot = { log: [], stuckT: 0, side: 1, last: null, route: (new URLSearchParams(location.search).get('route') || 'A').toUpperCase() };
+  window.__route = (r = 'A') => { window.__bot.route = r.toUpperCase(); return window.__bot.route; }; // Level 3: the route the bot takes
   window.__botTick = () => {
     const g = game, I = g.input, m = g.missions, B = window.__bot, p = g.player.pos;
     // the page pauses itself on blur / visibility / pointer-lock loss; the bot carries on
@@ -77,8 +80,10 @@ export function installDev(game) {
     if (g.cinematic && !B.watch) { I.edges.add('Enter'); window.__step(0.1); return; }
     const threat = g.crowd.nearest(p, (n) => g.crowd.isThreat(n) || (n.script && n.script.active), m.stage === 'p3' ? 12 : 30);
     let goal = null, fight = false;
-    if (threat) { goal = threat.pos; fight = true; } else if (m.markerPos) goal = m.markerPos;
+    // Level 3 gives the bot a place to walk (the chosen route's mouth, an interaction, behind the van)
+    if (threat) { goal = threat.pos; fight = true; } else if (m.botGoal) goal = m.botGoal(B.route || 'A'); else if (m.markerPos) goal = m.markerPos;
     if (g.crowd.arrestable(p) && !threat) I.edges.add('KeyE');
+    if (m.promptE && !threat) I.edges.add('KeyE'); // Level 3 interactions (barricade, scooter, handover)
     if (m.boss && m.boss.s === 'defeated') { goal = m.boss.n.pos; fight = false; if (p.distanceTo(goal) < 2.4) I.edges.add('KeyE'); }
     if (m.stage === 'final' && m.extractReady && Math.hypot(p.x + 3, p.z + 112) < 4) I.edges.add('KeyE');
     if (goal) {

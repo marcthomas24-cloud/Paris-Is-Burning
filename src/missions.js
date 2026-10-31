@@ -316,6 +316,7 @@ export class Missions {
       g.cameraRig.shake(Math.max(0, 0.6 - pd * 0.03));
       // a raised shield facing the thrower stops the splash
       if (pd < 3.2) g.player.takeDamage(22 * (1 - pd / 4), thrower, V(g.player.pos.x - ground.x, 0, g.player.pos.z - ground.z).normalize().multiplyScalar(3));
+      if (this.van) this.van.petrolBurst(ground); // Level 3: a crew petrol bomb bursting beside the transfer van
     }, Math.max(1.0, Math.min(1.6, d / 12)));
     proj.check = (pos) => g.player.hitTest(pos);
     g.audio.swing(n.pos, true);

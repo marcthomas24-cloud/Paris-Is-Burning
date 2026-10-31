@@ -1,0 +1,38 @@
+{
+  "description": "Level 3 Phase 3 (mission implementation): the four acts, the transfer van, the route choice, hazards, radio, checkpoints and results. Branch level3 on top of e3976a6 (uncommitted). Dev server (vite :5174), Claude desktop app built-in Chromium with the Browser pane hidden. The Fixer's boss fight is a placeholder (next phase).",
+  "date": "2026-10-31",
+  "regression": {
+    "level1_seed3": { "command": "?dev&seed=3, await __runToEnd()", "t": 95.4, "score": 6118, "stats": { "neutralized": 15, "arrests": 9, "peaceful": 0, "downed": 0, "bombsStopped": 0, "bombsThrown": 2 }, "minHp": 72, "crowdSum": ["514.815", "3300.723"], "playerPos": ["-2.171", "-111.592"], "verdict": "IDENTICAL to the Stage 0 / Phase 2 baseline" },
+    "level2_seed12": { "command": "?dev&level=2&seed=12, await __auditRun({ watch: true })", "t": 186.42, "score": 9925, "bossTimes": { "enforcer": 24.5, "leader": 37.4 }, "sections": [[0, 0.1], [1, 24.4], [2, 53.3], [3, 77.8], [4, 142.3]], "encountersStarted": 13, "shortfall": 0, "minHp": 16, "crowdSum": ["934.766", "7061.193"], "playerPos": ["2.700", "60.664"], "issues": [], "verdict": "IDENTICAL to the Stage 0 / Phase 2 baseline" }
+  },
+  "level3": {
+    "routes": {
+      "command": "?dev&level=3&seed=5, await __testRoutes({ seed: 5 }) (__auditRun per route, cinematics skipped)",
+      "A": { "title": "LEVEL 3 COMPLETE", "t": 285.35, "score": 9900, "sections": [[0, 0.1], [1, 72.8], [2, 160.6], [3, 172.3], [4, 229.4], [5, 255.2]], "encountersStarted": 11, "shortfall": 0, "issues": [], "van": 95, "vanIncidents": 2, "minHp": 80, "neutralized": 35, "arrests": 13, "peaceful": 0, "damageTaken": 66 },
+      "B": { "title": "LEVEL 3 COMPLETE", "t": 317.13, "score": 9800, "sections": [[0, 0.1], [1, 63.3], [2, 183.4], [3, 197.3], [4, 260.3], [5, 289.3]], "encountersStarted": 12, "shortfall": 0, "issues": [], "van": 95, "vanIncidents": 2, "minHp": 73, "neutralized": 32, "arrests": 16, "peaceful": 1, "bombsStopped": 1, "damageTaken": 97, "note": "the one peaceful person struck was the bot's swing in the fireworks surge (the proportionate-force penalty applied as in Levels 1 and 2)" },
+      "radioB": ["start", "route", "roll", "crews", "doors", "cookoff", "fork", "alone", "routeB", "alone", "gate", "square", "stash", "alone", "reveal", "fixer", "secured", "intercept", "extract", "handover"],
+      "verdict": "PASS (both routes converge at the square gate and finish; the bot plays faster than a person and skips cinematics: about 4:45-5:20 here against the 7-10 min human target, before the boss fight is added)"
+    },
+    "vanSweep": { "command": "__vanSweep()", "A": { "length": 302.9, "hits": 0 }, "B": { "length": 358.7, "hits": 0 }, "verdict": "PASS" },
+    "van": {
+      "command": "await __testVan()",
+      "followsToH1": true, "stopsForPerson": { "travelledAfter": 1.48, "gapToPerson": 2.52, "horned": true }, "stopsForThreat": true, "stopsForAbsentOfficer": true,
+      "damageTable": { "melee": 3, "bash": 4, "projectile": 2, "petrol": 12, "breach": 30 }, "farMultiplier": 4.5, "capOneFrame": 8, "capPerSecond": 7.73, "duringGrace": 0, "whileParked": 0,
+      "peacefulPressedAgainstIt10s": 0, "ambientIncidents": 0, "stoneOnWall": 0, "stoneOverRoof": 0, "stoneOnSide": 2, "strikeFromOutOfReach": 0, "strikeInReach": 3,
+      "failure": "MISSION FAILED · The transfer vehicle was disabled. Le Patron is gone. · RETRY SECTION shown", "retry": { "section": 1, "integrity": 100, "atSectionStart": true },
+      "verdict": "PASS"
+    },
+    "hazards": {
+      "command": "await __testHazards()",
+      "cookoff": { "telegraphS": 6.5, "dealtAtCentre": 24, "walkedOut": 0, "crewTakedowns": 2, "takedownScore": 500, "peacefulStruck": 0 },
+      "scaffold": { "telegraphS": 1.2, "dealtUnder": 18, "steppedOut": 0, "rubble": true },
+      "trail": { "telegraphS": 2.2, "blocksVan": true, "lit": "active, 5 pools", "burnsOut": "spent", "struckInTime": "spent, 0 pools" },
+      "fireworks": { "telegraphS": 1.0, "runners": 18, "allPeaceful": true, "madeHostile": 0 },
+      "lights": { "before": 11, "after": 11 }, "materialsShared": true,
+      "verdict": "PASS"
+    },
+    "radio": { "command": "await __testRadio()", "order": ["dmg50", "routeA", "barricade", "gate", "alone", "alone"], "minGapS": 0.81, "verdict": "PASS (urgent first, one at a time, duplicate dropped, cooldown respected)" },
+    "checkpoints": { "command": "await __testL3Checkpoints()", "rows": 10, "verdict": "PASS (every section, both routes from the square gate on: section, route, van position and integrity >= 60, score, flags, encounters and roadblock restored)" }
+  },
+  "build": "npm run build: clean"
+}
