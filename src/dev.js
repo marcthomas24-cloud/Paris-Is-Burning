@@ -2,6 +2,7 @@
 // step the simulation deterministically when the tab is not animating.
 //  ?dev&level=2         start in Level 2 (ignores the unlock)
 //  ?dev&level=2&stage=3 start Level 2 at section 3
+//  ?dev&level=3         start in Level 3 (the district; &stage=0-3 picks the act)
 //  ?seed=N              seeded run: __start({ audio: false }) then __step / __botRun replay exactly
 import { LEVELS, Progress } from './levels.js';
 import { randomOutfit } from './characters.js';
@@ -9,6 +10,8 @@ import { mulberry } from './textures.js';
 import { reseed, SEED } from './seed.js';
 import { lintBoss, ENFORCER, LEADER } from './boss.js';
 import { installTests } from './devtests.js';
+import * as THREE from 'three';
+import { areaAt as DISTRICT_AREA, DISTRICT } from './district.js';
 
 export function installDev(game) {
   installTests(game); // regression and fairness checks (devtests.js)
@@ -172,6 +175,192 @@ export function installDev(game) {
       calls += info.render.calls; tris += info.render.triangles;
     }
     return { msPerFrame: +((up + rd) / frames).toFixed(2), updateMs: +(up / frames).toFixed(2), renderMs: +(rd / frames).toFixed(2), calls: Math.round(calls / frames), tris: Math.round(tris / frames), programs: info.programs.length };
+  };
+
+  // ------------------------------------------------------------------------
+  // World inspection (any level; the Level 3 district has its own landmarks and walk areas).
+  //  __acts()                      the current level's acts / sections (jump with __jump(i))
+  //  __pos()                       where the officer is: position, heading, area, camera
+  //  __posHud(on)                  the same, live, in a small panel at the top of the screen
+  //  __goto(x, z, deg) / __view(n) put the officer somewhere (deg: facing, 0 = +z) / at a named view
+  //  __colliders(on, radius)       draw collider boxes near the officer and the level bounds
+  //  __navMap({ show })            flood fill from the start: reachable ground, leaks, pockets
+  //  __walkRoute(route)            walk a route with the normal controls; stuck and camera checks
+  //  __npcNav(n, seconds)          send crowd agents across the level; arrivals and stuck agents
+  //  __worldPerf({ frames })       frame cost, draw calls and triangles at fixed viewpoints
+  const deg = (r) => Math.round(((r * 180) / Math.PI + 360) % 360);
+  const district = () => game.world.district;
+  const areaName = (x, z) => (game.level.district ? DISTRICT_AREA(x, z) : z < -110 ? 'Oberkampf' : z < -20 ? 'Oberkampf to Malte' : z < 70 ? 'Malte to Timbaud' : 'Timbaud to the staging area');
+  window.__acts = () => (game.level.phases || []).map((name, i) => ({ i, name, jump: `__jump(${i})`, url: `?dev&level=${game.level.id}&stage=${i}` }));
+  window.__pos = () => {
+    const p = game.player.pos, c = game.camera.position;
+    return { level: game.level.id, x: +p.x.toFixed(2), z: +p.z.toFixed(2), y: +p.y.toFixed(2), heading: deg(game.player.heading), area: areaName(p.x, p.z), act: game.missions.section ?? game.missions.phase, camera: { x: +c.x.toFixed(2), y: +c.y.toFixed(2), z: +c.z.toFixed(2), dist: +game.cameraRig.curDist.toFixed(2) }, blocked: game.world.blocked(p.x, p.z, 0.36) };
+  };
+  window.__posHud = (on = true) => {
+    let el = document.getElementById('dev-pos');
+    clearInterval(window.__posHudT);
+    if (!on) { if (el) el.remove(); return 'off'; }
+    if (!el) { el = document.createElement('div'); el.id = 'dev-pos'; el.style.cssText = 'position:fixed;top:44px;left:50%;transform:translateX(-50%);z-index:50;font:12px Consolas,monospace;color:#fff;background:rgba(0,0,0,.65);padding:4px 8px;border-radius:4px;pointer-events:none'; document.body.appendChild(el); }
+    window.__posHudT = setInterval(() => { const s = window.__pos(); el.textContent = `x ${s.x} z ${s.z} · ${s.heading}° · ${s.area} · act ${s.act} · cam ${s.camera.dist} m`; }, 100);
+    return 'on';
+  };
+  window.__goto = (x, z, facing = 0) => {
+    const p = game.player; p.pos.set(x, 0, z); p.vel.set(0, 0, 0); p.heading = (facing * Math.PI) / 180;
+    game.cameraRig.reset(p); game.cameraRig.pitch = -0.1;
+    window.__step(0.4);
+    return window.__pos();
+  };
+  const VIEWS = {
+    1: { start: [0.5, 141, 180], centre: [0, 60, 180], malte: [0, -20, 180], oberkampf: [0, -100, 180] },
+    2: { start: [-1.5, -100, 0], malte: [0, -30, 0], centre: [0, 30, 0], timbaud: [0, 62, 0] },
+    3: {
+      staging: [3, 152, 0], gate: [2, 176, 0], boulevardSouth: [0, 200, 0], junction: [0, 236, 0], avenue: [0, 262, 0], roadblock: [4, 278, 0],
+      passage: [40, 252, 0], scaffold: [40, 280, 0], squareNorth: [0, 352, 0], squareWide: [40, 440, 225], monument: [-20, 380, 60],
+      metro: [27, 386, 180], rally: [-15, 400, 270], arena: [0, 412, 0], exitStreet: [0, 450, 0], extraction: [0, 472, 0],
+    },
+  };
+  window.__view = (name) => { const v = (VIEWS[game.level.id] || {})[name]; return v ? window.__goto(...v) : `views: ${Object.keys(VIEWS[game.level.id] || {}).join(', ')}`; };
+  window.__colliders = (on = true, radius = 60) => {
+    if (window.__colMesh) { game.scene.remove(window.__colMesh); window.__colMesh.geometry.dispose(); window.__colMesh = null; }
+    if (!on) return 'off';
+    const w = game.world, p = game.player.pos, pts = [];
+    const rect = (corners, h) => {
+      for (let i = 0; i < 4; i++) {
+        const [ax, az] = corners[i], [bx, bz] = corners[(i + 1) % 4];
+        pts.push(ax, 0.05, az, bx, 0.05, bz, ax, h, az, bx, h, bz, ax, 0.05, az, ax, h, az);
+      }
+    };
+    let n = 0;
+    for (const c of w.colliders) {
+      if (c.off) continue;
+      const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2;
+      if (Math.hypot(cx - p.x, cz - p.z) > radius + Math.max(c.maxX - c.minX, c.maxZ - c.minZ) / 2) continue;
+      const h = Math.min(c.h, 6);
+      if (c.obb) { const o = c.obb, C = (sx, sz) => [o.cx + o.c * sx * o.hw + o.s * sz * o.hd, o.cz - o.s * sx * o.hw + o.c * sz * o.hd]; rect([C(-1, -1), C(1, -1), C(1, 1), C(-1, 1)], h); }
+      else rect([[c.minX, c.minZ], [c.maxX, c.minZ], [c.maxX, c.maxZ], [c.minX, c.maxZ]], h);
+      n++;
+    }
+    const B = w.bounds; rect([[B.minX, B.minZ], [B.maxX, B.minZ], [B.maxX, B.maxZ], [B.minX, B.maxZ]], 12);
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    window.__colMesh = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x00ffaa, depthTest: false, transparent: true, opacity: 0.85 }));
+    window.__colMesh.renderOrder = 10; game.scene.add(window.__colMesh);
+    window.__step(0.02);
+    return { drawn: n, bounds: B };
+  };
+  // Flood fill on a 1 m grid from the level start, with the officer's radius. Reports ground the
+  // officer can reach outside the level's walk areas (a collision hole into a building), walk-area
+  // ground that is free but cannot be reached (a closed-off pocket), and which landmarks are reached.
+  window.__navMap = ({ cell = 1, radius = 0.36, show = false } = {}) => {
+    const w = game.world, B = w.bounds, s = game.level.start, D = game.level.district ? DISTRICT : null;
+    const nx = Math.floor((B.maxX - B.minX) / cell) + 1, nz = Math.floor((B.maxZ - B.minZ) / cell) + 1;
+    const X = (i) => B.minX + i * cell, Z = (j) => B.minZ + j * cell;
+    const state = new Uint8Array(nx * nz); // 0 unknown, 1 blocked, 2 reached
+    const free = (i, j) => !w.blocked(X(i), Z(j), radius);
+    const q = [[Math.round((s.x - B.minX) / cell), Math.round((s.z - B.minZ) / cell)]];
+    state[q[0][1] * nx + q[0][0]] = 2;
+    let reached = 0;
+    while (q.length) {
+      const [i, j] = q.pop(); reached++;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const a = i + di, b = j + dj; if (a < 0 || b < 0 || a >= nx || b >= nz) continue;
+        const k = b * nx + a; if (state[k]) continue;
+        if (free(a, b)) { state[k] = 2; q.push([a, b]); } else state[k] = 1;
+      }
+    }
+    const inWalk = (x, z) => !D || D.walkRects.some(([x0, z0, x1, z1]) => x >= x0 && x <= x1 && z >= z0 && z <= z1);
+    const leaks = [], pockets = [];
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      const x = X(i), z = Z(j), k = j * nx + i;
+      if (state[k] === 2 && !inWalk(x, z)) leaks.push([x, z]);
+      else if (state[k] === 0 && inWalk(x, z) && free(i, j)) pockets.push([x, z]);
+    }
+    const lm = D ? Object.fromEntries(Object.entries(D.landmarks).map(([n, [x, z]]) => {
+      // the nearest reached cell within 4 m of the landmark
+      let ok = false; for (let r = 0; r <= 4 && !ok; r++) for (let dx = -r; dx <= r && !ok; dx++) for (let dz = -r; dz <= r && !ok; dz++) { const i = Math.round((x + dx - B.minX) / cell), j = Math.round((z + dz - B.minZ) / cell); ok = state[j * nx + i] === 2; }
+      return [n, ok];
+    })) : null;
+    const out = { level: game.level.id, cell, reachedCells: reached, reachedM2: reached * cell * cell, leaks: leaks.length, leakSamples: leaks.slice(0, 12), pockets: pockets.length, pocketSamples: pockets.slice(0, 12), landmarksReached: lm };
+    if (show) {
+      const S = 2, cv = document.createElement('canvas'); cv.width = nx * S; cv.height = nz * S;
+      const ctx = cv.getContext('2d');
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const v = state[j * nx + i]; ctx.fillStyle = v === 2 ? (inWalk(X(i), Z(j)) ? '#3a7' : '#f33') : v === 1 ? '#555' : inWalk(X(i), Z(j)) && free(i, j) ? '#fc3' : '#111'; ctx.fillRect(i * S, j * S, S, S); }
+      let el = document.getElementById('dev-nav'); if (!el) { el = document.createElement('img'); el.id = 'dev-nav'; el.style.cssText = 'position:fixed;right:8px;top:8px;z-index:60;max-height:95vh;border:1px solid #fff;image-rendering:pixelated'; document.body.appendChild(el); el.onclick = () => el.remove(); }
+      el.src = cv.toDataURL();
+      out.shown = 'top right (click to close): green reached, red reached outside the walk areas, yellow unreachable walk area, grey blocked';
+    }
+    return out;
+  };
+  const ROUTES = {
+    3: {
+      A: [[10, 168], [3, 180], [0, 200], [0, 238], [0, 276], [12.3, 286], [12.3, 297], [0, 312], [0, 350], [27, 377], [0, 412], [0, 476]],
+      B: [[10, 168], [3, 180], [0, 200], [0, 238], [40, 241], [40, 318], [37.7, 324], [40, 334], [33, 356], [30, 362], [29.7, 374], [27, 377], [0, 412], [0, 476]],
+      // round the square's ring road, into both side streets and back past the monument
+      square: [[0, 352], [-30, 352], [-36, 365], [-36, 425], [-28, 432], [0, 437], [25, 434], [38, 420], [38, 370], [33, 355], [0, 352], [-20, 384], [-53.5, 395], [-20, 386], [20, 386], [53.5, 395], [20, 405], [0, 412]],
+    },
+    2: { main: [[0, -60], [0, 0], [0, 60]] },
+    1: { main: [[0, 100], [0, 0], [0, -105]] },
+  };
+  window.__walkRoute = async (route = 'A', { timeout = 240 } = {}) => {
+    const pts = (ROUTES[game.level.id] || {})[route]; if (!pts) return `routes: ${Object.keys(ROUTES[game.level.id] || {}).join(', ')}`;
+    const g = game, I = g.input, p = g.player.pos, w = g.world;
+    const wasSkip = g.skipCinematics; g.skipCinematics = true;
+    let t = 0, idx = 0, stuck = 0, stuckEvents = [], side = 1, strafe = 0, minCam = 99, clip = [], trappedT = 0, trapped = [];
+    const camInside = () => { const c = g.camera.position; for (const col of w.near(c.x, c.z, 0.5)) { if (col.obb) { if (w.blockedBy(c.x, c.z, 0.02, c.y) === col) return col.tag; continue; } if (c.x > col.minX && c.x < col.maxX && c.z > col.minZ && c.z < col.maxZ && c.y < col.h) return col.tag; } return null; };
+    while (idx < pts.length && t < timeout) {
+      I.keys.clear(); I.buttons.clear();
+      const [gx, gz] = pts[idx], dx = gx - p.x, dz = gz - p.z, d = Math.hypot(dx, dz);
+      if (d < 1.2) { idx++; continue; }
+      g.cameraRig.yaw = Math.atan2(-dx, -dz) + (strafe > 0 ? side * 0.9 : 0);
+      I.keys.add('KeyW'); if (d > 4) I.keys.add('ShiftLeft');
+      const before = p.clone();
+      window.__step(0.1); t += 0.1; strafe -= 0.1;
+      if (p.distanceTo(before) < 0.05) { stuck += 0.1; if (stuck > 1.0) { stuckEvents.push([+p.x.toFixed(1), +p.z.toFixed(1)]); stuck = 0; side *= -1; strafe = 1.2; } } else stuck = Math.max(0, stuck - 0.05);
+      minCam = Math.min(minCam, g.cameraRig.curDist);
+      const inside = camInside(); if (inside) clip.push([+p.x.toFixed(1), +p.z.toFixed(1), inside]);
+      if (g.cameraRig.curDist < 0.8) { trappedT += 0.1; if (trappedT > 1.5) { trapped.push([+p.x.toFixed(1), +p.z.toFixed(1)]); trappedT = 0; } } else trappedT = 0;
+      if (Math.round(t * 10) % 50 === 0) await new Promise((r) => setTimeout(r, 1));
+    }
+    I.keys.clear(); g.skipCinematics = wasSkip;
+    return { level: g.level.id, route, finished: idx >= pts.length, waypoints: `${idx} / ${pts.length}`, seconds: +t.toFixed(1), end: [+p.x.toFixed(1), +p.z.toFixed(1)], stuckEvents, minCameraDist: +minCam.toFixed(2), cameraInsideCollider: clip.slice(0, 10), cameraInsideCount: clip.length, cameraTrapped: trapped };
+  };
+  // Crowd agents sent to far points of the level: who gets there, who sticks, who ends up in a wall.
+  window.__npcNav = async (count = 24, seconds = 90, { minD = 30, maxD = 80 } = {}) => {
+    const g = game, crowd = g.crowd, w = g.world, D = g.level.district ? DISTRICT : null;
+    const rects = D ? D.walkRects : [[-14, -150, 14, 160]];
+    const R = (a, b) => a + Math.random() * (b - a);
+    const pickPoint = () => { for (let k = 0; k < 50; k++) { const [x0, z0, x1, z1] = rects[Math.floor(Math.random() * rects.length)]; const x = R(x0 + 1, x1 - 1), z = R(z0 + 1, z1 - 1); if (!w.blocked(x, z, 0.5)) return new THREE.Vector3(x, 0, z); } return null; };
+    const agents = crowd.npcs.filter((n) => n.temperament === 'peaceful' && n.state !== 'gone' && !n.march).slice(0, count);
+    const jobs = [];
+    for (const n of agents) {
+      let to = null; for (let k = 0; k < 60 && !to; k++) { const c = pickPoint(); if (c && c.distanceTo(n.pos) > minD && c.distanceTo(n.pos) < maxD) to = c; }
+      if (!to) continue;
+      n.anchor.copy(to); n.target.copy(to); n.role = 'wander'; crowd.setState(n, 'walk'); n.fear = 0; n.stimuli.length = 0;
+      jobs.push({ n, to, from: n.pos.clone(), best: n.pos.distanceTo(to), last: n.pos.clone(), still: 0, stuckAt: null });
+    }
+    for (let s = 0; s < seconds * 10; s++) {
+      for (const j of jobs) { if (j.n.state === 'act' || j.n.state === 'calm') { j.n.target.copy(j.to); crowd.setState(j.n, 'walk'); } }
+      window.__step(0.1);
+      for (const j of jobs) {
+        j.best = Math.min(j.best, j.n.pos.distanceTo(j.to));
+        if (j.n.pos.distanceTo(j.last) < 0.3) { j.still += 0.1; if (j.still > 15 && !j.stuckAt && j.best > 4) j.stuckAt = [+j.n.pos.x.toFixed(1), +j.n.pos.z.toFixed(1)]; } else { j.still = 0; j.last.copy(j.n.pos); }
+      }
+      if (s % 50 === 0) await new Promise((r) => setTimeout(r, 1));
+    }
+    const inWall = crowd.npcs.filter((n) => n.state !== 'gone' && w.blocked(n.pos.x, n.pos.z, 0.05)).map((n) => [n.id, +n.pos.x.toFixed(1), +n.pos.z.toFixed(1)]);
+    const outOfBounds = crowd.npcs.filter((n) => n.state !== 'gone' && (n.pos.x < w.bounds.minX - 0.01 || n.pos.x > w.bounds.maxX + 0.01 || n.pos.z < w.bounds.minZ - 0.01 || n.pos.z > w.bounds.maxZ + 0.01)).length;
+    const prog = jobs.map((j) => 1 - j.best / Math.max(1, j.from.distanceTo(j.to)));
+    return { level: g.level.id, sent: jobs.length, arrived: jobs.filter((j) => j.best < 4).length, meanProgress: +(prog.reduce((a, b) => a + b, 0) / Math.max(1, prog.length)).toFixed(2), under50pct: jobs.filter((j, i) => prog[i] < 0.5).map((j) => ({ from: [+j.from.x.toFixed(0), +j.from.z.toFixed(0)], to: [+j.to.x.toFixed(0), +j.to.z.toFixed(0)], now: [+j.n.pos.x.toFixed(0), +j.n.pos.z.toFixed(0)], state: j.n.state })), stuck: jobs.filter((j) => j.stuckAt).map((j) => ({ from: [+j.from.x.toFixed(0), +j.from.z.toFixed(0)], to: [+j.to.x.toFixed(0), +j.to.z.toFixed(0)], at: j.stuckAt })), meanClosest: +(jobs.reduce((a, j) => a + j.best, 0) / Math.max(1, jobs.length)).toFixed(1), agentsInsideColliders: inWall, agentsOutOfBounds: outOfBounds };
+  };
+  window.__worldPerf = async ({ frames = 60 } = {}) => {
+    const views = VIEWS[game.level.id] || {}, rows = [];
+    for (const name of Object.keys(views)) {
+      window.__goto(...views[name]); window.__step(0.5);
+      const r = window.__perf(frames);
+      rows.push({ view: name, ms: r.msPerFrame, update: r.updateMs, render: r.renderMs, calls: r.calls, tris: r.tris });
+      await new Promise((res) => setTimeout(res, 1));
+    }
+    const avg = (k) => +(rows.reduce((a, r) => a + r[k], 0) / Math.max(1, rows.length)).toFixed(2);
+    return { level: game.level.id, frames, programs: game.renderer.info.programs.length, mean: { ms: avg('ms'), update: avg('update'), render: avg('render'), calls: Math.round(avg('calls')), tris: Math.round(avg('tris')) }, rows };
   };
 
   // ------------------------------------------------------------------------

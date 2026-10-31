@@ -9,9 +9,11 @@
 // Signal: voices -> music bus (Music volume setting) -> game bus (pause fade) -> master.
 
 const NOTE = (n) => 440 * Math.pow(2, (n - 69) / 12); // MIDI note -> Hz
-// D minor progression, two bars per chord: Dm, Bb, F, A
-const CHORDS = [[50, 53, 57], [46, 50, 53], [41, 45, 48], [45, 49, 52]];
-const VICTORY = [50, 54, 57]; // D major: the resolve
+// A theme per level: a chord progression (two bars per chord), the chord the victory resolves
+// to, and optional tempo overrides per state (bpm). Level 2: D minor (Dm, Bb, F, A), D major.
+export const THEMES = {
+  l2: { chords: [[50, 53, 57], [46, 50, 53], [41, 45, 48], [45, 49, 52]], victory: [50, 54, 57], bpm: {} },
+};
 
 // per state: pad level, pad brightness (filter Hz), pulse level, drone level, tempo (bpm).
 // Levels keep the score under the soundscape (measured: about +2 dB RMS in boss fights).
@@ -29,7 +31,11 @@ export class Music {
     this.a = audio;
     this.state = 'off';
     this.started = false;
+    this.theme = THEMES.l2;
   }
+
+  // switch the level's theme (unknown names keep the Level 2 one); takes effect at the next chord
+  setTheme(name) { this.theme = THEMES[name] || THEMES.l2; }
 
   // build the persistent voices once the audio context exists
   _build() {
@@ -58,7 +64,7 @@ export class Music {
     this.droneOut.connect(this.bus); this.drone.start(); this.drone2.start();
     this.pulseOut = c.createGain(); this.pulseOut.gain.value = 0; this.pulseOut.connect(this.bus);
     this.chord = 0; this.bar = 0; this.beat = 0; this.nextBeat = c.currentTime + 0.1;
-    this._setChord(CHORDS[0], 0.01);
+    this._setChord(this.theme.chords[0], 0.01);
     this.started = true;
   }
 
@@ -79,15 +85,15 @@ export class Music {
     this.padFilter.frequency.setTargetAtTime(st.bright, t, 1.2);
     this.droneOut.gain.setTargetAtTime(st.drone, t, 1.0);
     this.pulseOut.gain.setTargetAtTime(st.pulse, t, 0.6);
-    if (s === 'victory') this._setChord(VICTORY, 0.8);
-    else if (prev === 'victory') this._setChord(CHORDS[this.chord], 1.5);
+    if (s === 'victory') this._setChord(this.theme.victory, 0.8);
+    else if (prev === 'victory') this._setChord(this.theme.chords[this.chord % this.theme.chords.length], 1.5);
   }
 
   // called every frame from Audio.update
   update() {
     if (!this.started || !this.a.enabled) return;
     const c = this.a.ctx, st = STATES[this.state] || STATES.off;
-    const spb = 60 / st.bpm;
+    const spb = 60 / (this.theme.bpm[this.state] || st.bpm);
     while (this.nextBeat < c.currentTime + 0.15) {
       const t = this.nextBeat;
       if (st.pulse > 0) {
@@ -95,7 +101,7 @@ export class Music {
         if (this.state !== 'combat' || this.beat % 2 === 1) this._tick(t + spb / 2, this.beat % 4 === 3 ? 0.5 : 0.3);
       }
       this.beat++;
-      if (this.beat % 8 === 0 && this.state !== 'victory') { this.chord = (this.chord + 1) % CHORDS.length; this._setChord(CHORDS[this.chord]); }
+      if (this.beat % 8 === 0 && this.state !== 'victory') { const ch = this.theme.chords; this.chord = (this.chord + 1) % ch.length; this._setChord(ch[this.chord]); }
       this.nextBeat += spb;
     }
   }
@@ -154,7 +160,7 @@ export class Music {
     } else if (kind === 'victory') {
       const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2400; nodes.push(f);
       const g = gain(); env(g, 0.4, 0.3, 3.2); f.connect(g).connect(out);
-      for (const n of [...VICTORY, 62, 66]) for (const det of [-5, 6]) { const o = osc('sawtooth', NOTE(n), det); o.connect(f); o.start(t); o.stop(t + 3.8); }
+      for (const n of [...this.theme.victory, 62, 66]) for (const det of [-5, 6]) { const o = osc('sawtooth', NOTE(n), det); o.connect(f); o.start(t); o.stop(t + 3.8); }
       done(3.9);
     }
   }

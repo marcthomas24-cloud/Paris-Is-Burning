@@ -35,6 +35,10 @@ Then open `http://localhost:5176/?dev&seed=3` (Level 1) or `http://localhost:517
 | `await __testTension()` | Crowd tension: each cause through the real game paths, decay, HUD band, ambient rate and cap, Level 2 extra members (never peaceful), barrier credit and its cap |
 | `await __auditAppearance({ level, tension: 100 })` | The appearance audit with tension held at 100, so the extra attackers it causes are audited too |
 | `__hudLayout()` | Visible HUD panels that overlap or leave the screen at the current viewport |
+| `__navMap({ show: true })` | Reachability from the level start: leaks into buildings, closed-off pockets, landmarks reached (Level 3: 0 / 0 / all five) |
+| `await __walkRoute('A' \| 'B' \| 'square')` | Level 3 routes walked with the normal controls: stuck points, camera inside a collider, camera trapped |
+| `await __npcNav(30, 90)` | Crowd agents sent 30-80 m across the level: arrivals, progress, stuck, inside colliders, out of bounds |
+| `await __worldPerf({ frames: 40 })` | Frame cost, draw calls and triangles at each named viewpoint of the current level |
 | `await __auditAppearance({ seeds: 30, level: 2 })` | Appearance of selected attackers versus their pool |
 
 ## Vehicle viewer

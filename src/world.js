@@ -22,6 +22,16 @@ const rnd = T.mulberry(1234);
 const R = (a, b) => a + (b - a) * rnd();
 const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
 
+// three.js draws Math.random for every new object's uuid. In ?seed runs the objects built
+// before the crowd decide which numbers the crowd's generator gets, so anything new built
+// during start-up draws from its own stream here: Levels 1 and 2 replay exactly as before.
+const QUIET = T.mulberry(181);
+export function quietly(fn) {
+  const r = Math.random;
+  Math.random = QUIET;
+  try { return fn(); } finally { Math.random = r; }
+}
+
 // push a circle out of an oriented box (see World.addObstacle)
 function resolveObb(p, r, o) {
   const dx = p.x - o.cx, dz = p.z - o.cz;
@@ -57,6 +67,7 @@ export class World {
     this.flags = [];        // static waving flags (cloth meshes)
     this.lightBars = [];
     this.gatherPoints = []; // crowd anchors
+    this.bounds = LAYOUT.bounds; // playable area of the current level (setBounds)
     T.setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
     this._initMaterials();
     this._buildSky();
@@ -270,17 +281,34 @@ export class World {
     return this.addCollider(cx - hw, cz - hd, cx + hw, cz + hd, h);
   }
 
-  _flush() {
+  // Merge the pending batches into one mesh per material. parent: where the meshes go (a
+  // district's group, so it can be hidden); noShadow: further keys that cast no shadow.
+  _flush(parent = this.scene, noShadow = []) {
+    // the cordon gate's own batch: built without touching Math.random (see quietly)
+    const gate = this.buckets.get('cordonGate');
+    if (gate) {
+      this.buckets.delete('cordonGate');
+      quietly(() => {
+        const merged = mergeGeometries(gate, false);
+        merged.computeBoundingSphere();
+        const mesh = new THREE.Mesh(merged, this.materials.metal);
+        mesh.castShadow = true; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false;
+        this.scene.add(mesh);
+        this.cordonGate.meshes.push(mesh);
+      });
+      gate.forEach((g) => g.dispose());
+    }
     for (const [key, geos] of this.buckets) {
       const merged = mergeGeometries(geos, false);
       if (!merged) { console.warn('merge failed', key); continue; }
       merged.computeBoundingSphere();
       const mesh = new THREE.Mesh(merged, this.mat(key));
-      const noShadow = ['road', 'roadPlain', 'paving', 'cobble', 'ground', 'paper', 'soot'];
-      mesh.castShadow = !noShadow.includes(key) && !key.startsWith('shop') && !key.startsWith('facade');
+      const flat = ['road', 'roadPlain', 'paving', 'cobble', 'ground', 'paper', 'soot'];
+      mesh.castShadow = !flat.includes(key) && !noShadow.includes(key.split(':')[0]) && !key.startsWith('shop') && !key.startsWith('facade');
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
-      this.scene.add(mesh);
+      mesh.name = key;
+      parent.add(mesh);
       geos.forEach((g) => g.dispose());
     }
     this.buckets.clear();
@@ -383,7 +411,42 @@ export class World {
 
   groundHeight(x, z) {
     for (const s of this.sidewalks) if (x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1) return 0.14;
+    // the active district's pavements (kept apart so other levels never scan them)
+    const D = this.district;
+    if (D) for (const s of D.sidewalks) if (x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1) return 0.14;
     return 0;
+  }
+
+  // ---------------------------------------------------------------- districts
+  // A district is a part of the city only some levels use (district.js). It is built once,
+  // when its level first loads, into its own group, and switched on with its level: shown,
+  // its pavements, fires, smoke and police light bars registered. Its colliders stay in the
+  // grid all the time; they lie outside every other level's bounds.
+  registerDistrict(name, d) { (this.districts || (this.districts = {}))[name] = d; }
+  hasDistrict(name) { return !!(this.districts && this.districts[name]); }
+  setDistrict(name) {
+    const want = (name && this.districts && this.districts[name]) || null;
+    if (want === this.district) return;
+    const off = (list, items) => { for (const it of items) { const i = list.indexOf(it); if (i >= 0) list.splice(i, 1); } };
+    if (this.district) {
+      const D = this.district;
+      D.group.visible = false;
+      off(this.fires, D.fires); off(this.smokes, D.smokes); off(this.lightBars, D.lightBars);
+      // put back what it hid, at the same places in the lists (their order is part of a replay)
+      for (const [list, item, i] of D.hidden || []) list.splice(i, 0, item);
+      D.hidden = null;
+    }
+    this.district = want;
+    if (want) {
+      want.group.visible = true;
+      // fires and smoke of the shared map the district replaces (removed last first)
+      want.hidden = [];
+      for (const item of want.suppressed || []) for (const list of [this.fires, this.smokes]) { const i = list.indexOf(item); if (i >= 0) want.hidden.push([list, item, i]); }
+      want.hidden.sort((a, b) => b[2] - a[2]);
+      for (const [list, , i] of want.hidden) list.splice(i, 1);
+      want.hidden.reverse();
+      this.fires.push(...want.fires); this.smokes.push(...want.smokes); this.lightBars.push(...want.lightBars);
+    }
   }
 
   // ---------------------------------------------------------------- buildings
@@ -427,8 +490,11 @@ export class World {
     }
   }
 
-  // Builds a run of Haussmann buildings along a frontage line.
-  _frontage(origin, dir, normal, length, depth, nextShop) {
+  // Builds a run of Haussmann buildings along a frontage line. rng: the random stream to
+  // draw from (default: the boulevard's own, so its layout never changes); later districts
+  // pass their own stream so they don't shift anything built after them.
+  _frontage(origin, dir, normal, length, depth, nextShop, rng = rnd) {
+    const pick = (arr) => arr[Math.floor(rng() * arr.length)];
     const up = new THREE.Vector3(0, 1, 0);
     // ensure facade faces `normal`: plane normal = uDir x vDir
     const testN = new THREE.Vector3().crossVectors(dir, up);
@@ -439,15 +505,16 @@ export class World {
     while (t < length - 0.1) {
       let w = pick([12, 18, 18, 24]);
       if (length - t < w + 6) w = length - t;
-      const floors = rnd() < 0.35 ? 4 : 5;
-      const style = Math.floor(rnd() * 4);
+      const floors = rng() < 0.35 ? 4 : 5;
+      const style = Math.floor(rng() * 4);
       const shop = nextShop() % T.SHOP_COUNT;
-      this._building(o.clone().addScaledVector(d, t), d, inward, normal, w, depth, floors, style, shop);
+      this._building(o.clone().addScaledVector(d, t), d, inward, normal, w, depth, floors, style, shop, rng);
       t += w;
     }
   }
 
-  _building(p0, d, inward, n, w, depth, floors, style, shop) {
+  _building(p0, d, inward, n, w, depth, floors, style, shop, rng = rnd) {
+    const R = (a, b) => a + (b - a) * rng();
     const up = new THREE.Vector3(0, 1, 0);
     const GH = 4.5, FH = 3.1;
     const H = GH + floors * FH;
@@ -477,12 +544,12 @@ export class World {
       this.quad('railing', railO, d, up, w, 1.0, w / 3, 1);
     }
     // awning over shops that are open
-    if (shop !== 5 && shop !== 7 && rnd() < 0.8) {
+    if (shop !== 5 && shop !== 7 && rng() < 0.8) {
       const aw = new THREE.PlaneGeometry(w - 1.2, 1.8);
       aw.rotateX(-Math.PI / 2 - 0.45);
       aw.rotateY(ang);
       const c = out(mid, 0.85); aw.translate(c.x, GH - 0.55, c.z);
-      this.add(`awnings:${Math.floor(rnd() * 4)}`, aw);
+      this.add(`awnings:${Math.floor(rng() * 4)}`, aw);
     }
     // mansard roof (sloped zinc with dormers) + flat top
     const slope = new THREE.Vector3().addScaledVector(up, 3.4).addScaledVector(inward, 2.0);
@@ -499,15 +566,15 @@ export class World {
       this.quad('stone', s0, inward, up, depth, H, depth / 4, H / 4);
     }
     // chimneys
-    const nc = 1 + Math.floor(rnd() * 3);
+    const nc = 1 + Math.floor(rng() * 3);
     for (let k = 0; k < nc; k++) {
       const c = p0.clone().addScaledVector(d, R(1.5, w - 1.5)).addScaledVector(inward, R(4, depth - 2));
       this.box('chimney', R(0.8, 1.8), R(1.2, 2.2), 0.7, c.x, H + 3.6, c.z, ang);
     }
     // occasional hanging flags / banners from balconies
-    const r = rnd();
+    const r = rng();
     if (floors > 1 && r < 0.12) {
-      const f = rnd();
+      const f = rng();
       this._hangingFlag(out(p0.clone().addScaledVector(d, R(2, w - 2)).setY(GH + FH + 1.0), 0.9), n, f < 0.35 ? 'palFlagStatic' : f < 0.55 ? 'algFlagStatic' : f < 0.85 ? 'frFlagStatic' : 'uniFlagStatic');
     }
   }
@@ -813,18 +880,19 @@ export class World {
   }
 
   // ---------------------------------------------------------------- barricades
-  _vauban(x, z, ry, { mat = 'metal', tilt = 0, roll = 0, y = 0, collide = true } = {}) {
+  _vauban(x, z, ry, { mat = 'metal', tilt = 0, roll = 0, y = 0, collide = true, bucket = mat } = {}) {
     // metal crowd-control barrier, 2 m wide (tilt / roll lean it onto a pile)
+    // bucket: merge into another batch than its material's (one that can be hidden)
     const B = (w, h, d, ox, oy) => {
       const g = new THREE.BoxGeometry(w, h, d);
       g.translate(ox, oy, 0); g.rotateZ(roll); g.rotateX(tilt); g.rotateY(ry); g.translate(x, y, z);
-      this.add(mat, g);
+      this.add(bucket, g);
     };
     B(2.0, 0.05, 0.05, 0, 1.08); B(2.0, 0.05, 0.05, 0, 0.25);
     for (let k = -0.95; k <= 0.96; k += 0.16) B(0.025, 0.85, 0.025, k, 0.66);
     B(0.06, 1.1, 0.06, -1.0, 0.55); B(0.06, 1.1, 0.06, 1.0, 0.55);
     B(0.06, 0.04, 0.7, -0.9, 0.02); B(0.06, 0.04, 0.7, 0.9, 0.02);
-    if (collide) this.addColliderRotated(x, z, 2.0, 0.35, ry, 1.1);
+    return collide ? this.addColliderRotated(x, z, 2.0, 0.35, ry, 1.1) : null;
   }
 
   _binPyre(cx, cz, scale = 1) {
@@ -887,8 +955,15 @@ export class World {
     this._barricade(5, -88, 6, true);
     this._barricade(0, -168, 26, true);   // northern limit
     this._barricade(-3.5, 60, 4, false);
-    // rear police cordon (southern limit)
-    for (let x = -14; x <= 14; x += 2.05) this._vauban(x, 181, 0);
+    // rear police cordon (southern limit). Its middle four sections are a gate a later level
+    // opens (setCordonGate): the same barriers and colliders, in the same order, but as their
+    // own meshes so they can be hidden.
+    this.cordonGate = { meshes: [], cols: [], open: false };
+    for (let x = -14; x <= 14; x += 2.05) {
+      const gate = Math.abs(x + 0.675) < 3.2;
+      const col = this._vauban(x, 181, 0, gate ? { bucket: 'cordonGate' } : undefined);
+      if (gate) this.cordonGate.cols.push(col);
+    }
     // banners on barricades
     const banner = (text, x, z, ry, bg, fg) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.9), new THREE.MeshStandardMaterial({ map: T.bannerTexture(text, bg, fg), side: THREE.DoubleSide, roughness: 0.9 }));
@@ -979,6 +1054,7 @@ export class World {
       geos.push(g);
     }
     const mat = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.04, metalness: 0.6, envMap, envMapIntensity: 1.1, transparent: true, opacity: 0.82, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+    this.puddleMat = mat; // districts built later reuse it (same shader program)
     const mesh = new THREE.Mesh(mergeGeometries(geos), mat);
     mesh.receiveShadow = true;
     mesh.renderOrder = 1;
@@ -986,12 +1062,26 @@ export class World {
   }
 
   // ---------------------------------------------------------------- queries
+  // Clamp for the officer and everyone else (resolveCircle, blockedBy). Levels that use a
+  // different part of the city pass their own; null restores the boulevard's.
+  setBounds(b) { this.bounds = b || LAYOUT.bounds; }
+
+  // Open or close the gate in the rear cordon. Its colliders stay registered (switched off,
+  // not removed), so collider order, and with it every seeded replay, is the same after closing.
+  setCordonGate(open) {
+    const G = this.cordonGate;
+    if (G.open === !!open) return;
+    G.open = !!open;
+    for (const m of G.meshes) m.visible = !G.open;
+    for (const c of G.cols) c.off = G.open;
+  }
+
   near(x, z, r) {
     const cs = this.cell, out = new Set();
     for (let gx = Math.floor((x - r) / cs); gx <= Math.floor((x + r) / cs); gx++)
       for (let gz = Math.floor((z - r) / cs); gz <= Math.floor((z + r) / cs); gz++) {
         const l = this.grid.get(gx * 10007 + gz);
-        if (l) for (const c of l) out.add(c);
+        if (l) for (const c of l) if (!c.off) out.add(c);
       }
     return out;
   }
@@ -1018,7 +1108,7 @@ export class World {
         }
       }
     }
-    const B = LAYOUT.bounds;
+    const B = this.bounds;
     p.x = Math.max(B.minX, Math.min(B.maxX, p.x));
     p.z = Math.max(B.minZ, Math.min(B.maxZ, p.z));
     return hit;
@@ -1039,7 +1129,7 @@ export class World {
       }
       if (x + r > c.minX && x - r < c.maxX && z + r > c.minZ && z - r < c.maxZ) return c;
     }
-    const B = LAYOUT.bounds;
+    const B = this.bounds;
     return x < B.minX || x > B.maxX || z < B.minZ || z > B.maxZ ? true : null;
   }
 
@@ -1065,6 +1155,7 @@ export class World {
     this.materials.lightA.emissiveIntensity = on ? 6 : 0.2;
     this.materials.lightB.emissiveIntensity = on ? 0.2 : 6;
     if (this.impostors.mesh.visible) this.updateImpostors(t);
+    if (this.district && this.district.update) this.district.update(dt, t);
   }
 }
 

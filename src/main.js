@@ -3,7 +3,7 @@ import { SEED, isolateRender } from './seed.js'; // first: seeds Math.random whe
 import * as THREE from 'three';
 import { World } from './world.js';
 import { Effects } from './effects.js';
-import { Audio } from './audio.js';
+import { Audio, BOULEVARD_SIREN_LANES } from './audio.js';
 import { Crowd } from './crowd.js';
 import { Brawls } from './brawls.js';
 import { Player } from './player.js';
@@ -12,7 +12,7 @@ import { LEVELS, LIGHTING, Progress } from './levels.js';
 import { HUD } from './hud.js';
 import { Input } from './input.js';
 import { loadHumans, makeEnvMap, Humans } from './humans.js';
-import { IncidentScheduler } from './events.js';
+import { IncidentScheduler, BOULEVARD_EVENTS } from './events.js';
 import { Post } from './post.js';
 import { Cinematic } from './cinematic.js';
 import { TouchControls } from './touch.js';
@@ -196,11 +196,22 @@ class Game {
       this.missions = new def.Missions(this);
     }
     this.player.start = def.start;
+    // where this level plays: its part of the city, the clamp for everyone, the crowd's places
+    this.world.setDistrict(def.district || null);
+    this.world.setCordonGate(!!def.cordonOpen);
+    this.world.setBounds(def.bounds);
+    this.brawls.setEnabled(def.brawls !== false);
+    const moved = this.crowd.layoutDef !== def.crowdLayout;
+    this.crowd.setLayout(def.crowdLayout);
     const wasOn = this.crowd.reserveOn;
     this.crowd.setReserve(!!def.reserveCrews);
-    if (this.crowd.reserveOn !== !!wasOn) this.crowd.reset(); // bring the reserve crews in or out
+    // bring the reserve crews in or out, or move everyone to the level's places
+    if (this.crowd.reserveOn !== !!wasOn || moved) this.crowd.reset();
     this.crowd.setPoliceOff(def.policeOff || []);
     this.events.hazardDir = def.hazardDir || -1;
+    this.events.cfg = def.events || BOULEVARD_EVENTS;
+    this.audio.sirenLanes = def.sirenLanes || BOULEVARD_SIREN_LANES;
+    this.audio.music.setTheme(def.musicTheme);
     this.player.reset();
     this.cameraRig.reset(this.player);
     this.applyLighting(def.lighting);
@@ -321,7 +332,8 @@ class Game {
   endGame(win, reason) {
     this.pendingEnd = { win, reason, t: win ? 1.2 : 2.2 };
     // completing a level unlocks the next one on this device
-    if (win && LEVELS[this.level.id + 1]) { Progress.unlock(this.level.id + 1); this._syncLevelMenu(); }
+    const next = LEVELS[this.level.id + 1];
+    if (win && next && !next.devOnly) { Progress.unlock(next.id); this._syncLevelMenu(); }
   }
 
   _showEnd() {
@@ -331,7 +343,8 @@ class Game {
     this.hud.showEnd(win, reason, this.missions);
     $('app').classList.add('ended'); // results over a clean picture: the gameplay HUD fades out
     const next = LEVELS[this.level.id + 1];
-    $('btn-continue').classList.toggle('hidden', !(win && next && Progress.unlocked(next.id)));
+    $('btn-continue').classList.toggle('hidden', !(win && next && !next.devOnly && Progress.unlocked(next.id)));
+    if (next) $('btn-continue').textContent = `CONTINUE · LEVEL ${next.id}`;
     $('btn-retry').classList.toggle('hidden', !(!win && this.missions.cp)); // section checkpoint (Level 2)
     this._screen('end-screen');
     this.input.unlock();

@@ -32,6 +32,25 @@ const CREW_SIZE = 4;
 const RESERVE_SITES = [[-1, -64], [1, -38], [-1, 30], [1, 50]];
 const CIVILIANS = 16;
 const CROSS = LAYOUT.crossStreets;
+// Where the crowd lives in Levels 1 and 2. A level elsewhere in the city passes its own
+// (levels.js `crowdLayout`); keys it leaves out fall back to these.
+//  gatherPoints: crowd anchors (null: the world's) · marchPaths: routes of the marching groups
+//  crewZ: the stretch looting crews work in · bystanderZ: watchers and photographers step onto
+//  the pavement within this |z| · focus: where idle demonstrators look (the police line at
+//  lineZ: in front of it they face frontZ, behind it behindZ) · bgExclude: rects {x0, z0, x1, z1}
+//  where the static background population is not drawn (ground a level makes playable)
+export const BOULEVARD_LAYOUT = {
+  gatherPoints: null,
+  marchPaths: [
+    [[-4, 108], [-5, 60], [-3, 10], [4, -40], [3, -90]],
+    [[6, -95], [5, -50], [-2, 0], [-4, 50], [-6, 95]],
+    [[11.5, 100], [11.5, 60], [11.8, 20], [11.5, -10], [-11.5, -10], [-11.8, 30], [-11.5, 90]],
+  ],
+  crewZ: [-150, 108],
+  bystanderZ: 170,
+  focus: { lineZ: 128, frontZ: 135, behindZ: 100 },
+  bgExclude: [],
+};
 // Shield-carrier (Level 2): an improvised shield blocks baton strikes from the front.
 // Openings: the recovery after its shield bash, or getting round its side.
 export const SHIELD = {
@@ -61,6 +80,7 @@ export class Crowd {
     this.count = count;
     this.maxSkinned = MAX_SKINNED;
     this.keepOut = []; // {x, z, r}: ground the crowd walks round (street fights)
+    this.layout = BOULEVARD_LAYOUT;
     for (let i = 0; i < count; i++) this._spawn(randomOutfit(this.rng));
     // looting crews, and passers-by caught up in the violence
     this.crews = LOOT_SITES.map(([side, z], i) => ({ id: i, side, z0: z, home: z, door: V(), rally: V(), members: [] }));
@@ -102,9 +122,17 @@ export class Crowd {
     return 'chant';
   }
 
+  // The level's places for the crowd (see BOULEVARD_LAYOUT); applied at the next reset.
+  setLayout(layout) {
+    this.layoutDef = layout; // as the level gave it (Game.setLevel resets the crowd when it changes)
+    this.layout = layout ? { ...BOULEVARD_LAYOUT, ...layout } : BOULEVARD_LAYOUT;
+    this.bgAt = null; // redraw the background population with the new exclusions
+  }
+
   reset() {
     this.time = 0;
-    const gps = this.world.gatherPoints;
+    const L = this.layout;
+    const gps = L.gatherPoints || this.world.gatherPoints;
     for (const c of this.crews) { if (c.reserve && !this.reserveOn) continue; c.z0 = c.home; this._placeCrew(c); c.burns = 0; c.burnT = 8 + this.rng() * 25; }
     this.npcs.forEach((n, i) => {
       if (n.special) { this.retire(n); return; } // scripted characters are placed by their level
@@ -133,7 +161,7 @@ export class Crowd {
       n.thinkT = this.rng() * 0.3; n.animAcc = 0; n.cool = 0; n.targetRef = null;
       n.script = null; n.surge = null; n.hitCount = 0; n.fallDir = -1;
       n.radius = 0.32; n.mass = 1;
-      if ((n.role === 'watch' || n.role === 'photo') && Math.abs(n.anchor.x) < 9.5 && Math.abs(n.anchor.z) < 170) {
+      if ((n.role === 'watch' || n.role === 'photo') && Math.abs(n.anchor.x) < 9.5 && Math.abs(n.anchor.z) < L.bystanderZ) {
         const sx = (n.anchor.x >= 0 ? 1 : -1) * (10.8 + this.rng() * 2.6);
         if (!this.world.blocked(sx, n.anchor.z, 0.4)) { n.anchor.x = sx; n.pos.copy(n.anchor); }
       }
@@ -164,8 +192,18 @@ export class Crowd {
   // Find a reachable spot in front of a shop near the crew's z, plus a rally
   // point on the pavement where the crew gathers between break-ins.
   _placeCrew(c) {
+    // a level with its own shop fronts gives each crew a door and a rally point
+    const sites = this.layout.crewSites;
+    if (sites) {
+      const s = sites[c.id % sites.length];
+      c.damage = 0; c.broken = false;
+      c.door.set(s.door[0], 0, s.door[1]); c.rally.set(s.rally[0], 0, s.rally[1]);
+      c.face = { x: s.face[0], z: s.face[1] }; // from the pavement into the shop front
+      return;
+    }
+    c.face = null; // boulevard shop fronts face across x (c.side)
     const inStreet = (z) => CROSS.some((s) => Math.abs(z - s.z) < s.half + 3);
-    c.z0 = Math.max(-150, Math.min(108, c.z0));
+    c.z0 = Math.max(this.layout.crewZ[0], Math.min(this.layout.crewZ[1], c.z0));
     for (let i = 0; i < 6 && inStreet(c.z0); i++) c.z0 += c.z0 > c.home ? 6 : -6;
     c.damage = 0; c.broken = false;
     for (let dz = 0; dz < 14; dz += 1.5) for (const sg of [1, -1]) {
@@ -229,7 +267,8 @@ export class Crowd {
   _startArson(n) {
     const c = n.crew;
     giveItem(n.rig, 'bottle');
-    n.target.set(c.side * 10.5, 0, c.door.z + (this.rng() - 0.5) * 4);
+    if (this.layout.crewSites) n.target.set(c.rally.x + (this.rng() - 0.5) * 3, 0, c.rally.z + (this.rng() - 0.5) * 3);
+    else n.target.set(c.side * 10.5, 0, c.door.z + (this.rng() - 0.5) * 4);
     if (this.world.blocked(n.target.x, n.target.z, 0.4)) n.target.copy(c.rally);
     n.lootStep = 'arson'; n.lootSpeed = 2.6;
     this.setState(n, 'loot_move');
@@ -252,7 +291,8 @@ export class Crowd {
     if (s === 'loot_move') {
       if (Math.hypot(n.target.x - n.pos.x, n.target.z - n.pos.z) > 0.6 && n.st < 14) return;
       if (n.lootStep === 'door') {
-        n.focus.set(c.side * 30, 0, n.pos.z); // face the shop front
+        if (c.face) n.focus.set(n.pos.x + c.face.x * 30, 0, n.pos.z + c.face.z * 30);
+        else n.focus.set(c.side * 30, 0, n.pos.z); // face the shop front
         if (c.broken) this.setState(n, 'loot_grab', 1.2 + this.rng() * 1.4);
         else { this.setState(n, 'loot_smash', 2.5 + this.rng() * 2.5); n.hitCyc = Math.floor(n.id * 0.3 - 0.25); }
       } else if (n.lootStep === 'stash') { clearItem(n.rig); this._lootMove(n, 'rally', 2.0); }
@@ -263,7 +303,8 @@ export class Crowd {
       const cyc = Math.floor(n.st * 1.6 + n.id * 0.3 - 0.25);
       if (cyc !== n.hitCyc) {
         n.hitCyc = cyc;
-        const at = n.pos.clone().setY(n.pos.y + 1.0); at.x += c.side * 0.6;
+        const at = n.pos.clone().setY(n.pos.y + 1.0);
+        if (c.face) { at.x += c.face.x * 0.6; at.z += c.face.z * 0.6; } else at.x += c.side * 0.6;
         c.damage++;
         if (!c.broken && c.damage >= 6) {
           c.broken = true;
@@ -282,7 +323,8 @@ export class Crowd {
       giveItem(n.rig, 'loot', this.rng);
       // carry it off along the pavement
       const dir = this.rng() < 0.5 ? 1 : -1;
-      n.target.set(c.side * (10.5 + this.rng() * 2), 0, c.door.z + dir * (12 + this.rng() * 8));
+      if (c.face) { const k = dir * (12 + this.rng() * 8); n.target.set(c.rally.x - c.face.z * k, 0, c.rally.z + c.face.x * k); }
+      else n.target.set(c.side * (10.5 + this.rng() * 2), 0, c.door.z + dir * (12 + this.rng() * 8));
       if (this.world.blocked(n.target.x, n.target.z, 0.4)) n.target.copy(n.anchor);
       n.lootStep = 'stash'; n.lootSpeed = 1.9;
       this.setState(n, 'loot_move');
@@ -305,10 +347,11 @@ export class Crowd {
     const door = c.door.clone();
     const from = n.pos.clone().setY(n.pos.y + 1.9);
     g.audio.swing(n.pos);
-    g.effects.throwProjectile(from, V().set(door.x + c.side * 0.4, 0.8, door.z), 'petrol', () => {
+    const fx = c.face ? c.face.x : c.side, fz = c.face ? c.face.z : 0;
+    g.effects.throwProjectile(from, V().set(door.x + fx * 0.4, 0.8, door.z + fz * 0.4), 'petrol', () => {
       const ground = door.clone().setY(this.world.groundHeight(door.x, door.z));
       g.effects.ignite(ground, 2.4, 7 + this.rng() * 4);
-      g.effects.addFire(V().set(door.x + c.side * 1.1, 1.0, door.z), 1.3, 2.2);
+      g.effects.addFire(V().set(door.x + fx * 1.1, 1.0, door.z + fz * 1.1), 1.3, 2.2);
       g.audio.molotov(ground, 0.9);
       g.audio.glass(ground, 0.7);
       this.disturb(ground, 18, 0.95, 'explosion');
@@ -338,8 +381,10 @@ export class Crowd {
     if (!cands.length) cands = this.crews;
     const c = cands[Math.floor(this.rng() * cands.length)];
     n.pos.copy(c.rally);
+    const sites = this.layout.crewSites;
     for (let k = 0; k < 8; k++) {
-      const x = c.side * (9.8 + this.rng() * 3.5), z = c.door.z + (this.rng() < 0.5 ? -1 : 1) * (3 + this.rng() * 7);
+      const x = sites ? c.rally.x + (this.rng() - 0.5) * 12 : c.side * (9.8 + this.rng() * 3.5);
+      const z = sites ? c.rally.z + (this.rng() - 0.5) * 12 : c.door.z + (this.rng() < 0.5 ? -1 : 1) * (3 + this.rng() * 7);
       if (!this.world.blocked(x, z, 0.4)) { n.pos.set(x, 0, z); break; }
     }
     n.anchor.copy(n.pos); n.vel.set(0, 0, 0); n.knock.set(0, 0, 0);
@@ -409,11 +454,7 @@ export class Crowd {
   // Groups of demonstrators that move together along the boulevard.
   _makeMarches() {
     for (const n of this.npcs) { n.march = null; }
-    const paths = [
-      [[-4, 108], [-5, 60], [-3, 10], [4, -40], [3, -90]],
-      [[6, -95], [5, -50], [-2, 0], [-4, 50], [-6, 95]],
-      [[11.5, 100], [11.5, 60], [11.8, 20], [11.5, -10], [-11.5, -10], [-11.8, 30], [-11.5, 90]],
-    ];
+    const paths = this.layout.marchPaths;
     this.marches = paths.map((path, gi) => ({ path: path.map(([x, z]) => new THREE.Vector3(x, 0, z)), idx: 1, pos: new THREE.Vector3(path[0][0], 0, path[0][1]), dir: new THREE.Vector3(0, 0, -1), speed: 0.85 + gi * 0.12, wait: 0 }));
     const free = this.npcs.filter((n) => n.id >= Math.round(this.count * 0.23) && n.temperament === 'peaceful');
     let k = 0;
@@ -706,8 +747,10 @@ export class Crowd {
     this.bgAt = { x: cam.x, z: cam.z };
     const F = this.bgFar;
     F.begin();
+    const ex = this.layout.bgExclude;
     for (const b of this.bg) {
       if ((b.x - cam.x) ** 2 + (b.z - cam.z) ** 2 > 195 * 195) continue;
+      if (ex.length && ex.some((r) => b.x > r.x0 && b.x < r.x1 && b.z > r.z0 && b.z < r.z1)) continue;
       F.add(b.kind, b.walk, { x: b.x, y: 0, z: b.z, heading: b.h, scale: b.scale, colors: b.colors, pat: b.pat });
     }
     F.end();
@@ -775,8 +818,8 @@ export class Crowd {
       // focus: filmers point their phones at the officer when he is close
       if (!n.lookT || n.lookT <= 0) {
         if ((n.role === 'film' || n.role === 'shout') && n.distToPlayer < 16) n.focus.copy(player.pos);
-        else if (n.pos.z < 128) n.focus.set(n.pos.x * 0.5, 0, 135);
-        else n.focus.set(0, 0, 100);
+        else if (n.pos.z < this.layout.focus.lineZ) n.focus.set(n.pos.x * 0.5, 0, this.layout.focus.frontZ);
+        else n.focus.set(0, 0, this.layout.focus.behindZ);
       } else n.lookT -= dt;
       // stay out of the officer's way when he walks through (personal space), and back
       // off from a fight going on around him

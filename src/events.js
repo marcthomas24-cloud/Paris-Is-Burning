@@ -22,6 +22,18 @@ const ZONES = [
   { name: 'Oberkampf junction', crowd: V(-2, 0, -96), police: V(2, 0, -78), inside: true },
 ];
 
+// Where things happen on the boulevard (Levels 1 and 2). A level that plays elsewhere gives
+// its own `events` in levels.js with the same keys.
+//  zones: unrest areas above · hazardZ: incoming petrol bombs only land between these z
+//  carFireZ: parked cars that catch fire stay between these z
+//  gas: the CRS line's tear-gas volleys (fired from z fromZ into toZ, while the officer is past minPlayerZ)
+export const BOULEVARD_EVENTS = {
+  zones: ZONES,
+  hazardZ: [-120, 170],
+  carFireZ: [-150, 110],
+  gas: { fromZ: 125, toZ: [86, 108], minPlayerZ: 40 },
+};
+
 export class IncidentScheduler {
   constructor(game) {
     this.game = game;
@@ -29,7 +41,7 @@ export class IncidentScheduler {
   }
 
   // hazardDir: the direction the officer advances along the boulevard (Level 1 -z, Level 2 +z)
-  reset() { this.hazardDir = (this.game.level && this.game.level.hazardDir) || -1; this.t = 4; this.carT = 22 + Math.random() * 15; this.lastZone = null; this.queue = []; this.hazards = false; this.hazT = 4; this.gasT = 30 + Math.random() * 20; this.gasClouds = []; this.timers = []; }
+  reset() { this.hazardDir = (this.game.level && this.game.level.hazardDir) || -1; this.cfg = (this.game.level && this.game.level.events) || BOULEVARD_EVENTS; this.t = 4; this.carT = 22 + Math.random() * 15; this.lastZone = null; this.queue = []; this.hazards = false; this.hazT = 4; this.gasT = 30 + Math.random() * 20; this.gasClouds = []; this.timers = []; }
 
   // run fn after `sec` seconds of game time (staggered shots; replaces wall-clock
   // timers so the simulation stays reproducible and nothing fires while paused)
@@ -49,18 +61,19 @@ export class IncidentScheduler {
   }
 
   _nearestZone(p, minD) {
-    const c = ZONES.filter((z) => z.crowd.distanceTo(p) > minD).sort((a, b) => a.crowd.distanceTo(p) - b.crowd.distanceTo(p));
-    return c[0] || ZONES[0];
+    const zones = this.cfg.zones;
+    const c = zones.filter((z) => z.crowd.distanceTo(p) > minD).sort((a, b) => a.crowd.distanceTo(p) - b.crowd.distanceTo(p));
+    return c[0] || zones[0];
   }
 
   // CRS fire tear-gas canisters from the line into the crowd ahead
   tearGas() {
-    const g = this.game;
+    const g = this.game, gas = this.cfg.gas;
     const n = 2 + Math.floor(Math.random() * 3);
     for (let i = 0; i < n; i++) {
       this.later(i * R(250, 600) / 1000, () => {
-        const from = V(R(-8, 8), 2.2, 125);
-        const to = V(R(-9, 9), 0.1, R(86, 108));
+        const from = V(R(-8, 8), 2.2, gas.fromZ);
+        const to = V(R(-9, 9), 0.1, R(gas.toZ[0], gas.toZ[1]));
         g.audio.thump(from);
         g.effects.throwProjectile(from, to, 'stone', (pos) => this.gasCloud(pos), R(1.1, 1.5));
       });
@@ -100,7 +113,7 @@ export class IncidentScheduler {
     const g = this.game, p = g.player.pos;
     const sideOff = (Math.random() < 0.5 ? -1 : 1) * R(2.5, 6);
     const ahead = V(Math.max(-12, Math.min(12, p.x + sideOff)), 0, p.z + this.hazardDir * R(14, 24));
-    if (ahead.z < -120 || ahead.z > 170) return;
+    if (ahead.z < this.cfg.hazardZ[0] || ahead.z > this.cfg.hazardZ[1]) return;
     g.hud.alert('Incoming petrol bomb!', 'warn', 1.4, 'incoming');
     this.molotovAt(ahead);
   }
@@ -113,7 +126,7 @@ export class IncidentScheduler {
     if (this.hazards) { this.hazT -= dt; if (this.hazT <= 0) { this.hazT = R(8, 13); this._hazard(); } }
     // police tear gas at intervals while the crowd is near the line
     this.gasT -= dt;
-    if (this.gasT <= 0) { this.gasT = R(35, 60); if (g.player.pos.z > 40) this.tearGas(); }
+    if (this.gasT <= 0) { this.gasT = R(35, 60); if (g.player.pos.z > this.cfg.gas.minPlayerZ) this.tearGas(); }
     // lingering tear-gas clouds: thick pale smoke that keeps people away
     for (let i = this.gasClouds.length - 1; i >= 0; i--) {
       const c = this.gasClouds[i];
@@ -129,7 +142,7 @@ export class IncidentScheduler {
       // prefer areas at a visible distance, never on top of the player
       // never into a boss arena: a boss fight must contain no damage the player cannot see coming
       const A = g.crowd.arena, nearArena = (v) => A && Math.hypot(v.x - A.x, v.z - A.z) < A.r + 25;
-      const cands = ZONES.filter((z) => { const d = z.crowd.distanceTo(p); return d > (z.inside ? 30 : 20) && d < 170 && z !== this.lastZone && !nearArena(z.police) && !nearArena(z.crowd); });
+      const cands = this.cfg.zones.filter((z) => { const d = z.crowd.distanceTo(p); return d > (z.inside ? 30 : 20) && d < 170 && z !== this.lastZone && !nearArena(z.police) && !nearArena(z.crowd); });
       if (!cands.length) return;
       const z = cands[Math.floor(Math.random() * cands.length)];
       this.lastZone = z;
@@ -208,7 +221,7 @@ export class IncidentScheduler {
     // a parked car near the player's area bursts into flames (not too close)
     const p = g.player.pos;
     const spot = at ? at.clone() : V(R(-1, 1) > 0 ? 7.7 : -7.7, 1.0, p.z + R(-60, 60) * (Math.random() < 0.5 ? 1 : -1));
-    spot.z = Math.max(-150, Math.min(110, spot.z));
+    spot.z = Math.max(this.cfg.carFireZ[0], Math.min(this.cfg.carFireZ[1], spot.z));
     if (!at && spot.distanceTo(p) < 18) return;
     g.effects.explosion(spot, 1.1);
     g.effects.addFire(spot, 1.4, 2.0);

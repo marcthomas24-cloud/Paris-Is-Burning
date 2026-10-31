@@ -87,7 +87,15 @@ export class Brawls {
     }
   }
 
+  // Levels played elsewhere in the city switch the boulevard's set pieces off (hidden, frozen).
+  setEnabled(on) {
+    if (this.off === !on) return;
+    this.off = !on;
+    if (this.off) for (const sc of this.scenes) for (const a of [...sc.actors, sc.victim].filter(Boolean)) a.rig.root.visible = false;
+  }
+
   update(dt, t) {
+    if (this.off) return;
     const g = this.game, pp = g.player.pos;
     for (const sc of this.scenes) {
       const d = Math.hypot(pp.x - sc.x, pp.z - sc.z);

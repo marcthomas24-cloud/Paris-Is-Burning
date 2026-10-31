@@ -29,8 +29,14 @@ const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI)
 // ------------------------------------------------------------------ definitions
 // kind: bash / shove (shield), chop / swing (axe), charge
 // blockable: the player's raised shield stops it; otherwise it must be dodged or avoided
+// Behaviour flags (instead of checks on the boss's id):
+//  pattern: 'shieldCharge' bashes up close, charges from range and after two blocked bashes;
+//           without it the boss picks weighted moves from its phase (`moves`)
+//  keepDist: how close it stands while waiting to attack (m) · closeSpeed: run speed when far
+//  intro: 'slam' plays the shield slam during its introduction (otherwise the axe is raised)
 export const ENFORCER = {
   id: 'enforcer', name: 'THE ENFORCER', sub: "le Patron's lieutenant", hp: 10, shield: 'heavy', axe: false,
+  pattern: 'shieldCharge', keepDist: 2.3, intro: 'slam',
   openCap: { rec: 2, stun: 3 },
   phases: [{ from: 8, speed: 2.4, turn: 2.0, guardCos: 0.4, cooldown: 1.3 }],
   attacks: {
@@ -41,6 +47,7 @@ export const ENFORCER = {
 
 export const LEADER = {
   id: 'leader', name: 'LE PATRON', sub: 'runs the looting crews', hp: 15, shield: 'door', axe: true,
+  keepDist: 2.4, closeSpeed: 4.2,
   openCap: { rec: 2, stun: 3 },
   phases: [
     // 1: defensive, shield up, deliberate heavy attacks
@@ -256,7 +263,7 @@ export class Boss {
   // intro beats, timed to the introduction cinematic
   _introBeats() {
     const g = this.game, n = this.n;
-    if (this.def.id === 'enforcer' && !this.slammed && this.introT > 1.25) {
+    if (this.def.intro === 'slam' && !this.slammed && this.introT > 1.25) {
       this.slammed = true; // the steel shield slammed into the road
       g.audio.impact(n.pos, true, true); g.effects.dust(n.pos.clone().setY(0.2), 16); g.cameraRig.shake(0.2);
     }
@@ -264,7 +271,7 @@ export class Boss {
 
   _choose(d) {
     const ph = this.phase, A = this.def.attacks;
-    if (this.def.id === 'enforcer') {
+    if (this.def.pattern === 'shieldCharge') {
       // pattern: after two bashes stopped by the officer's shield he backs off and charges
       if (this.blockedBashes >= 2 && this.chargeCool <= 0) { this.blockedBashes = 0; this.s = 'backoff'; this.t = 0; return; }
       if (d > 6.5 && this.chargeCool <= 0) { this.chargeCool = 6; this.queue = []; this.curRecScale = 1; return this._wind(A.charge); }
@@ -369,9 +376,9 @@ export class Boss {
       const a = Math.atan2(n.pos.x - p.x, n.pos.z - p.z) + this.strafeSide * 0.7;
       return { speed: ph.speed, dest: V().set(p.x + Math.sin(a) * 2.5, 0, p.z + Math.cos(a) * 2.5) };
     }
-    const want = this.def.id === 'enforcer' ? 2.3 : 2.4;
+    const want = this.def.keepDist ?? 2.4;
     if (d <= want) return { speed: 0 };
-    return { speed: d > 7 && this.def.id === 'leader' ? 4.2 : ph.speed, dest: p.clone() };
+    return { speed: d > 7 && this.def.closeSpeed ? this.def.closeSpeed : ph.speed, dest: p.clone() };
   }
 
   heading(dt) {
@@ -400,7 +407,7 @@ export class Boss {
     if (rig.ring) rig.ring.scale.setScalar(s === 'wind' && a && !a.blockable ? 1 + 0.3 * Math.abs(Math.sin(t * 16)) : 1);
     if (s === 'intro' && this.game.cinematic) {
       const it = this.introT;
-      if (this.def.id === 'enforcer') {
+      if (this.def.intro === 'slam') {
         // shield raised high, then slammed down at 1.25 s
         if (it < 1.25) { sp = [SHIELD_POSE.wind[0].clone().setY(0.55), SHIELD_POSE.wind[1]]; P.shLX = -2.0; P.elL = -1.2; P.spX = -0.15; sk = 6; }
         else { sp = SHIELD_POSE.strike; P.shLX = -1.5; P.elL = -0.6; P.spX = 0.35; sk = 30; }

@@ -6,6 +6,8 @@
 // never add or remove lights, so switching does not recompile any shaders.
 import { Missions, PHASES } from './missions.js';
 import { Level2, L2_PHASES } from './level2.js';
+import { Level3, L3_PHASES, L3_CROWD, L3_EVENTS } from './level3.js';
+import { DISTRICT } from './district.js';
 
 export const LIGHTING = {
   // the original look, values unchanged
@@ -25,6 +27,15 @@ export const LIGHTING = {
     sky: { horizon: [0.20, 0.13, 0.09], low: [0.08, 0.08, 0.10], top: [0.02, 0.03, 0.05], glow: [0.75, 0.32, 0.12], glowK: 0.35, haze: [0.16, 0.10, 0.07] },
     lamp: 3.2, beaconOn: 24, beaconOff: 3, fireLight: 1.7, puddleEnv: 0.5, smokeTint: [0.42, 0.39, 0.38],
   },
+  // Level 3: later the same night, a large square. Cooler and a little clearer than `night`,
+  // so the far side of the square and its landmarks still read through the haze.
+  night3: {
+    hemiSky: 0x52648c, hemiGround: 0x2a2420, hemiI: 1.15,
+    sunColor: 0xa6bce8, sunI: 0.8, sunOffset: [26, 70, -30],
+    exposure: 1.35, baseFog: 0.0092, fogA: 0x252a34, fogB: 0x3a2e26,
+    sky: { horizon: [0.17, 0.14, 0.13], low: [0.08, 0.09, 0.12], top: [0.02, 0.03, 0.06], glow: [0.55, 0.28, 0.14], glowK: 0.28, haze: [0.14, 0.12, 0.11] },
+    lamp: 3.6, beaconOn: 26, beaconOff: 3, fireLight: 1.5, puddleEnv: 0.6, smokeTint: [0.44, 0.42, 0.42],
+  },
 };
 
 export const LEVELS = {
@@ -40,6 +51,16 @@ export const LEVELS = {
     reserveCrews: true,              // extra looting crews along the Level 2 route
     music: true,                     // synthesised score (music.js); Level 1 keeps its original soundscape
     start: { x: -1.5, z: -100, heading: 0 },
+  },
+  // Environment build only (no encounters yet): reachable through the developer shortcuts
+  // (?dev&level=3), never unlocked by finishing Level 2 until its mission is in.
+  3: {
+    id: 3, name: 'THE BREAKOUT', tag: 'Place du Château-d\'Eau · 02h20', devOnly: true,
+    Missions: Level3, phases: L3_PHASES, lighting: 'night3', hazardDir: 1,
+    policeOff: ['injured', 'guard'], reserveCrews: true, music: true,
+    start: DISTRICT.start, bounds: DISTRICT.bounds,
+    district: 'l3', cordonOpen: true, brawls: false,
+    crowdLayout: L3_CROWD, events: L3_EVENTS, sirenLanes: [240, 395, 470],
   },
 };
 

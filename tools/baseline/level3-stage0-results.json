@@ -1,0 +1,41 @@
+{
+  "description": "Level 3 Stage 0 (groundwork, no behaviour change): before/after comparison on branch level3. Before = level2 tip 958a56d; after = the Stage 0 changes. Both on the dev server (vite :5173), Claude desktop app built-in Chromium, hidden pane, AMD Radeon integrated GPU.",
+  "date": "2026-10-30",
+  "changes": [
+    "world.js: per-level bounds (world.bounds / setBounds, default LAYOUT.bounds); optional rng argument for _frontage/_building (default: the boulevard stream); rear-cordon gate (four centre barriers) in its own batch, opened by setCordonGate, whose colliders are switched off rather than removed; quietly() builds start-up objects without drawing from Math.random",
+    "events.js: BOULEVARD_EVENTS (zones, hazard and car-fire z clamps, CRS tear-gas origin) read from the level's `events`",
+    "crowd.js: BOULEVARD_LAYOUT (gather points, march paths, crew z range, bystander z, idle focus, background exclusion rects) and setLayout()",
+    "audio.js: BOULEVARD_SIREN_LANES / audio.sirenLanes; music.js: THEMES (Level 2 theme only), setTheme(), per-theme bpm overrides",
+    "boss.js: behaviour flags (pattern, keepDist, closeSpeed, intro) replace checks on the boss id",
+    "main.js: setLevel applies events config, bounds, crowd layout, siren lanes and music theme"
+  ],
+  "level1_seed3": {
+    "command": "?dev&seed=3, await __runToEnd()",
+    "before": { "t": 95.4, "score": 6118, "stats": { "neutralized": 15, "arrests": 9, "peaceful": 0, "downed": 0, "bombsStopped": 0, "bombsThrown": 2 }, "minHp": 72, "crowdSum": ["514.815", "3300.723"], "playerPos": ["-2.171", "-111.592"], "programs": 53 },
+    "after": { "t": 95.4, "score": 6118, "stats": { "neutralized": 15, "arrests": 9, "peaceful": 0, "downed": 0, "bombsStopped": 0, "bombsThrown": 2 }, "minHp": 72, "crowdSum": ["514.815", "3300.723"], "playerPos": ["-2.171", "-111.592"], "programs": 53 },
+    "verdict": "IDENTICAL"
+  },
+  "level2_seed12": {
+    "command": "?dev&level=2&seed=12, await __auditRun({ watch: true })",
+    "before": { "t": 186.42, "score": 9925, "bossTimes": { "enforcer": 24.5, "leader": 37.4 }, "sections": [[0, 0.1], [1, 24.4], [2, 53.3], [3, 77.8], [4, 142.3]], "encountersStarted": 13, "shortfall": 0, "minHp": 16, "crowdSum": ["934.766", "7061.193"], "playerPos": ["2.700", "60.664"], "issues": [], "programs": 79 },
+    "after": { "t": 186.42, "score": 9925, "bossTimes": { "enforcer": 24.5, "leader": 37.4 }, "sections": [[0, 0.1], [1, 24.4], [2, 53.3], [3, 77.8], [4, 142.3]], "encountersStarted": 13, "shortfall": 0, "minHp": 16, "crowdSum": ["934.766", "7061.193"], "playerPos": ["2.700", "60.664"], "issues": [], "programs": 79 },
+    "verdict": "IDENTICAL"
+  },
+  "world": {
+    "before": { "colliders": 303, "colliderChecksum": "31619.872", "mergedVertices": 690566, "staticMeshes": 67, "crowdAnchorsAtBoot": "5307.250" },
+    "after": { "colliders": 303, "colliderChecksum": "31619.872", "mergedVertices": 690566, "staticMeshes": 68, "crowdAnchorsAtBoot": "5307.250" },
+    "note": "One extra static mesh: the cordon gate's own batch (same barriers, same vertex total). A first attempt that built the gate as separate meshes during start-up shifted the seeded Math.random stream before the crowd was built (three.js draws it for every uuid) and Level 1 diverged; the gate now goes through the same _vauban path and its batch is merged inside quietly()."
+  },
+  "bosses": {
+    "command": "?dev&level=2&seed=5, __start({ audio: false }); __lintBosses(), __testChargeWindow(), __testWallStun(), __testTransitions(2), __testFeints(400), __fuzzBoss('leader', 40), __fuzzBoss('enforcer', 40), __testCheckpoint('enforcer')",
+    "verdict": "IDENTICAL before and after: lint clean; charge launch-to-contact 0.52 / 0.63 / 0.72 / 0.80 / 1.03 s at 4.5-9 m; wall stun pass; transitions 4/4; feints 6, all 6 real attacks after a feint safe, 0 chop hits taken; fuzz leader and enforcer pass with identical visit counts; checkpoint pass"
+  },
+  "newHooks": {
+    "setCordonGate": "closed: centre and side both blocked; open: centre free, sides still blocked, gate mesh hidden; closing again restores both",
+    "setBounds": "default clamps z at 182; Level 3 bounds let z = 300 through and block z = 500; null restores 182",
+    "crowd.setLayout": "partial layouts merge with the boulevard defaults; null restores them",
+    "music.setTheme": "unknown names fall back to the Level 2 theme",
+    "events.cfg": "Level 2 uses the boulevard config (hazard z -120..170, 10 zones)"
+  },
+  "build": "npm run build: clean (48 modules, index 975 kB / 279 kB gzip)"
+}

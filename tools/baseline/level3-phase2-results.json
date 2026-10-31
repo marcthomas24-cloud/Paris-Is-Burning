@@ -1,0 +1,27 @@
+{
+  "description": "Level 3 Phase 2 (world expansion and environment): validation of the district built by src/district.js, run on the dev server (vite :5173) in the Claude desktop app's built-in Chromium with the Browser pane hidden (a background page), AMD Radeon integrated GPU. Branch level3, on top of Stage 0 (uncommitted).",
+  "date": "2026-10-31",
+  "traversal": {
+    "navMap": { "command": "?dev&level=3, __navMap()", "reachableM2": 16889, "leaksIntoBuildings": 0, "closedOffPockets": 0, "landmarksReached": { "staging": true, "blockedStreet": true, "square": true, "metro": true, "extraction": true } },
+    "walkRoute": [
+      { "route": "A (Avenue, through the roadblock's east-pavement gap)", "finished": true, "seconds": 68.2, "stuckEvents": 0, "cameraInsideCollider": 0, "cameraTrapped": 0, "minCameraDist": 0.6 },
+      { "route": "B (Passage)", "finished": true, "seconds": 74.1, "stuckEvents": 1, "note": "the walker's straight line met the metro balustrade and steered round it (route since adjusted)", "cameraInsideCollider": 1, "cameraInsideAt": [34.7, 345.9, "building corner at the Passage exit, one 0.1 s sample"] },
+      { "route": "square (ring road, both side streets)", "finished": true, "note": "first version of the test route put waypoints inside a parked car and a van; nudged by hand, route since corrected", "cameraInsideCollider": 4, "cameraInsideAt": "thin props for one 0.1 s sample each: a Morris column, a candelabra pole, a van end" }
+    ]
+  },
+  "npcNavigation": { "command": "__npcNav(30, 90): agents sent 30-80 m", "sent": 30, "arrived": 22, "meanProgress": 0.94, "under50pct": 0, "stuck": 0, "insideColliders": 0, "outOfBounds": 0 },
+  "regression": {
+    "level1_seed3": { "command": "?dev&seed=3, await __runToEnd()", "t": 95.4, "score": 6118, "crowdSum": ["514.815", "3300.723"], "playerPos": ["-2.171", "-111.592"], "programs": 53, "verdict": "IDENTICAL to the Stage 0 baseline" },
+    "level2_seed12": { "command": "?dev&level=2&seed=12, await __auditRun({ watch: true })", "t": 186.42, "score": 9925, "bossTimes": { "enforcer": 24.5, "leader": 37.4 }, "crowdSum": ["934.766", "7061.193"], "playerPos": ["2.700", "60.664"], "issues": [], "programs": 79, "verdict": "IDENTICAL to the Stage 0 baseline" }
+  },
+  "performance": {
+    "caveat": "Measured with the Browser pane hidden: absolute milliseconds are about ten times the archived frame-times.json figures and vary by +-40% between identical passes, so only draw calls, triangles and relative cost are meaningful.",
+    "level1_fresh": { "calls": 255, "tris": 1720506, "msMean": [268.25, 375.9] },
+    "level1_after_visiting_level3": { "calls": 257, "tris": 1729599, "msMean": [337.02, 343.35], "note": "the hidden district adds no draw calls or triangles" },
+    "level3": { "calls": 197, "tris": 965243, "msMean": 184.86, "programs": "75-89 depending on what has been on screen; Level 2's fights reach 79", "heaviestViews": { "squareWide": { "calls": 341, "tris": 1254375 }, "squareNorth": { "calls": 233, "tris": 1037038 } } },
+    "districtBuild": { "ms": 1808, "note": "first entry to Level 3 only; includes canvas textures and renderer.compile of the whole scene (programs 41 -> 80), which keeps compiles out of play. Over the 400 ms design target." },
+    "lights": "unchanged: no light added; lamp pools, lit windows and signs are unlit materials, police and fire glow use the existing pooled lights"
+  },
+  "mobile": { "viewport": "812x375 with ?touch", "hudLayout": { "overlaps": [], "offscreen": [] } },
+  "build": "npm run build: clean; main bundle 1,019.99 kB (295.87 kB gzip), dev chunk 40.89 kB"
+}

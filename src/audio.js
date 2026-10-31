@@ -39,6 +39,8 @@ const CATS = {
   shout: [2, 2], whistle: [1, 2], chant: [1, 3], roar: [1, 4], fw: [3, 3], alarm: [2, 2], misc: [4, 3],
 };
 const MAX_VOICES = 22;
+// cross streets of the boulevard (and the far ends) that police vehicles drive along
+export const BOULEVARD_SIREN_LANES = [-190, -110, -20, 70, 175];
 
 const SETTINGS_KEY = 'parisBurning.audio.v1';
 const DEFAULTS = { master: 0.8, ambience: 0.8, effects: 0.9, music: 0.7, muted: false };
@@ -104,6 +106,7 @@ export class Audio {
     this.samples = {};
     this.voices = [];
     this.vehicles = [];
+    this.sirenLanes = BOULEVARD_SIREN_LANES; // z of the cross streets sirens drive along (per level)
     this.alarms = [];
     this.pending = [];     // deferred one-shots {t, fn} run from update()
     this.music = new Music(this);
@@ -590,7 +593,7 @@ export class Audio {
 
   _spawnVehicle() {
     const L = this.listener, c = this.ctx;
-    const lanes = [-190, -110, -20, 70, 175].filter((z) => Math.abs(z - L.z) > 25 && Math.abs(z - L.z) < 170);
+    const lanes = this.sirenLanes.filter((z) => Math.abs(z - L.z) > 25 && Math.abs(z - L.z) < 170);
     const lz = lanes.length ? pick(lanes) : L.z + (Math.random() < 0.5 ? -1 : 1) * R(60, 120);
     const dir = Math.random() < 0.5 ? 1 : -1;
     // a quick pass: in from one side, out of the other within about 11 s

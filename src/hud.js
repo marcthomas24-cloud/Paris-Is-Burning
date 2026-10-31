@@ -222,6 +222,11 @@ export class HUD {
     };
     for (const r of w.roads) poly(r.x0, r.z0, r.x1, r.z1, 'rgba(120,120,118,0.55)');
     for (const b of w.blocks) poly(b.x0, b.z0, b.x1, b.z1, 'rgba(58,56,52,0.95)');
+    const D = w.district; // the active level's own part of the city
+    if (D) {
+      for (const r of D.roads) poly(r.x0, r.z0, r.x1, r.z1, 'rgba(120,120,118,0.55)');
+      for (const b of D.blocks) poly(b.x0, b.z0, b.x1, b.z1, 'rgba(58,56,52,0.95)');
+    }
     // NPCs
     const crowd = g.crowd;
     for (const n of crowd.npcs) {
