@@ -193,7 +193,10 @@ export class Level2 extends Missions {
     this.leaderSeen = cp.section > 0;
     this._startSection(cp.section);
   }
-  jumpTo(i) { this.resume({ section: Math.max(0, Math.min(SECTIONS.length - 1, i | 0)) }); }
+  jumpTo(i) {
+    if (typeof i === 'string') i = Math.max(0, SECTIONS.findIndex((s) => s.boss === i)); // ?dev&level=2&stage=leader
+    this.resume({ section: Math.max(0, Math.min(SECTIONS.length - 1, i | 0)) });
+  }
 
   update(dt) {
     const g = this.game;

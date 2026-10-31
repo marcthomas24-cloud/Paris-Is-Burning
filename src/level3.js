@@ -11,10 +11,18 @@
 //  Act 3 THE SQUARE     S3  a peaceful rally; the crew's stash and phone reveal the Fixer;
 //                           fireworks into the rally, a panicked surge with two attackers in it;
 //                           the crew's last line at the south exit
-//  Act 4 THE INTERCEPT  S4  the Fixer's final attempt (boss fight: next phase; a placeholder here)
+//  Act 4 THE INTERCEPT  S4  the Fixer's final attempt: the van parks in the arena and he fights
+//                           the officer himself (boss.js FIXER); arrested, his crews scatter
 //                       S5  the last stand, then the handover at the extraction point
 //
-// Every section is a checkpoint. The van (convoy.js) holds at the end of each section until
+// The Fixer is nobody's cause: he runs le Patron's crews day to day and is breaking him out to
+// keep the network, and his own place in it, together.
+//
+// Cinematics (all skippable; the radio waits while one plays): the transfer briefing, the
+// Fixer's reveal in the square, his introduction before the fight, his arrest, the handover.
+//
+// Every section is a checkpoint, and so is the start of the Fixer's fight (a retry goes
+// straight back into it). The van (convoy.js) holds at the end of each section until
 // its gate is met; the hazards are hazards.js; the groups are EncounterRunner data, drawn
 // only from the crews (never from the rally or passers-by). Shares the Missions interface
 // (reset / update / hudInfo / endInfo / resume / jumpTo) with the other levels.
@@ -24,10 +32,11 @@ import { EncounterRunner } from './encounters.js';
 import { buildDistrict, DISTRICT, areaAt } from './district.js';
 import { TransferVan, VanPath, breacherScript, VAN } from './convoy.js';
 import { HazardDirector, igniterScript, firerScript } from './hazards.js';
-import { randomOutfit, giveItem, clearItem } from './characters.js';
+import { randomOutfit, giveItem, clearItem, attachGloves } from './characters.js';
 import { vanParts } from './vehicles.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { orbit, overShoulderAt } from './cinematic.js';
+import { orbit, overShoulderAt, frontOf } from './cinematic.js';
+import { Boss, FIXER } from './boss.js';
 import { mulberry } from './textures.js';
 
 export const L3_PHASES = DISTRICT.acts.map((a) => a.name);
@@ -152,7 +161,7 @@ const SECTIONS = [
     ],
   },
   {
-    id: 'intercept', act: 3, van: 'monument', hold: 'arena', player: null, boss: 'fixer', placeholder: true,
+    id: 'intercept', act: 3, van: 'monument', hold: 'arena', player: null, boss: 'fixer', spawn: [0, 430],
     text: 'The Fixer is going for the van',
     encounters: [],
   },
@@ -195,22 +204,26 @@ const LINES = {
   dmg25: ['VAN 1', 'Engine\'s smoking — one more push and we\'re finished!'],
   alone: ['VAN 1', 'Where are you? We\'re alone out here!'],
   intercept: ['CONTROL', 'The Fixer is moving on the van himself.'],
+  fixerFight: ['CONTROL', 'He is quick and he is patient. Let him commit, then hit him.'],
+  fixerDown: ['CONTROL', 'The Fixer is in custody. His crews are breaking up. Get the van moving.'],
   extract: ['CONTROL', 'Gendarmes are at the extraction point. Bring the van in.'],
   handover: ['CONTROL', 'Transfer complete. Le Patron is in gendarmerie custody.'],
 };
 
-// The Fixer's look is fixed: average height, lean, a dark grey shell jacket, a black cap; no
-// scarf, no face covering. Complexion and build come from the shared generator.
+// The Fixer's look is fixed, and unlike either earlier boss: lean and athletic, a fitted dark
+// technical jacket with signal-orange piping, black tactical gloves with orange cuffs (added in
+// the constructor), orange trainers, a black cap; no scarf, no face covering, nothing in his hands
+// but a phone. Complexion and build come from the shared generator.
 function fixerOutfit() {
   let o = null;
   for (let s = 5150; !o || o.gender !== 'm' || o.base !== 'male'; s++) o = randomOutfit(mulberry(s));
   Object.assign(o, {
-    top: 'jacket', smart: false, topColor: 0x3a3d42, topBase: 0x3a3d42, longSleeve: true,
-    garment: 'puffer', shellColor: 0x3a3d42, shellPattern: 0, vest: false, keepTop: false,
+    top: 'track', smart: false, topColor: 0x1d2026, topBase: 0x1d2026, longSleeve: true, stripe: 0xd2561a,
+    garment: 'hoodie', shellColor: 0x1d2026, shellPattern: 8, pa: 0xd2561a, vest: false, keepTop: false,
     scarf: 'none', mask: 'none', hat: 'cap', hatColor: 0x111111, hood: false, backpack: false,
-    pants: 0x1c1d22, shoes: 0x151515, height: 1.0, build: 0.97,
+    pants: 0x17181c, shoes: 0xc9521c, height: 1.02, build: 0.94,
   });
-  o.body = { ...o.body, girth: 0.95 };
+  o.body = { ...o.body, girth: 0.9, shoulders: 1.03 };
   return o;
 }
 
@@ -226,6 +239,7 @@ export class Level3 extends Missions {
     this.van.onDamage = (a, kind) => this._onVanDamage(a, kind);
     this.hz = new HazardDirector(game);
     this.fixer = game.crowd.fixer || (game.crowd.fixer = game.crowd.spawnSpecial(fixerOutfit()));
+    attachGloves(this.fixer.rig); // once per rig: part of his look in every scene
     this.props = game.l3props || (game.l3props = this._buildProps());
     this.paths = this._paths();
     this._showProps(true);
@@ -233,6 +247,7 @@ export class Level3 extends Missions {
   }
 
   dispose() {
+    if (this.boss) { this.boss.stop(); this.boss = null; } // switching level mid-fight
     this.van.show(false);
     this._showProps(false);
     this.hz.dispose();
@@ -255,7 +270,9 @@ export class Level3 extends Missions {
     this.cleared = [false, false];
     this.passageDamage = 0;
     this.igniter = null; this.firer = null;
+    this.musicTier = 0;
     this.lastHealth = this.game.player ? this.game.player.health : 100;
+    if (this.boss) { this.boss.stop(); this.boss = null; }
     if (!this.enc) return; // first call, from the Missions constructor
     this.enc.reset();
     this.hz.reset();
@@ -308,6 +325,8 @@ export class Level3 extends Missions {
     const newAct = sec.act !== this.act || i === 0;
     this.section = i; this.act = sec.act; this.stage = 'route'; this.stageT = 0;
     this.busy = null; this.flags = {};
+    this.musicTier = sec.act; // the score builds act by act (music.js)
+    if (this.boss) { this.boss.stop(); this.boss = null; }
     this.enc.load(sec.encounters);
     this.hz.reset();
     g.events.setHazards(false);
@@ -369,7 +388,8 @@ export class Level3 extends Missions {
     this.fixerMet = cp.section >= 5;
     const P = this.path();
     if (this.route === 'A' && cp.section >= 2) for (const r of this.D.roadblock || []) { r.group.visible = false; r.cols.forEach((c) => { c.off = true; }); }
-    this.van.restore(P, cp.vanS ?? P.holds[sec.van], cp.van ?? VAN.max);
+    // the fight's checkpoint (cp.fight): the van already parked in the arena
+    this.van.restore(P, cp.vanS ?? P.holds[cp.fight ? sec.hold : sec.van], cp.van ?? VAN.max);
     this.van.incidents = this.stats.vanHits || 0; this.van.lost = this.stats.vanLost || 0; // the run's totals carry on
     this.van.show(true);
     // the officer stands behind the van (or at the level start)
@@ -383,9 +403,14 @@ export class Level3 extends Missions {
     g.cameraRig.reset(g.player);
     this.lastHealth = g.player.health;
     this._startSection(cp.section, true);
+    if (cp.fight && SECTIONS[cp.section].boss) this._startFixerFight();
   }
-  // ?dev&level=3&stage=N and __jump(N): the act's first section
-  jumpTo(i) { this.resume({ section: ACT_FIRST[Math.max(0, Math.min(ACT_FIRST.length - 1, i | 0))] }); }
+  // ?dev&level=3&stage=N and __jump(N): the act's first section; 'fixer' (?dev&level=3&stage=fixer,
+  // __boss('fixer')): straight into the Fixer's fight
+  jumpTo(i) {
+    if (i === 'fixer') return this.resume({ section: SECTIONS.findIndex((s) => s.boss === 'fixer'), fight: true });
+    this.resume({ section: ACT_FIRST[Math.max(0, Math.min(ACT_FIRST.length - 1, i | 0))] });
+  }
   jumpToSection(i) { this.resume({ section: Math.max(0, Math.min(SECTIONS.length - 1, i | 0)) }); }
 
   _actDone(act, bonus, text) {
@@ -427,6 +452,8 @@ export class Level3 extends Missions {
       this._officerDistance();
     } else if (this.stage === 'glimpse') {
       if (!g.cinematic) { this.stage = 'route'; this.flags.glimpsed = true; this._fixerLeaves(); }
+    } else if (this.stage === 'custody') {
+      if (!g.cinematic) this._afterCustody(); // (its onDone normally gets there first)
     }
     // arrests (an interaction prompt takes precedence)
     if (!this.promptE && this.stage !== 'victory') {
@@ -534,22 +561,41 @@ export class Level3 extends Missions {
     }
   }
 
-  // Act 4, first part: the Fixer's final attempt. The fight itself is the next phase's work;
-  // here the van parks in the arena and he shows himself, then breaks off.
+  // Act 4, first part: the Fixer's final attempt. The van rolls into the arena and parks (no
+  // damage reaches it while parked); he comes out to stop it himself. The fight ends with his
+  // arrest: he kneels until the officer cuffs him (E), as the Level 2 bosses do.
   _s_intercept() {
-    const g = this.game, van = this.van, f = this.fixer;
-    if (van.atHold() && !van.parked) {
-      van.parked = true;
-      this._placeFixer(V(-5, 0, 436), true);
-      g.hud.alert('BOSS ENCOUNTER — implemented in the next phase', 'info', 4);
-    }
-    if (van.parked && f.state !== 'gone' && g.player.pos.distanceTo(f.pos) < 6) {
-      this.fixerMet = true; // the boss phase records the fight in bossTimes
-      g.hud.alert('The Fixer breaks off into the side streets', 'warn', 3);
-      this._fixerLeaves();
-      van.parked = false;
-      this._nextSection();
-    }
+    const g = this.game, van = this.van, b = this.boss;
+    if (!b) { if (van.atHold() && !van.parked) this._startFixerFight(); return; }
+    if (b.s !== 'defeated') return;
+    const n = b.n;
+    if (Math.hypot(g.player.pos.x - n.pos.x, g.player.pos.z - n.pos.z) > 2.6) return;
+    g.hud.prompt('E', 'Arrest the Fixer');
+    this.promptE = true;
+    if (!g.input.pressed('KeyE')) return;
+    b.stop(); this.boss = null;
+    g.crowd.arrest(n); n.untargetable = true;
+    this.onArrest(n);
+    this.bossTimes.fixer = this.t - this.bossStart;
+    this.addScore(1500, 'The Fixer arrested');
+    this.say('fixerDown', 2);
+    this._custody(n);
+  }
+
+  // the fight: the Fixer in the arena, the van parked behind the officer
+  _startFixerFight() {
+    const g = this.game, sec = SECTIONS[this.section], A = DISTRICT.arena, n = this.fixer;
+    this.van.parked = true;
+    g.crowd.retire(n);
+    this.boss = new Boss(g, n, FIXER);
+    const at = V(sec.spawn[0], 0, sec.spawn[1]);
+    this.boss.start(at, Math.atan2(g.player.pos.x - at.x, g.player.pos.z - at.z), { x: A.x, z: A.z, r: A.r });
+    this.bossStart = this.t;
+    this.fixerMet = true;
+    this.say('fixerFight');
+    this._fixerIntro(n);
+    // a checkpoint at the fight itself: RETRY SECTION goes straight back into it
+    this.cp = { ...this.cp, fight: true, vanS: this.van.s, van: this.van.integrity, score: this.score, stats: { ...this.stats }, t: this.t };
   }
 
   // Act 4, end: the last stand, then the handover
@@ -595,16 +641,53 @@ export class Level3 extends Missions {
     if (watch) n.focus.copy(g.player.pos);
   }
 
+  // The reveal in the square: a close look at him on the phone by the crew's van, then the long
+  // lens from where the officer stands, so the player knows where he is (3.6 s)
   _glimpse() {
     const g = this.game, n = this.fixer, p = g.player;
     this._placeFixer(V(-5, 0, 445.5), true);
     this.say('fixer');
     this.stage = 'glimpse';
     const c = g.playCinematic({
-      id: 'fixerGlimpse', title: 'THE FIXER', sub: 'le Patron\'s organiser', titleAt: [0.6, 2.6],
-      shots: [{ dur: 0.8, a: 'rig', b: overShoulderAt(p, n, 22) }, { dur: 1.6, a: overShoulderAt(p, n, 22), b: overShoulderAt(p, n, 20) }, { dur: 0.6, a: overShoulderAt(p, n, 20), b: 'rig' }],
+      id: 'fixerGlimpse', title: 'THE FIXER', sub: 'runs the breakout', titleAt: [0.4, 2.8],
+      lines: [['"All of them. At the exit. Now."', 0.5, 1.6]],
+      shots: [{ dur: 1.6, a: frontOf(n, 5.2, 0.55, 1.9, 40), b: frontOf(n, 4.3, 0.65, 1.2, 34) },
+        { dur: 1.4, a: overShoulderAt(p, n, 22), b: overShoulderAt(p, n, 19) }, { dur: 0.6, a: overShoulderAt(p, n, 19), b: 'rig' }],
     });
     if (!c) { this.stage = 'route'; this.flags.glimpsed = true; this._fixerLeaves(); }
+  }
+
+  // before the fight: he ends his call, puts the phone away and squares up (4.0 s); the boss
+  // holds his ground through it (boss.js introWait)
+  _fixerIntro(n) {
+    const g = this.game;
+    g.playCinematic({
+      id: 'fixer', title: 'THE FIXER', sub: 'runs the breakout', titleAt: [0.5, 3.4], sting: 'intro',
+      lines: [[FIXER.barks[0], 1.3, 3.8]],
+      shots: [{ dur: 2.4, a: frontOf(n, 6.6, 0.9, 2.3, 44), b: frontOf(n, 4.6, 0.75, 1.4, 38) },
+        { dur: 1.6, a: frontOf(n, 4.6, 0.75, 1.4, 38), b: 'rig' }],
+    });
+  }
+
+  // his arrest: the crews still in the square break and run; a short shot of him in cuffs (3.6 s),
+  // then the escort goes on
+  _custody(n) {
+    const g = this.game, p = g.player;
+    this.stage = 'custody';
+    for (const m of g.crowd.npcs) if (m.temperament === 'hostile' && !m.neutralized && !m.arrested) { m.fleeFrom = n.pos.clone(); g.crowd.setState(m, 'flee', 8); }
+    const mid = () => V((p.pos.x + n.pos.x) / 2, 0, (p.pos.z + n.pos.z) / 2);
+    const a0 = Math.atan2(p.pos.x - n.pos.x, p.pos.z - n.pos.z) + 1.3;
+    g.playCinematic({
+      id: 'custody', title: 'THE FIXER IN CUSTODY', sub: 'Place du Château-d\'Eau · 02h31', titleAt: [0.4, 3.2],
+      lines: [['His phone is still ringing.', 0.6, 2.0], ['Without him, the crews have nobody to call.', 2.0, 3.5]],
+      shots: [{ dur: 3.6, a: orbit(mid, 4.6, 1.6, a0, 44, 1.0), b: orbit(mid, 5.6, 2.4, a0 + 1.1, 48, 1.0) }],
+      onDone: () => this._afterCustody(),
+    });
+  }
+  _afterCustody() {
+    if (this.stage !== 'custody') return;
+    this.stage = 'route';
+    this._nextSection();
   }
 
   _fixerLeaves() {
@@ -656,24 +739,29 @@ export class Level3 extends Missions {
   }
   radio(text) { this.radioQ.push({ key: null, who: 'CONTROL', text, pri: 1, t: this.t }); } // encounter data and shared code
   _radioUpdate(dt) {
+    if (this.game.cinematic) return; // the HUD is hidden: lines wait for the picture to come back
     this.radioGap -= dt;
     if (this.radioGap > 0 || !this.radioQ.length) return;
     const q = this.radioQ.shift();
     const dur = Math.min(6, 2.5 + q.text.length / 20);
     this.game.hud.alert(`📻 ${q.who}: ${q.text}`, 'radio', dur);
-    this.game.audio.squelch(); this.game.audio.ui('radio');
+    this.game.audio.radio(q.pri >= 2, dur);
     this.radioLog.push({ t: +this.t.toFixed(2), key: q.key, who: q.who, dur: +dur.toFixed(2), queued: +(this.t - q.t).toFixed(2) });
     this.radioGap = dur + 0.8;
   }
 
   // ------------------------------------------------------------- presentation
+  // the transfer briefing: the van at the staging area, then the road south it has to take (5.4 s)
   _introCinematic() {
     const g = this.game, van = this.van;
     const a0 = van.heading + 2.4;
+    const ahead = () => V(van.pos.x, 0, van.pos.z + 14);
     g.playCinematic({
       id: 'transfer', title: 'THE BREAKOUT', sub: 'Place du Château-d\'Eau · 02h20', titleAt: [0.4, 3.2],
-      line: 'Le Patron is loaded. Doors shut.', lineAt: [0.8, 3.0],
-      shots: [{ dur: 2.6, a: orbit(() => van.pos, 7.5, 2.6, a0, 46, 1.2), b: orbit(() => van.pos, 7.0, 2.2, a0 + 1.0, 46, 1.2) }, { dur: 1.0, a: orbit(() => van.pos, 7.0, 2.2, a0 + 1.0, 46, 1.2), b: 'rig' }],
+      lines: [['VAN 1: "Le Patron is loaded. Doors shut."', 0.5, 2.4], ['CONTROL: "His crews want him back. Gendarmes are waiting beyond the square."', 2.5, 5.0]],
+      shots: [{ dur: 2.6, a: orbit(() => van.pos, 7.5, 2.6, a0, 46, 1.2), b: orbit(() => van.pos, 7.0, 2.2, a0 + 1.0, 46, 1.2) },
+        { dur: 1.8, a: orbit(ahead, 17, 3.2, Math.PI + 0.25, 50, 1.2), b: orbit(ahead, 16, 3.8, Math.PI - 0.15, 52, 1.6) },
+        { dur: 1.0, a: orbit(ahead, 16, 3.8, Math.PI - 0.15, 52, 1.6), b: 'rig' }],
     });
   }
 
@@ -690,7 +778,7 @@ export class Level3 extends Missions {
     const a0 = van.heading + 0.9;
     g.playCinematic({
       id: 'victory', title: 'TRANSFER COMPLETE', sub: 'Rue de la Caserne · 02h33', titleAt: [0.5, 4.0], sting: 'victory',
-      line: 'The gendarmes take custody of le Patron.', lineAt: [1.0, 4.0],
+      lines: [['The gendarmes take custody of le Patron.', 0.6, 2.4], ['And of the man who tried to break him out.', 2.5, 4.4]],
       shots: [{ dur: 4.6, a: orbit(mid, 7.0, 2.4, a0, 46, 1.2), b: orbit(mid, 8.0, 3.2, a0 + 1.2, 50, 1.2) }],
       onDone: () => this.complete(),
     });
@@ -715,6 +803,7 @@ export class Level3 extends Missions {
     const g = this.game, van = this.van, sec = SECTIONS[this.section];
     this.markerPos = null;
     if (this.stage !== 'route') return;
+    if (this.boss) { if (this.boss.s === 'defeated') this.markerPos = this.boss.n.pos; return; } // no beam in the fight itself
     const fighting = this.enc.active();
     const near = fighting.length ? g.crowd.nearest(g.player.pos, (n) => fighting.includes(n)) : null;
     if (near) { this.markerPos = near.pos; return; }
@@ -723,7 +812,6 @@ export class Level3 extends Missions {
     const hz = this._holdingFor();
     if (hz) { this.markerPos = hz; return; }
     if (sec.choice && !this.route) return; // the choice is the player's: no beam
-    if (sec.id === 'intercept' && van.parked && this.fixer.state !== 'gone') { this.markerPos = this.fixer.pos; return; }
     const P = this.path(), hold = P.at(van.limitS, V());
     this.markerPos = van.atHold() ? hold : P.at(Math.min(van.limitS, van.s + 25), V());
   }
@@ -758,7 +846,7 @@ export class Level3 extends Missions {
     if (this.stage !== 'route') return this.markerPos;
     if (sec.choice && !this.route) return V(ROUTE_TARGETS[route][0], 0, ROUTE_TARGETS[route][1]);
     if (this.interactPos && this._wantsInteraction() && g.player.pos.distanceTo(this.interactPos) < 60) return this.interactPos;
-    if (sec.id === 'intercept' && van.parked && this.fixer.state !== 'gone') return this.fixer.pos;
+    if (this.boss) return this.boss.n.pos;
     if (!this.rolled) return van.pos;
     const hz = this._holdingFor();
     if (hz) return V(hz.x, 0, hz.z - 5); // up to the trail's near side
@@ -767,7 +855,7 @@ export class Level3 extends Missions {
     return V(van.pos.x - f.x * 6, 0, van.pos.z - f.z * 6);
   }
 
-  bossInfo() { return null; }
+  bossInfo() { return this.boss ? this.boss.info() : null; }
 
   // minimap: the van, and the two routes while the choice is open
   mapExtras(ctx, tr, scale) {
@@ -795,7 +883,11 @@ export class Level3 extends Missions {
     const crew = total ? ` · Crew ${down} / ${total}` : '';
     if (sec.id === 'transfer' && !this.rolled) return Object.assign(info, { text: 'Join the transfer van', chip: 'STANDBY', status: 'calm', detail: 'It moves off when you are beside it' });
     if (sec.choice && !this.route) return Object.assign(info, { chip: 'CHOOSE', detail: 'Avenue: shorter, blocked, more crews · Passage: longer, narrow, hazards' });
-    if (sec.placeholder) return Object.assign(info, { chip: 'PREVIEW', status: 'danger', text: v.parked ? 'Confront the Fixer (boss fight: next phase)' : sec.text, detail: v.parked ? 'Walk up to him to continue' : vi });
+    if (this.boss) {
+      if (this.boss.s === 'defeated') return Object.assign(info, { text: 'Arrest the Fixer', chip: 'DOWN', detail: 'Press E beside him' });
+      return Object.assign(info, { text: 'Stop the Fixer', status: 'danger', chip: 'BOSS', detail: 'Let him commit, then strike — or catch him off balance' });
+    }
+    if (this.stage === 'custody') return Object.assign(info, { text: 'The Fixer is in custody', chip: 'DONE', status: 'done', detail: vi });
     if (v.breacher && v.breach > 0) return Object.assign(info, { text: 'Stop them breaking into the van!', chip: 'DANGER', status: 'danger', detail: `Doors ${Math.round(v.breach * 100)}% · ${vi}` });
     if (this.hz.warning) return Object.assign(info, { chip: 'DANGER', status: 'danger', detail: `${this.hz.warning.replace('⚠ ', '')} · ${vi}` });
     if (fighting) return Object.assign(info, { chip: 'ENGAGED', status: 'danger', detail: `${vi}${crew} · ${fighting} still fighting` });
@@ -811,7 +903,7 @@ export class Level3 extends Missions {
     const vanEnd = this.vanAtExtract ?? Math.round(v.integrity);
     return {
       title: win ? 'LEVEL 3 COMPLETE' : 'MISSION FAILED',
-      sub: win ? 'Le Patron handed to the gendarmerie · the Fixer is still out there' : reason || '',
+      sub: win ? 'Le Patron handed to the gendarmerie · the Fixer in custody' : reason || '',
       rows: [
         ['Acts completed', `${this.completed.filter(Boolean).length} / ${L3_PHASES.length}`],
         ['Route', this.route ? ROUTE_NAME[this.route] : '—'],
@@ -824,12 +916,14 @@ export class Level3 extends Missions {
         ['Peaceful people struck', s.peaceful],
         ['Downed suspects struck', s.downed || 0],
         ['Damage received', Math.round(s.damageTaken)],
-        ['The Fixer', this.fixerMet ? 'Pending: boss fight in the next phase' : '—'],
+        ['The Fixer', this.bossTimes.fixer !== undefined ? fmt(this.bossTimes.fixer) : '—'],
+        ['Strikes stopped by his guard / dodges', `${s.blocked} / ${s.dodges}`],
         ['Crowd tension · peak', `${Math.round(this.tension.peak)} / 100`],
         ['Mission time', fmt(this.t)],
       ],
       hook: win ? HOOK : '',
-      rank: win ? 'RATING · ' + (this.score >= 10500 && s.peaceful === 0 ? 'COMMENDATION' : this.score >= 8000 ? 'PROFESSIONAL' : this.score >= 5500 ? 'ADEQUATE' : 'UNDER REVIEW') : this.cp ? 'Retry from the start of this section, or restart' : 'Restart to try again',
+      // (the Fixer's arrest adds 1500, his hits 25 each: the bands sit that much higher than before)
+      rank: win ? 'RATING · ' + (this.score >= 12000 && s.peaceful === 0 ? 'COMMENDATION' : this.score >= 9500 ? 'PROFESSIONAL' : this.score >= 7000 ? 'ADEQUATE' : 'UNDER REVIEW') : this.cp ? (this.cp.fight ? 'Retry the fight with the Fixer, or restart' : 'Retry from the start of this section, or restart') : 'Restart to try again',
     };
   }
 }

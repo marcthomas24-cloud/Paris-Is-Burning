@@ -23,7 +23,7 @@ The Level 3 tests step the simulation in long synchronous stretches (a full rout
 | `await __runToEnd()` | Bot plays the current level to the results screen (cinematics skipped) |
 | `await __runToEnd({ watch: true })` | Same, cinematics played through |
 | `await __auditRun({ watch: true })` | `__runToEnd` plus: duplicate spawns, encounters active > 90 s, boss damage during a phase change or after defeat, hits > 25, score equals the sum of awarded events |
-| `__lintBosses()` | Attack tables against the fairness rules (boss.js) |
+| `__lintBosses()` | Attack tables of the Enforcer, le Patron and the Fixer against the fairness rules (boss.js): telegraphs, the 25 cap, a dodge or block answer for every attack, time to dodge again in combinations and after feints, runs that stop at obstacles, openings that a miss never shortens, reachable phases |
 | `await __testTransitions(10)` | Le Patron phase changes with hits just before and during the change |
 | `await __testFeints(400)` | Feints forced on: the real attack after a feint can still be dodged |
 | `await __testCheckpoint('enforcer' \| 'leader')` | Die mid-fight, RETRY SECTION, check the reset |
@@ -48,6 +48,11 @@ The Level 3 tests step the simulation in long synchronous stretches (a full rout
 | `await __testRadio()` | Level 3 radio queue: urgent first, one at a time with a pause, no repeats, cooldowns |
 | `await __testL3Checkpoints()` | Level 3: fail in each of the six sections (both routes from the square on), RETRY SECTION, check section, route, van position and integrity (at least 60), score, flags, encounters, roadblock |
 | `await __testRoutes({ seed })` | Level 3: `__auditRun` on the Avenue and on the Passage; both must reach LEVEL 3 COMPLETE through all six sections with no audit issue and no shortfall |
+| `await __testFixer()` | The Fixer: lint clean; each phase bot-played (moves used, largest hit, shortest telegraphs; footwork in phase 1, the rush from phase 2, kicks in phase 3); the rush's launch-to-contact at 5.6 / 6.5 / 8 m and a dodge at the launch (no damage, longer opening); a rush into the parked van (dazed, officer untouched, front open); a kick with a wall in between (no damage) and without (damage); a miss opens him longer than a hit; defeat, arrest, the escort going on |
+| `await __testL3Cinematics()` | The briefing, the reveal, the Fixer's introduction, his arrest and the handover, each skipped at a random moment (with Space: no dodge from it) and played through: letterbox and HUD restored, camera back to the gameplay field of view, no damage, the mission moved on, the radio held back, no strike from the Fixer in the 1.4 s after his introduction |
+| `await __testL3Music()` | Sound on, a full bot run: the music's tiers go 1, 2, 3 with the acts, it reaches its boss and last-phase states and ends on the victory; the volume settings are untouched; Level 2 gets its own theme back with no tier |
+| `await __testRetryClean()` | Sound on: a phase banner up, a hiss, a radio duck, a sting and a cinematic when the run fails; RETRY SECTION leaves none of them, the fight restarts at full health in phase 1, the volume settings are untouched |
+| `__testTransitions(10, 'fixer')`, `__testFeints(400, 'fixer')`, `__testCheckpoint('fixer')`, `__fuzzBoss('fixer')`, `__frameTimes('fixer')`, `__probeMemory(6, ['fixer'])` | The Level 2 boss checks, run on the Fixer |
 
 ## Vehicle viewer
 

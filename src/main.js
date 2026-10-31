@@ -104,7 +104,8 @@ class Game {
     const q = new URLSearchParams(location.search);
     const devLevel = q.has('dev') && LEVELS[q.get('level')] ? +q.get('level') : 1;
     this.setLevel(devLevel);
-    this.devStage = q.has('dev') && q.has('stage') ? +q.get('stage') : null;
+    // a section number, or a boss's name (?dev&level=3&stage=fixer)
+    this.devStage = q.has('dev') && q.has('stage') ? (Number.isNaN(+q.get('stage')) ? q.get('stage') : +q.get('stage')) : null;
     this._syncLevelMenu();
     this.post = new Post(this.renderer, this.scene, this.camera);
     this.audio._randomCrowdPos = () => this.crowd.randomCrowdPos();
@@ -312,6 +313,8 @@ class Game {
     this.cameraRig.reset(this.player);
     this.cameraRig.intro(2.4);
     this.hud.clearAlerts();
+    this.hud.clearOverlays(); // no banner or title card from the run before
+    this.audio.stopVoices();  // nor the tail of its sounds (a hiss, a sting's echo)
     this.timeScale = 1; this.hitStopT = 0;
     this.pendingEnd = null;
     this._screen(null);
@@ -490,6 +493,7 @@ class Game {
       const m = this.missions, b = m.boss;
       if (threats) this._lastThreatT = this.time;
       const fighting = this.time - (this._lastThreatT ?? -99) < 4; // hold through short gaps
+      a.music.setTier(m.musicTier || 0); // Level 3 builds through its acts
       a.music.setState(m.stage === 'victory' || (m.ended && this.pendingEnd && this.pendingEnd.win) ? 'victory'
         : b && b.active ? (b.phaseIdx >= 2 ? 'boss3' : 'boss') : fighting || (m.van && m.van.underAttack()) ? 'combat' : 'calm');
     } else a.music.setState('off');
@@ -515,7 +519,9 @@ class Game {
       this.player.invuln = Math.max(this.player.invuln, 0.1); // nobody lands a hit during a cinematic
     }
 
-    this.player.update(dt, this.cinematic ? NULL_INPUT : input, this.cameraRig.yaw);
+    // (the frame that skips a cinematic still ignores the controls: the Space, Enter or click that
+    // skipped it must not also dodge or strike)
+    this.player.update(dt, cine ? NULL_INPUT : input, this.cameraRig.yaw);
     this.crowd.update(dt, this.player);
     this.brawls.update(dt, this.time);
     this.missions.update(dt);

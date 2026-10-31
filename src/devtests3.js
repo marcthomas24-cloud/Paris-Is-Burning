@@ -8,10 +8,19 @@
 //   await __testRadio()       the radio queue: one line at a time, urgent first, no repeats
 //   await __testL3Checkpoints() fail in every section, RETRY SECTION, check what comes back
 //   await __testRoutes()      the bot plays both routes to the results (cinematics skipped)
+//   await __testFixer()       the Fixer: every phase's moves, the rush window and dodge, a rush into
+//                             the van, no strike through an obstacle, the opening after a miss, the
+//                             telegraphs, defeat, arrest and the escort going on
+//   await __testL3Cinematics() each of the five sequences skipped and played through: control and
+//                             camera come back, no damage, nothing attacks out of it
+//   await __testL3Music()     the score's states and tiers through a full run; Level 2 unchanged
+//   await __testRetryClean()  a retry leaves no banner, cinematic, sound or duck behind; volumes kept
 import * as THREE from 'three';
 import { VAN } from './convoy.js';
 import { HAZARD } from './hazards.js';
 import { getShared } from './characters.js';
+import { FIXER, lintBoss } from './boss.js';
+import { THEMES } from './music.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -20,7 +29,7 @@ export function installTests3(game) {
   const resume = () => { if (game.state === 'paused') { game._screen(null); game.state = 'playing'; game.audio.setPaused(false); } };
   const step = (s, fn) => { resume(); window.__step(s, fn); };
   const fresh = (seed = 5, section = null) => {
-    if (game.level.id !== 3) window.__level(3);
+    if (game.level.id !== 3 || game.devStage !== null) window.__level(3); // (a dev stage left by __boss would restart into a fight)
     game.skipCinematics = true;
     window.__start({ audio: false, seed });
     step(1.4);
@@ -292,7 +301,7 @@ export function installTests3(game) {
   window.__testRoutes = async ({ seed = 5, routes = ['A', 'B'] } = {}) => {
     const out = { runs: {} };
     for (const r of routes) {
-      if (game.level.id !== 3) window.__level(3);
+      window.__level(3); // from the start, whatever dev stage an earlier test left
       window.__route(r);
       const res = await window.__auditRun({ seed });
       const m = game.missions;
@@ -306,5 +315,236 @@ export function installTests3(game) {
     const ok = (x) => x && x.title === 'LEVEL 3 COMPLETE' && x.issues.length === 0 && x.shortfall === 0 && x.sections.map((s) => s[0]).join() === '0,1,2,3,4,5';
     out.pass = routes.every((r) => ok(out.runs[r]) && out.runs[r].route === r);
     return out;
+  };
+
+  // ------------------------------------------------------------------ the Fixer
+  // An open stretch of the arena: the boss at (6, 430) facing the officer to his west.
+  const fight = (seed = 5) => {
+    game.skipCinematics = true;
+    window.__level(3);
+    window.__start({ audio: false, seed });
+    game.input.keys.clear(); game.input.buttons.clear(); // nothing left held by a bot run before
+    window.__boss('fixer'); step(1.3); // past his introduction
+    return game.missions.boss;
+  };
+  const pin = (b, bx, bz, px, pz) => () => { b.n.pos.set(bx, 0, bz); b.n.vel.set(0, 0, 0); const p = game.player; p.pos.set(px, 0, pz); p.vel.set(0, 0, 0); p.knock.set(0, 0, 0); };
+  // wind one attack by hand and step until it has resolved (strike or run logged)
+  const force = (b, a, hold, maxS = 3) => {
+    b.s = 'idle'; b.cool = 99; b.queue = []; b.curRecScale = 1; b.backTo = null;
+    const n0 = b.log.length; b._wind({ ...a });
+    for (let i = 0; i < maxS * 60 && b.log.length === n0; i++) step(1 / 60, hold);
+    return b.log[b.log.length - 1];
+  };
+
+  window.__testFixer = async ({ seed = 5 } = {}) => {
+    const out = { lint: lintBoss(FIXER) };
+    const A = FIXER.attacks;
+    // 1. every phase, bot-played: which moves he uses, the largest hit, every telegraph
+    out.phases = [];
+    for (let ph = 0; ph < 3; ph++) {
+      const b = fight(seed + ph);
+      while (b.phaseIdx < ph) { window.__bossHit('back'); if (b.s === 'transition') step(2.4); }
+      const visits = {}; let prev = b.s, feints = 0; const log0 = b.log.length;
+      for (let i = 0; i < 400; i++) {
+        window.__botTick();
+        if (b.s !== prev) { visits[b.s] = (visits[b.s] || 0) + 1; if (b.s === 'feint') feints++; prev = b.s; }
+        if (b.hp <= (FIXER.phases[ph + 1] ? FIXER.phases[ph + 1].from + 1 : 2)) b.hp = FIXER.phases[ph].from; // stay in this phase
+        if (game.player.health < 40) game.player.health = 100;
+        if (i % 40 === 39) await sleep(1);
+      }
+      const log = b.log.slice(log0);
+      out.phases.push({ phase: ph + 1, kinds: [...new Set(log.map((e) => e.kind))], strikes: log.length, maxDealt: Math.max(0, ...log.map((e) => e.dealt)), minWind: Math.min(...log.map((e) => e.wind)), minUnblockableWind: Math.min(9, ...log.filter((e) => !e.blockable).map((e) => e.wind)), visits, feints });
+    }
+    await sleep(1);
+    // 2. the rush: launch to contact at several distances, and a sideways dodge at the launch
+    out.rush = [];
+    for (const D of [5.6, 6.5, 8]) {
+      const b = fight(seed), p = game.player, I = game.input;
+      const hold = pin(b, 6, 430, 6 - D, 430);
+      hold(); p.health = 100; p.invuln = 0;
+      let t = 0, launch = -1, contact = -1;
+      b.s = 'idle'; b.cool = 99; b._wind({ ...A.rush });
+      for (let i = 0; i < 240; i++) { if (launch < 0) hold(); step(1 / 60); t += 1 / 60; if (b.s === 'charge' && launch < 0) launch = t; if (launch >= 0 && contact < 0 && p.health < 100) { contact = t; break; } if (launch >= 0 && b.s !== 'charge') break; }
+      const row = { distance: D, launchToContact: contact > 0 ? +(contact - launch).toFixed(2) : null, dealt: 100 - p.health };
+      // the same rush, dodged sideways as it launches
+      const b2 = fight(seed), hold2 = pin(b2, 6, 430, 6 - D, 430);
+      hold2(); p.health = 100; p.invuln = 0; game.cameraRig.yaw = -Math.PI / 2; // looking east, at him
+      b2.s = 'idle'; b2.cool = 99; b2._wind({ ...A.rush });
+      let dodged = false;
+      for (let i = 0; i < 240; i++) {
+        if (b2.s !== 'charge') hold2();
+        if (b2.s === 'charge' && !dodged) { dodged = true; I.keys.add('KeyD'); I.edges.add('Space'); }
+        step(1 / 60); I.keys.delete('KeyD');
+        if (dodged && b2.s !== 'charge') break;
+      }
+      row.dodgedDealt = 100 - p.health; row.recAfterMiss = +b2.dur.toFixed(2); row.stateAfter = b2.s;
+      out.rush.push(row);
+      await sleep(1);
+    }
+    // 3. a rush into the parked van: he is stunned, the officer untouched
+    {
+      const b = fight(seed), p = game.player, van = game.missions.van;
+      const f = van.fwd(V()), r = V(f.z, 0, -f.x); // across the van
+      const hold = pin(b, van.pos.x + r.x * 6, van.pos.z + r.z * 6, van.pos.x - r.x * 3, van.pos.z - r.z * 3);
+      hold(); p.health = 100;
+      b.s = 'idle'; b.cool = 99; b._wind({ ...A.rush });
+      for (let i = 0; i < 240 && b.s !== 'stun'; i++) { if (b.s !== 'charge') hold(); else { p.pos.set(van.pos.x - r.x * 3, 0, van.pos.z - r.z * 3); } step(1 / 60); }
+      out.rushIntoVan = { state: b.s, officerHp: p.health, frontHit: b.s === 'stun' ? window.__bossHit('front').result : 'n/a', vanIntegrity: Math.round(van.integrity) };
+    }
+    await sleep(1);
+    // 4. no strike through an obstacle: a kick with a wall between them, then the same kick without it
+    {
+      const b = fight(seed), p = game.player, w = game.world;
+      const hold = () => { pin(b, 6, 430, 3.8, 430)(); p.health = 100; p.invuln = 0; };
+      const wall = w.addObstacle(4.9, 430, 0.3, 3, 0, 2, 'test');
+      const e1 = force(b, A.kick, hold);
+      w.removeCollider(wall);
+      step(1.5, hold);
+      const e2 = force(b, A.kick, hold);
+      out.throughGeometry = { withWall: { wall: !!e1.wall, dealt: e1.dealt }, without: { dealt: e2.dealt } };
+    }
+    await sleep(1);
+    // 5. the opening after a miss: a kick from out of reach leaves a longer recovery than one that lands
+    {
+      const b = fight(seed);
+      const far = () => { pin(b, 6, 430, 6 - 3.3, 430)(); game.player.health = 100; game.player.invuln = 0; };
+      force(b, A.kick, far); step(0.13, far);
+      const missDur = b.s === 'rec' ? b.dur : null;
+      step(2, far);
+      const near = () => { pin(b, 6, 430, 6 - 2.0, 430)(); game.player.health = 100; game.player.invuln = 0; };
+      const e = force(b, A.kick, near); step(0.13, near);
+      out.missOpening = { missRec: missDur && +missDur.toFixed(2), hitRec: b.s === 'rec' ? +b.dur.toFixed(2) : null, hitDealt: e.dealt };
+    }
+    await sleep(1);
+    // 6. defeat, arrest, the escort goes on
+    {
+      const b = fight(seed), m = game.missions, p = game.player, I = game.input;
+      const sc0 = m.score;
+      for (let k = 0; k < 40 && b.s !== 'defeated'; k++) { window.__bossHit('back'); if (b.s === 'transition') step(2.4); }
+      step(0.5);
+      const defeated = b.s === 'defeated', hud = m.hudInfo().text;
+      p.pos.set(b.n.pos.x + 1.4, 0, b.n.pos.z); step(0.1);
+      I.edges.add('KeyE'); step(0.2);
+      out.arrest = { defeated, hudDown: hud, arrested: b.n.arrested, section: m.section, stage: m.stage, bossCleared: !m.boss, arena: !!game.crowd.arena, vanParked: m.van.parked, time: m.bossTimes.fixer !== undefined, scoreGain: m.score - sc0 };
+    }
+    game.skipCinematics = false;
+    const P = out.phases;
+    out.pass = out.lint.length === 0
+      && P.every((x) => x.maxDealt <= 25 && x.minWind >= 0.55 && x.minUnblockableWind >= 0.6)
+      && P[0].kinds.includes('jab') && (P[0].visits.shift || P[0].visits.backoff) && !P[0].kinds.includes('rush')
+      && P[1].kinds.includes('rush') && P[2].kinds.includes('kick')
+      && out.rush.every((r) => r.launchToContact === null || r.launchToContact >= 0.45) && out.rush.every((r) => r.dodgedDealt === 0 && r.recAfterMiss > A.rush.rec)
+      && out.rushIntoVan.state === 'stun' && out.rushIntoVan.officerHp === 100 && out.rushIntoVan.frontHit === 'hit'
+      && out.throughGeometry.withWall.wall && out.throughGeometry.withWall.dealt === 0 && out.throughGeometry.without.dealt > 0
+      && out.missOpening.missRec > out.missOpening.hitRec && out.missOpening.hitDealt > 0
+      && out.arrest.defeated && out.arrest.arrested && out.arrest.section === 5 && out.arrest.stage === 'route' && out.arrest.bossCleared && !out.arrest.arena && !out.arrest.vanParked && out.arrest.time && out.arrest.scoreGain >= 1500;
+    return out;
+  };
+
+  // ------------------------------------------------------------------ cinematics
+  // Each sequence started through the game's own path, then skipped part-way (Space, as a player
+  // would) or played through. After it: no cinematic, the letterbox gone, the HUD back, the camera
+  // easing back to the follow camera's field of view, no damage taken, the mission moved on, and
+  // nothing attacks out of it straight away (the Fixer holds his ground for a second).
+  window.__testL3Cinematics = async ({ seed = 5 } = {}) => {
+    const rows = [], I = game.input;
+    const setups = {
+      transfer: () => { window.__level(3); window.__start({ audio: false, seed }); step(1.3); },
+      fixerGlimpse: () => { window.__level(3); window.__start({ audio: false, seed }); step(0.2); game.missions.jumpToSection(3); step(0.2); game.missions._glimpse(); },
+      fixer: () => { window.__level(3); window.__start({ audio: false, seed }); window.__boss('fixer'); step(0.05); },
+      custody: () => { window.__level(3); window.__start({ audio: false, seed }); game.skipCinematics = true; window.__boss('fixer'); step(1.2); const b = game.missions.boss; for (let k = 0; k < 40 && b.s !== 'defeated'; k++) { window.__bossHit('back'); if (b.s === 'transition') step(2.4); } step(0.4); game.player.pos.set(b.n.pos.x + 1.4, 0, b.n.pos.z); step(0.1); game.skipCinematics = false; I.edges.add('KeyE'); step(1 / 60); },
+      victory: () => { window.__level(3); window.__start({ audio: false, seed }); step(0.2); game.missions.jumpToSection(5); step(0.3); game.missions._victory(); },
+    };
+    for (const [id, setup] of Object.entries(setups)) {
+      for (const mode of ['skip', 'watch']) {
+        game.skipCinematics = false;
+        setup();
+        const c = game.cinematic, m = game.missions, p = game.player;
+        const row = { id, mode, started: !!c && c.id === id, total: c ? +c.total.toFixed(1) : 0 };
+        if (!row.started) { rows.push(row); continue; }
+        const hp0 = p.health, log0 = m.boss ? m.boss.log.length : 0;
+        let dmg = 0, endT = null;
+        const watchHp = () => { if (p.health < hp0) dmg = hp0 - p.health; if (endT === null && !game.cinematic) endT = m.t; };
+        const at = mode === 'skip' ? 0.4 + Math.random() * Math.max(0.1, c.total - 0.8) : c.total + 1;
+        step(Math.min(at, c.total + 0.5), watchHp);
+        if (mode === 'skip' && game.cinematic) { I.edges.add('Space'); const d0 = p.dodgeT; step(1 / 60, watchHp); row.skipDodged = p.dodgeT > d0 + 0.01; }
+        step(0.05, watchHp);
+        row.ended = !game.cinematic && document.getElementById('cine').classList.contains('hidden') && !document.getElementById('app').classList.contains('cine-on');
+        row.at = +at.toFixed(2);
+        // the moments after: attacks (the Fixer holds his ground for a second, then needs a full wind-up)
+        step(1.35, watchHp);
+        if (id === 'fixer') { const b = m.boss; row.bossState = b && b.s; row.strikesSoon = b ? b.log.length - log0 : null; }
+        const rig = game.cameraRig; step(0.5, watchHp);
+        row.fovBack = Math.abs(game.camera.fov - (rig.lastPose ? rig.lastPose.fov : game.camera.fov)) < 2;
+        row.damage = +dmg.toFixed(1);
+        row.stage = m.stage; row.section = m.section;
+        if (id === 'transfer') row.radioWaited = m.radioLog.length > 0 && m.radioLog.every((e) => e.t >= endT - 0.02);
+        if (id === 'fixerGlimpse') row.glimpsed = !!m.flags.glimpsed;
+        if (id === 'victory') { step(3); row.ended3 = m.ended && game.state === 'ended'; }
+        row.pass = row.ended && row.damage === 0 && !row.skipDodged && row.fovBack
+          && (id !== 'transfer' || (m.stage === 'route' && row.radioWaited)) && (id !== 'fixerGlimpse' || (m.stage === 'route' && row.glimpsed))
+          && (id !== 'fixer' || (row.bossState !== 'intro' && row.strikesSoon === 0)) && (id !== 'custody' || (m.section === 5 && m.stage === 'route')) && (id !== 'victory' || row.ended3);
+        rows.push(row);
+        await sleep(2);
+      }
+    }
+    game.skipCinematics = false;
+    return { pass: rows.every((r) => r.pass), rows };
+  };
+
+  // ------------------------------------------------------------------ the score
+  // The music's state and tier through a whole bot run (sound on: the mixer only drives the music
+  // when audio is running; seeded, but the sound effects draw random numbers, so this run is not
+  // the reference run): it starts restrained, builds act by act, has its boss states, ends on the
+  // victory; Level 2 keeps its own theme and no tiers.
+  window.__testL3Music = async ({ seed = 5 } = {}) => {
+    const mu = game.audio.music, trace = [];
+    game.audio.init();
+    window.__level(3); // from the start, whatever dev stage an earlier test left
+    mu.setTier(0);
+    const origS = mu.setState.bind(mu), origT = mu.setTier.bind(mu);
+    mu.setState = (s) => { if (s !== mu.state) trace.push(['state', s, game.missions.section]); return origS(s); };
+    mu.setTier = (k) => { if (k !== mu.tier) trace.push(['tier', k, game.missions.section]); return origT(k); };
+    const settings0 = JSON.stringify(game.audio.getSettings());
+    let r;
+    try { window.__route('A'); r = await window.__runToEnd({ seed, audio: true }); } finally { mu.setState = origS; mu.setTier = origT; }
+    const states = trace.filter((x) => x[0] === 'state').map((x) => x[1]), tiers = trace.filter((x) => x[0] === 'tier').map((x) => x[1]);
+    const out = { title: r.title, theme: mu.theme === THEMES.l3 ? 'l3' : 'other', states, tiers, firstState: states[0], lastState: states[states.length - 1], settingsKept: JSON.stringify(game.audio.getSettings()) === settings0 };
+    window.__level(2); step(0.5);
+    out.level2 = { theme: mu.theme === THEMES.l2 ? 'l2' : 'other', tier: mu.tier };
+    window.__level(3); step(0.2);
+    out.pass = out.title === 'LEVEL 3 COMPLETE' && out.theme === 'l3' && tiers.join() === '1,2,3' && states.includes('boss') && states.includes('boss3') && out.lastState === 'victory'
+      && states.indexOf('boss3') > states.indexOf('boss') && out.settingsKept && out.level2.theme === 'l2' && out.level2.tier === 0;
+    return out;
+  };
+
+  // ------------------------------------------------------------------ retries leave nothing behind
+  // Sound on: a phase banner up, a hazard hissing, the music ducked under a radio line and a cinematic
+  // playing when the officer goes down; RETRY SECTION must bring back none of it, and keep the volumes.
+  window.__testRetryClean = async () => {
+    const a = game.audio;
+    a.init();
+    const settings0 = JSON.stringify(a.getSettings());
+    game.skipCinematics = true;
+    window.__level(3); window.__start({ audio: true }); window.__boss('fixer'); step(1.3);
+    const m = game.missions, b = m.boss;
+    while (b.phaseIdx < 1) { window.__bossHit('back'); }
+    const bannerUp = document.getElementById('banner').classList.contains('show');
+    a.hiss(game.player.pos, 6); a.radio(true, 6); a.music.sting('phase');
+    const mine = new Set(a.voices.filter((v) => v.pri >= 0)); // the sounds of the run that is about to fail
+    const before = { banner: bannerUp, voices: mine.size };
+    game.skipCinematics = false;
+    m._fixerIntro(b.n); // a cinematic on screen as well
+    const cineBefore = !!game.cinematic;
+    m.fail('test failure'); step(3); // (the officer cannot be hurt while it plays: fail the run directly)
+    game.skipCinematics = true; // the retry would replay his introduction: keep it out of the check
+    document.getElementById('btn-retry').click(); step(0.3);
+    const after = {
+      banner: document.getElementById('banner').classList.contains('show'), oldVoicesStillPlaying: [...mine].filter((v) => v.pri >= 0).length,
+      cinematic: game.cinematic ? game.cinematic.id : null, letterbox: !document.getElementById('cine').classList.contains('hidden'), cineOn: document.getElementById('app').classList.contains('cine-on'),
+      pending: a.pending.length, state: game.state, fight: !!m.boss && m.boss.phaseIdx === 0 && m.boss.hp === FIXER.hp, settingsKept: JSON.stringify(a.getSettings()) === settings0,
+    };
+    game.skipCinematics = false;
+    return { before: { ...before, cinematic: cineBefore }, after, ctxState: a.ctx.state, pass: before.banner && before.voices > 0 && cineBefore && !after.banner && after.oldVoicesStillPlaying === 0 && !after.cinematic && !after.letterbox && !after.cineOn && after.state === 'playing' && after.fight && after.settingsKept };
   };
 }

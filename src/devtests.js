@@ -3,9 +3,9 @@
 // Typical use, in the browser console on a page opened with ?dev&seed=N:
 //   await __runToEnd()                      full level with the bot, cinematics skipped
 //   await __runToEnd({ watch: true })       same, cinematics played through
-//   await __testTransitions(10)             boss phase-change trials
-//   await __testFeints(400)                 feint fairness with feints forced on
-//   await __testCheckpoint('leader')        die mid-fight, retry, check the reset
+//   await __testTransitions(10, 'leader')   boss phase-change trials ('leader' | 'fixer')
+//   await __testFeints(400, 'leader')       feint fairness with feints forced on ('leader' | 'fixer')
+//   await __testCheckpoint('leader')        die mid-fight, retry, check the reset ('enforcer' | 'leader' | 'fixer')
 //   await __testChargeWindow()              Enforcer charge reaction window
 //   await __testWallStun()                  charge into an obstacle
 //   await __probeMemory(8)                  heap / GPU objects across retries
@@ -14,7 +14,7 @@
 //   await __testGas()                       officer's tear-gas grenade: cloud, crowd reaction, supply, boss lock-out
 //   await __testBarriers()                  police barriers: preview and placing, refusals, crowd walks round, pick-up, arenas
 //   await __testTension()                   crowd tension: what raises and lowers it, decay, HUD, and what it changes
-import { ENFORCER, LEADER } from './boss.js';
+import { ENFORCER } from './boss.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -103,14 +103,14 @@ export function installTests(game) {
     return { ...r, encountersStarted: encounters, maxHit: +maxHit.toFixed(1), maxHitFrom, scoreSum, issues };
   };
 
-  // Phase changes: bring le Patron to threshold+1 during a wind-up, land the crossing hit and
-  // more hits straight after. Expect: health clamped, attack cancelled, extra hits blocked,
-  // no damage to the officer, exactly one phase gained, boss back to idle.
-  window.__testTransitions = async (trials = 10) => {
+  // Phase changes: bring a boss with phases (le Patron, the Fixer) to threshold+1 during a wind-up,
+  // land the crossing hit and more hits straight after. Expect: health clamped, attack cancelled,
+  // extra hits blocked, no damage to the officer, exactly one phase gained, boss back to idle.
+  window.__testTransitions = async (trials = 10, name = 'leader') => {
     game.skipCinematics = true;
-    const rows = [];
-    for (const threshold of LEADER.phases.slice(1).map((p) => p.from)) for (let i = 0; i < trials; i++) {
-      window.__boss('leader'); step(0.2);
+    const rows = [], def = window.__bossDefs[name];
+    for (const threshold of def.phases.slice(1).map((p) => p.from)) for (let i = 0; i < trials; i++) {
+      window.__boss(name); step(0.2);
       const b = game.missions.boss, p = game.player;
       p.pos.set(b.n.pos.x + 2.2, 0, b.n.pos.z - 1.5); b.s = 'idle'; b.t = 0;
       while (b.hp > threshold + 1) { window.__bossHit('back'); if (b.s === 'transition') step(2.4); }
@@ -120,7 +120,7 @@ export function installTests(game) {
       const kind = b.cur && b.cur.kind, was = b.s, hp0 = p.health, log0 = b.log.length, phase0 = b.phaseIdx;
       const cross = window.__bossHit('back');
       const extra = [window.__bossHit('back'), window.__bossHit('front'), window.__bossHit('back')].map((e) => e.result);
-      const atCross = { hp: b.hp, s: b.s, cancelled: b.cur === null && b.queue.length === 0 };
+      const atCross = { hp: b.hp, s: b.s, cancelled: b.cur === null && b.queue.length === 0 && !b.backTo };
       step(2.5);
       const r = { threshold, trial: i, hitDuring: was, kind, crossing: cross.result, hpAfter: atCross.hp, state: atCross.s, cancelled: atCross.cancelled, extra: extra.join(','), resolvedDuring: b.log.length - log0, officerHpLost: +(hp0 - p.health).toFixed(1), phaseGain: b.phaseIdx - phase0, after: b.s };
       r.pass = r.hpAfter === threshold && r.state === 'transition' && r.cancelled && r.extra === 'blocked,blocked,blocked' && r.resolvedDuring === 0 && r.officerHpLost === 0 && r.phaseGain === 1 && r.after !== 'transition';
@@ -128,14 +128,15 @@ export function installTests(game) {
       await sleep(2);
     }
     game.skipCinematics = false;
-    return { trials: rows.length, passed: rows.filter((r) => r.pass).length, failures: rows.filter((r) => !r.pass) };
+    return { name, trials: rows.length, passed: rows.filter((r) => r.pass).length, failures: rows.filter((r) => !r.pass) };
   };
 
   // Feints forced on in phase 3: the bot dodges every heavy wind-up in good faith (it cannot
-  // tell a feint), and must still be safe from the real chop that follows.
-  window.__testFeints = async (ticks = 400) => {
+  // tell a feint), and must still be safe from the real heavy attack that follows (the Leader's
+  // chop, the Fixer's kick).
+  window.__testFeints = async (ticks = 400, name = 'leader') => {
     game.skipCinematics = true;
-    window.__boss('leader'); step(0.3);
+    window.__boss(name); step(0.3);
     const b = game.missions.boss, ph3 = b.def.phases[2], saved = ph3.feint;
     ph3.feint = 1;
     game.player.pos.set(b.n.pos.x + 3, 0, b.n.pos.z - 3);
@@ -152,8 +153,9 @@ export function installTests(game) {
         if (i % 20 === 19) await sleep(2);
       }
     } finally { ph3.feint = saved; game.skipCinematics = false; }
-    const chops = b.log.filter((e) => e.kind === 'chop');
-    return { feints, realAttacksAfterFeint: after.length, safeAfterFeint: after.filter((e) => e.dealt === 0).length, chops: chops.length, chopHitsTaken: chops.filter((e) => e.dealt > 0).length, after };
+    const heavy = new Set(Object.values(b.def.attacks).filter((a) => a.feintable).map((a) => a.kind));
+    const chops = b.log.filter((e) => heavy.has(e.kind));
+    return { name, feints, realAttacksAfterFeint: after.length, safeAfterFeint: after.filter((e) => e.dealt === 0).length, heavies: chops.length, heavyHitsTaken: chops.filter((e) => e.dealt > 0).length, after };
   };
 
   // Die mid-fight, RETRY SECTION, check the fight resets cleanly.
@@ -163,14 +165,15 @@ export function installTests(game) {
     const m = game.missions; m.addScore(777, 'carried in'); m.cp.score = m.score;
     const cpScore = m.score, fires0 = game.world.fires.length;
     const b = m.boss; game.player.pos.set(b.n.pos.x + 3, 0, b.n.pos.z - 3);
-    for (let i = 0; i < (name === 'leader' ? 7 : 4); i++) { window.__bossHit('back'); if (b.s === 'transition') step(2.4); }
+    for (let i = 0; i < (name === 'enforcer' ? 4 : 7); i++) { window.__bossHit('back'); if (b.s === 'transition') step(2.4); }
     const mid = { hp: b.hp, phase: b.phaseIdx + 1, score: m.score };
     game.player.takeDamage(1000, null, null); step(3);
     const failed = { state: game.state, retryShown: !document.getElementById('btn-retry').classList.contains('hidden') };
     document.getElementById('btn-retry').click(); step(0.5);
     const b2 = m.boss, rig = b2.n.rig;
-    const r = { name, mid, failed, after: { state: game.state, section: m.section, boss: b2.s, hp: b2.hp, max: b2.def.hp, phase: b2.phaseIdx + 1, score: m.score, scoreRestored: m.score === cpScore, arena: !!game.crowd.arena, newFight: b2 !== b, axes: rig.handR.children.filter((c) => c === rig.axe).length, worldFires: [fires0, game.world.fires.length], playerHp: game.player.health, endedOverlay: document.getElementById('app').classList.contains('ended') } };
-    r.pass = failed.retryShown && r.after.state === 'playing' && r.after.hp === r.after.max && r.after.phase === 1 && r.after.scoreRestored && r.after.arena && r.after.newFight && r.after.axes === (name === 'leader' ? 1 : 0) && r.after.worldFires[0] === r.after.worldFires[1] && r.after.playerHp === 100 && !r.after.endedOverlay;
+    const banner = document.getElementById('banner').classList.contains('show');
+    const r = { name, mid, failed, after: { state: game.state, section: m.section, boss: b2.s, hp: b2.hp, max: b2.def.hp, phase: b2.phaseIdx + 1, score: m.score, scoreRestored: m.score === cpScore, arena: !!game.crowd.arena, newFight: b2 !== b, axes: rig.handR.children.filter((c) => c === rig.axe).length, gloves: (rig.gloves || []).filter((gl) => gl.parent === rig.handL || gl.parent === rig.handR).length, worldFires: [fires0, game.world.fires.length], playerHp: game.player.health, endedOverlay: document.getElementById('app').classList.contains('ended'), phaseBanner: banner } };
+    r.pass = failed.retryShown && r.after.state === 'playing' && r.after.hp === r.after.max && r.after.phase === 1 && r.after.scoreRestored && r.after.arena && r.after.newFight && r.after.axes === (name === 'leader' ? 1 : 0) && r.after.gloves === (name === 'fixer' ? 2 : 0) && r.after.worldFires[0] === r.after.worldFires[1] && r.after.playerHp === 100 && !r.after.endedOverlay && !r.after.phaseBanner;
     game.skipCinematics = false;
     return r;
   };
@@ -224,8 +227,10 @@ export function installTests(game) {
     game.skipCinematics = true;
     window.__boss(name); step(0.2);
     const b = game.missions.boss, p = game.player;
-    // longest legitimate stay per state (s); intro ends 0.8 s after the cinematic (skipped here)
-    const bound = { intro: 1.5, idle: 12, wind: 1.1, feint: 0.5, strike: 0.2, rec: 1.5, stun: 2.5, charge: 2.6, backoff: 2.1, transition: 2.3, defeated: Infinity };
+    // longest legitimate stay per state (s), from the boss's own tables; intro ends 0.8-1 s after
+    // the cinematic (skipped here)
+    const D = b.def, atk = Object.values(D.attacks).filter((a) => !a.seq), missMax = Math.max(1, ...D.phases.map((ph) => ph.missRec || 1));
+    const bound = { intro: 1.5, idle: 12, wind: Math.max(1.1, ...atk.map((a) => a.wind)), feint: D.feintCancel || 0.5, strike: 0.2, rec: Math.max(1.5, ...atk.map((a) => a.rec * missMax)), stun: Math.max(2.5, ...atk.map((a) => a.stun || 0)), charge: 2.6, backoff: (D.backMax ?? 2.0) + 0.1, shift: 0.5, transition: 2.3, defeated: Infinity };
     const issues = [], visits = {};
     let st = b.s, since0 = game.crowd.time, lastHp = b.hp, t = 0, hits = 0, flagged = false;
     const steps = Math.round(seconds * 10);
@@ -247,12 +252,12 @@ export function installTests(game) {
   };
 
   // Heap and GPU object counts across repeated retries of a boss fight (Chrome only for heap).
-  window.__probeMemory = async (retries = 8) => {
+  window.__probeMemory = async (retries = 8, names = ['enforcer', 'leader']) => {
     game.skipCinematics = true;
     const snap = () => ({ heapMB: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null, geometries: game.renderer.info.memory.geometries, textures: game.renderer.info.memory.textures, programs: game.renderer.info.programs.length, sceneObjects: game.scene.children.length, npcs: game.crowd.npcs.length, worldFires: game.world.fires.length });
     const rows = [snap()];
     for (let i = 0; i < retries; i++) {
-      window.__boss(i % 2 ? 'leader' : 'enforcer'); step(0.3);
+      window.__boss(names[i % names.length]); step(0.3);
       for (let k = 0; k < 40; k++) window.__botTick();
       game.player.takeDamage(1000, null, null); step(3);
       document.getElementById('btn-retry').click(); step(1);
@@ -266,7 +271,7 @@ export function installTests(game) {
 
   // Per-frame simulation and render cost while the bot fights (max and percentiles).
   window.__frameTimes = async (scenario = 'leader', frames = 300) => {
-    if (scenario === 'enforcer' || scenario === 'leader') { game.skipCinematics = true; window.__boss(scenario); step(0.3); game.skipCinematics = false; }
+    if (window.__bossDefs[scenario]) { game.skipCinematics = true; window.__boss(scenario); step(0.3); game.skipCinematics = false; }
     const gl = game.renderer.getContext(), up = [], rd = [];
     for (let i = 0; i < frames; i++) {
       game.player.health = 100; // keep the fight running (the officer stands still; the boss attacks)

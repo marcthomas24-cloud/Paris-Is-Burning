@@ -47,6 +47,12 @@ export class HUD {
   }
 
   clearAlerts() { this.alerts.innerHTML = ''; }
+  // the banner and title card (a retry starts without the last run's phase banner on screen)
+  clearOverlays() {
+    clearTimeout(this._tcT); clearTimeout(this._bnT);
+    for (const id of ['title-card', 'banner']) $(id).classList.remove('show');
+    this._bossKey = null;
+  }
 
   scorePop(v, reason) {
     const el = $('score-pop');

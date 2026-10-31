@@ -218,7 +218,7 @@ export class TransferVan {
     this.lastHitPos = at;
     if (kind !== 'pool') {
       g.effects.impact(at);
-      g.audio.impact(at, kind === 'breach' || kind === 'petrol', true, 'shield');
+      g.audio.vanHit(at, kind === 'breach' || kind === 'petrol' || kind === 'explosion');
       if (g.player.pos.distanceTo(this.pos) < 14) g.cameraRig.shake(kind === 'breach' ? 0.2 : 0.05);
     }
     if (this.onDamage) this.onDamage(a, kind);

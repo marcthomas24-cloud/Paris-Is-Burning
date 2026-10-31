@@ -1,4 +1,4 @@
-// Short, skippable camera sequences (Level 2 introductions and the victory).
+// Short, skippable camera sequences (the Level 2 and 3 introductions, reveals and endings).
 //
 // A cinematic is a list of shots. Each shot eases from pose `a` to pose `b`
 // ({ pos, look, fov }), given as functions so they can follow moving characters;
@@ -14,6 +14,7 @@ const _p = new THREE.Vector3(), _l = new THREE.Vector3();
 
 export class Cinematic {
   // o: { id, shots: [{ dur, a, b }], title, sub, titleAt: [from, to], line, lineAt, onDone, sting }
+  //    lines: [[text, from, to], ...] instead of line: subtitles one after another
   constructor(game, o) {
     this.g = game; this.o = o; this.id = o.id;
     this.t = 0;
@@ -24,7 +25,7 @@ export class Cinematic {
     const o = this.o;
     $('cine').classList.remove('hidden');
     $('cine-title').textContent = o.title || ''; $('cine-sub').textContent = o.sub || '';
-    $('cine-line').textContent = o.line || '';
+    $('cine-line').textContent = o.line || (o.lines && o.lines[0] ? o.lines[0][0] : '');
     $('cine-card').classList.remove('show'); $('cine-line').classList.remove('show');
     $('app').classList.add('cine-on');
     if (o.sting) this.g.audio.music.sting(o.sting);
@@ -46,7 +47,11 @@ export class Cinematic {
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
     const ta = o.titleAt || [0.3, this.total - 0.3], la = o.lineAt || [0.6, this.total - 0.2];
     $('cine-card').classList.toggle('show', !!o.title && this.t >= ta[0] && this.t < ta[1]);
-    $('cine-line').classList.toggle('show', !!o.line && this.t >= la[0] && this.t < la[1]);
+    if (o.lines) {
+      const cur = o.lines.find(([, a, b]) => this.t >= a && this.t < b), el = $('cine-line');
+      if (cur && el.textContent !== cur[0]) el.textContent = cur[0];
+      el.classList.toggle('show', !!cur);
+    } else $('cine-line').classList.toggle('show', !!o.line && this.t >= la[0] && this.t < la[1]);
   }
 
   skip() { if (this.t > 0.3) this.finish(true); }

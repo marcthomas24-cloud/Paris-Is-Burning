@@ -634,6 +634,34 @@ export function attachFireAxe(rig) {
 }
 export function removeFireAxe(rig) { if (rig.axe) { rig.axe.parent && rig.axe.parent.remove(rig.axe); rig.axe = null; } }
 
+// The Fixer's gloves: black tactical gloves with a signal-orange cuff, on both hands. Separate
+// from the rig's 'item' slot (like the axe), so they stay on when he holds or drops his phone.
+// In the hand socket -Y runs along the fingers and +Y back to the wrist.
+let GLOVE = null;
+export function attachGloves(rig) {
+  initShared();
+  if (rig.gloves) return rig.gloves;
+  if (!GLOVE) {
+    GLOVE = {
+      palm: geo('BoxGeometry(0.06, 0.12, 0.1)', () => new THREE.BoxGeometry(0.06, 0.12, 0.1)),
+      cuff: geo('BoxGeometry(0.075, 0.045, 0.105)', () => new THREE.BoxGeometry(0.075, 0.045, 0.105)),
+      knuckle: geo('BoxGeometry(0.068, 0.03, 0.102)', () => new THREE.BoxGeometry(0.068, 0.03, 0.102)),
+      black: colMat(0x0e0f11, { roughness: 0.55 }), orange: colMat(0xd2561a, { roughness: 0.6 }),
+    };
+  }
+  rig.gloves = [rig.handL, rig.handR].map((hand) => {
+    const g = new THREE.Group();
+    const palm = new THREE.Mesh(GLOVE.palm, GLOVE.black); palm.position.y = 0.005;
+    const knuckle = new THREE.Mesh(GLOVE.knuckle, GLOVE.black); knuckle.position.y = -0.035; // padded knuckle strip
+    const cuff = new THREE.Mesh(GLOVE.cuff, GLOVE.orange); cuff.position.y = 0.075;
+    g.add(palm, knuckle, cuff);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    hand.add(g);
+    return g;
+  });
+  return rig.gloves;
+}
+
 // Compile the shaders of props that first appear mid-level (Level 2's shields and flare)
 // while the level loads, so their first appearance does not stall a frame.
 export function prewarmItems(renderer, scene, camera, types) {

@@ -2,13 +2,14 @@
 // step the simulation deterministically when the tab is not animating.
 //  ?dev&level=2         start in Level 2 (ignores the unlock)
 //  ?dev&level=2&stage=3 start Level 2 at section 3
-//  ?dev&level=3         start in Level 3 (&stage=0-3 picks the act; &route=A|B the route the bot takes)
+//  ?dev&level=3         start in Level 3 (&stage=0-3 picks the act, &stage=fixer the Fixer's fight;
+//                       &route=A|B the route the bot takes)
 //  ?seed=N              seeded run: __start({ audio: false }) then __step / __botRun replay exactly
 import { LEVELS, Progress } from './levels.js';
 import { randomOutfit } from './characters.js';
 import { mulberry } from './textures.js';
 import { reseed, SEED } from './seed.js';
-import { lintBoss, ENFORCER, LEADER } from './boss.js';
+import { lintBoss, ENFORCER, LEADER, FIXER } from './boss.js';
 import { installTests } from './devtests.js';
 import { installTests3 } from './devtests3.js';
 import * as THREE from 'three';
@@ -50,7 +51,9 @@ export function installDev(game) {
   window.__unlock = (id = 2) => { Progress.unlock(id); game._syncLevelMenu(); return Progress.unlocked(id); };
   window.__resetProgress = () => { Progress.reset(); game._syncLevelMenu(); return Progress.unlocked(2); };
   // bosses: jump to a fight, land a hit through the real hit path, check the fairness rules
-  window.__boss = (name = 'enforcer') => window.__level(2, name === 'leader' ? 4 : 2);
+  // 'enforcer' | 'leader' (Level 2) | 'fixer' (Level 3: the van parked in the arena, the fight starting)
+  window.__boss = (name = 'enforcer') => (name === 'fixer' ? window.__level(3, 'fixer') : window.__level(2, name === 'leader' ? 4 : 2));
+  window.__bossDefs = { enforcer: ENFORCER, leader: LEADER, fixer: FIXER };
   window.__bossHit = (from = 'back') => {
     const b = game.missions.boss; if (!b) return 'no boss';
     const n = b.n, f = from === 'back' ? -1.6 : 1.6;
@@ -58,7 +61,7 @@ export function installDev(game) {
     const dir = n.pos.clone().sub(pos).setY(0).normalize();
     return { result: game.crowd.onBatonHit(n, dir, pos), hp: b.hp, phase: b.phaseIdx + 1, state: b.s };
   };
-  window.__lintBosses = () => ({ enforcer: lintBoss(ENFORCER), leader: lintBoss(LEADER) });
+  window.__lintBosses = () => ({ enforcer: lintBoss(ENFORCER), leader: lintBoss(LEADER), fixer: lintBoss(FIXER) });
   // line up a few agents in front of the camera for inspection
   window.__studio = (filter, z = 156, n = 4) => {
     const list = game.crowd.npcs.filter(filter).slice(0, n);

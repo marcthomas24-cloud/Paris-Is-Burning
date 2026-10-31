@@ -1027,6 +1027,86 @@ export class Audio {
     });
   }
 
+  // the Fixer's footwork: a trainer scuffing the road (side-steps, a feint, the rush's launch)
+  scuff(pos) {
+    if (!this.enabled) return;
+    this._shot('step', pos, 0.5, { ref: 3, max: 30, verb: 0 }, (out, t, p, v) => {
+      const f = this._filter(v, out, 'bandpass', R(2600, 3400), 6);
+      f.frequency.setValueAtTime(f.frequency.value, t); f.frequency.exponentialRampToValueAtTime(f.frequency.value * 1.35, t + 0.09);
+      const g = this.ctx.createGain(); this._env(g.gain, t, 0.006, 0.7, 0.11); g.connect(f); v.nodes.push(g);
+      this._noise(v, g, this.white, t, 0.14, R(0.9, 1.1));
+      const s = this._sprite('step');
+      if (s) this._buf(v, out, s.buf, t, { offset: s.off, dur: s.dur, rate: R(1.05, 1.2), gain: 0.6 });
+      return 0.18;
+    });
+  }
+
+  // a blow on the transfer van's bodywork: a dull sheet-metal thump with a rattle (heavier for a
+  // completed breach or a petrol bomb); one sound per blow, never more than one every 0.15 s
+  vanHit(pos, heavy = false) {
+    if (!this.enabled) return;
+    const now = this.ctx.currentTime;
+    if (now - (this._vanHitT || -1) < 0.15) return;
+    this._vanHitT = now;
+    this._shot('crash', pos, heavy ? 0.85 : 0.55, { ref: 5, max: 80 }, (out, t, p, v) => {
+      this._thud(v, out, t, heavy ? 85 : 110, 38, heavy ? 0.3 : 0.18, heavy ? 0.7 : 0.4);
+      const m = this._sprite('metal');
+      if (m) {
+        this._buf(v, out, m.buf, t, { offset: m.off, dur: Math.min(m.dur, 0.6), rate: R(0.55, 0.7), gain: heavy ? 0.9 : 0.6, fadeOut: 0.25 });
+        if (heavy) { const m2 = this._sprite('metal'); this._buf(v, out, m2.buf, t + R(0.08, 0.16), { offset: m2.off, dur: 0.5, rate: R(0.8, 1.0), gain: 0.35 }); }
+      } else {
+        const f = this._filter(v, out, 'bandpass', 420, 3);
+        const g = this.ctx.createGain(); this._env(g.gain, t, 0.003, 0.8, 0.3); g.connect(f); v.nodes.push(g);
+        this._noise(v, g, this.white, t, 0.35);
+      }
+      return heavy ? 0.9 : 0.6;
+    });
+  }
+
+  // a hazard starting its tell: a low two-tone klaxon from where it is (the hazard's own sound
+  // follows); at most one every 2 s, so two tells starting together stay one warning
+  hazardWarn(pos) {
+    if (!this.enabled) return;
+    const now = this.ctx.currentTime;
+    if (now - (this._hzWarnT || -9) < 2) return;
+    this._hzWarnT = now;
+    this._shot('alarm', pos, 0.5, { ref: 10, max: 90 }, (out, t, p, v) => {
+      const f = this._filter(v, out, 'lowpass', 1400);
+      [[0, 330], [0.22, 262]].forEach(([dt, hz]) => {
+        const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = hz;
+        const g = this.ctx.createGain(); this._env(g.gain, t + dt, 0.015, 0.22, 0.2);
+        o.connect(g).connect(f); o.start(t + dt); o.stop(t + dt + 0.26);
+        v.srcs.push(o); v.nodes.push(o, g);
+      });
+      return 0.5;
+    });
+  }
+
+  // a radio line: static and a chirp (two for an urgent line); the music dips under the line
+  radio(urgent = false, dur = 3) {
+    if (!this.enabled) return;
+    this.squelch();
+    const c = this.ctx, t = c.currentTime + 0.05;
+    (urgent ? [0, 0.12] : [0]).forEach((dt) => {
+      const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(urgent ? 1500 : 1200, t + dt);
+      const g = c.createGain(); this._env(g.gain, t + dt, 0.004, 0.09, 0.07);
+      o.connect(g).connect(this.uiBus); o.start(t + dt); o.stop(t + dt + 0.1);
+      o.onended = () => { o.disconnect(); g.disconnect(); };
+    });
+    this.music.duck(0.7, dur);
+  }
+
+  // retry / restart: the one-shots still sounding from the run before are faded out, the
+  // deferred ones dropped, so nothing carries over (beds, music and settings are untouched)
+  stopVoices() {
+    if (!this.enabled) return;
+    const now = this.ctx.currentTime;
+    for (const v of this.voices) if (v.pri >= 0 && v.out) this._kill(v, now);
+    this.pending.length = 0;
+    this.recentBooms.length = 0;
+    this.music.duck(1, 0);
+  }
+
   // a short burst of static before a radio line
   squelch() {
     if (!this.enabled) return;

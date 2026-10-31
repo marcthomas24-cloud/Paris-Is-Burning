@@ -1,0 +1,65 @@
+{
+  "description": "Level 3 Phase 4 (the Fixer: boss, cinematics and audio). Branch level3 on top of f5ad5d4 (uncommitted). Dev server (vite :5174), Claude desktop app built-in Chromium, Browser pane displayed.",
+  "date": "2026-10-31",
+  "regression": {
+    "level1_seed3": { "command": "?dev&seed=3, await __runToEnd()", "t": 95.4, "score": 6118, "stats": { "neutralized": 15, "arrests": 9, "peaceful": 0, "downed": 0, "bombsStopped": 0, "bombsThrown": 2 }, "minHp": 72, "crowdSum": ["514.815", "3300.723"], "playerPos": ["-2.171", "-111.592"], "verdict": "IDENTICAL to the Phase 3 baseline" },
+    "level2_seed12": { "command": "?dev&level=2&seed=12, await __auditRun({ watch: true })", "t": 186.42, "score": 9925, "bossTimes": { "enforcer": 24.5, "leader": 37.4 }, "sections": [[0, 0.1], [1, 24.4], [2, 53.3], [3, 77.8], [4, 142.3]], "encountersStarted": 13, "shortfall": 0, "minHp": 16, "crowdSum": ["934.766", "7061.193"], "playerPos": ["2.700", "60.664"], "issues": [], "verdict": "IDENTICAL to the Phase 3 baseline" },
+    "level2_bosses": {
+      "lint": "__lintBosses(): enforcer [], leader [], fixer []",
+      "transitionsLeader": "8 / 8", "feintsLeader": "5 feints, 4 real chops after a feint, 4 safe",
+      "checkpointLeader": "pass", "checkpointEnforcer": "pass", "fuzzLeader60s": "pass, no issues", "fuzzEnforcer60s": "pass, no issues",
+      "chargeWindow": [[4.5, 0.52], [5.5, 0.63], [6.2, 0.72], [7, 0.8], [9, 1.03]], "wallStun": "pass",
+      "verdict": "unchanged"
+    }
+  },
+  "fixer": {
+    "testFixer": {
+      "command": "?dev&level=3&seed=5, await __testFixer()",
+      "phases": [
+        { "phase": 1, "kinds": ["jab"], "maxDealt": 0.84, "minWind": 0.55, "states": "wind, strike, rec, idle, backoff 3, shift 1" },
+        { "phase": 2, "kinds": ["rush", "jab", "kick"], "maxDealt": 16, "minWind": 0.55, "minUnblockableWind": 0.75, "states": "charge 2, stun 1, backoff 6, shift 1" },
+        { "phase": 3, "kinds": ["rush", "kick", "jab"], "maxDealt": 16, "minWind": 0.55, "minUnblockableWind": 0.65, "states": "feint 2, charge 2, stun 1, backoff 4, shift 4" }
+      ],
+      "rush": [
+        { "distance": 5.6, "launchToContact": 0.68, "dealt": 16, "dodgedAtLaunch": 0, "openingAfterMiss": 1.5 },
+        { "distance": 6.5, "launchToContact": 0.78, "dealt": 16, "dodgedAtLaunch": 0, "openingAfterMiss": 1.5 },
+        { "distance": 8.0, "launchToContact": 0.97, "dealt": 16, "dodgedAtLaunch": 0, "openingAfterMiss": 1.5 }
+      ],
+      "rushIntoVan": { "state": "stun", "officerHp": 100, "frontHit": "hit", "vanIntegrity": 100 },
+      "throughGeometry": { "kickWithWall": 0, "kickWithoutWall": 15 },
+      "missOpening": { "afterMiss": 1.38, "afterHit": 1.1 },
+      "arrest": { "hud": "Arrest the Fixer", "section": 5, "arena": false, "vanParked": false, "scoreGain": 2125 },
+      "verdict": "PASS"
+    },
+    "transitions": "__testTransitions(6, 'fixer'): 12 / 12",
+    "feints": "__testFeints(400, 'fixer'): 3 feints, 3 real kicks after a feint, 3 safe; 8 kicks, 0 hits taken",
+    "checkpoint": "__testCheckpoint('fixer'): pass (hp 15, phase 1, score restored, arena, gloves 2, fires unchanged, no phase banner left)",
+    "fuzz": "__fuzzBoss('fixer', 90): pass, no issues (defeated after 27 s)",
+    "frameTimes": { "fixer": { "update": { "p50": 5.2, "p95": 8.9 }, "total": { "p50": 29.2, "p95": 55.2 } }, "leader": { "update": { "p50": 6.9, "p95": 11.8 }, "total": { "p50": 54.2, "p95": 83.3 } }, "note": "narrow Browser pane, same session; the Fixer's fight costs no more than le Patron's" },
+    "memory": "__probeMemory(6, ['fixer']): geometries 385, textures 632, programs 86, scene objects 634 after every retry; heap 215-267 MB with no trend"
+  },
+  "cinematics": {
+    "command": "await __testL3Cinematics()",
+    "rows": "transfer 5.4 s, fixerGlimpse 3.6 s, fixer 4.0 s, custody 3.6 s, victory 4.6 s; each skipped at a random moment and played through: 10 / 10 pass (letterbox and HUD back, field of view back, no damage, no dodge from the skipping key, radio held until the end, the Fixer idle and no strike in the 1.4 s after his introduction, custody leads to the extraction, victory to the results)",
+    "verdict": "PASS"
+  },
+  "music": {
+    "command": "await __testL3Music({ seed: 5 }) (sound on, audio context running; a full bot run on the Avenue)",
+    "states": ["calm", "combat", "calm", "combat", "calm", "combat", "calm", "combat", "calm", "combat", "calm", "boss", "boss3", "combat", "calm", "combat", "calm", "victory"],
+    "tiers": [1, 2, 3], "theme": "l3", "settingsKept": true, "level2After": { "theme": "l2", "tier": 0 },
+    "verdict": "PASS"
+  },
+  "retryClean": { "command": "await __testRetryClean()", "before": "phase banner, 3 voices, a cinematic", "after": "no banner, 0 old voices, no cinematic or letterbox, fight at full health, volume settings unchanged", "verdict": "PASS" },
+  "level3": {
+    "routes": {
+      "command": "?dev&level=3&seed=5, await __testRoutes({ seed: 5 }) (cinematics skipped)",
+      "A": { "title": "LEVEL 3 COMPLETE", "t": 314.79, "score": 11825, "sections": [[0, 0.1], [1, 63.3], [2, 151.4], [3, 163.8], [4, 224.7], [5, 279.9]], "issues": [], "shortfall": 0, "van": 95, "minHp": 80, "dodges": 7, "damageTaken": 67 },
+      "B": { "title": "LEVEL 3 COMPLETE", "t": 330.73, "score": 11775, "sections": [[0, 0.1], [1, 72.4], [2, 185.8], [3, 196.5], [4, 252.4], [5, 301.1]], "issues": [], "shortfall": 0, "van": 95, "minHp": 62, "dodges": 5, "damageTaken": 114 },
+      "radio": "... intercept, fixerFight, fixerDown, extract, handover",
+      "note": "the one peaceful person struck in each run is the bot's swing in the fireworks surge, as in Phase 3",
+      "verdict": "PASS"
+    },
+    "checkpoints": { "command": "await __testL3Checkpoints()", "rows": 10, "verdict": "PASS" }
+  },
+  "build": "npm run build: clean"
+}

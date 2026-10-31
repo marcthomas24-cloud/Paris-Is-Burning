@@ -110,6 +110,7 @@ export class HazardDirector {
       if (h.go || ((!h.ready || h.ready()) && (vd < h.triggerVan || p.distanceTo(pos) < h.triggerPlayer))) {
         this._set(h, 'telegraph');
         g.audio.hiss(pos, h.telegraph);
+        g.audio.hazardWarn(pos);
         g.hud.alert('That car\'s going to blow — get clear!', 'warn', 3);
         g.crowd.disturb(pos, h.r + 8, 0.9, 'explosion'); // bystanders leave before it goes
         for (const f of g.world.fires) if (f.pos.distanceTo(V3(pos.x, f.pos.y, pos.z)) < 3) { f.boost = 2.2; f.boostT = h.telegraph; }
@@ -209,6 +210,7 @@ export class HazardDirector {
         this._set(h, 'telegraph');
         const c = V3((h.x0 + h.x1) / 2, 3, h.zc);
         g.audio.creak(c);
+        g.audio.hazardWarn(c);
         g.hud.alert('The scaffolding is giving way!', 'warn', 2.2);
         crowd.disturb(c.setY(0), 7, 0.8, 'explosion');
       }
@@ -297,7 +299,7 @@ export function igniterScript(game, dir, h, n) {
       if (sc.phase === 'wait' && m.distToPlayer < (h.lightWithin || 12)) {
         sc.phase = 'light'; sc.amber = true; m.focus.set(h.x1, 0, h.z);
         giveItem(m.rig, 'bottle'); crowd.setState(m, 'bomb_light', h.telegraph + 0.2);
-        game.audio.lighter(m.pos); dir.lightTrail(h);
+        game.audio.lighter(m.pos); game.audio.hazardWarn(m.pos); dir.lightTrail(h);
       } else if (sc.phase === 'light') {
         if (m.rig.wick && Math.random() < 0.7) { const q = V3(); m.rig.wick.getWorldPosition(q); game.effects.fire.spawn({ pos: q, vel: V3(0, 0.8, 0), size: 0.16, life: 0.25, alpha: 1, color: C(1, 0.75, 0.3), color2: C(0.9, 0.2, 0), drag: 1 }); }
         if (h.state === 'active') { clearItem(m.rig); sc.done(m); }
