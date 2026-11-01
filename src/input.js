@@ -22,6 +22,8 @@ export class Input {
       if (e.repeat) return;
       this.keys.add(e.code); this.edges.add(e.code);
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+      // Tab toggles the boss lock-on in play; on the menus it still moves the focus
+      if (e.code === 'Tab' && !(e.target instanceof Element && e.target.matches('button, input, select, textarea, a'))) e.preventDefault();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => { this.keys.clear(); this.buttons.clear(); this.cursor = null; });

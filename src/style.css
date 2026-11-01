@@ -295,6 +295,7 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 #boss-state { height: 16px; margin-top: 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.25em; }
 #boss-state.open { color: var(--green); }
 #boss-state.phase { color: var(--amber); }
+#boss-lock { position: absolute; right: 0; bottom: 0; height: 16px; line-height: 16px; font-size: 10px; font-weight: 800; letter-spacing: 0.16em; color: var(--dim); }
 /* phones: directly under the objective panel, clear of the minimap and bars on the right */
 .touch #boss-bar { bottom: auto !important; top: calc(env(safe-area-inset-top, 0px) + 112px); left: calc(env(safe-area-inset-left, 0px) + 8px) !important; right: auto !important; transform: none !important; width: min(62vw, 239px) !important; text-align: left; }
 .touch #boss-bar .boss-name { justify-content: flex-start; }
@@ -371,6 +372,7 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 #end-stats .medal-block .rank { margin: 0 0 4px; }
 #end-stats .best-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; animation: rowIn 0.4s ease 0.7s both; }
 #end-stats .best-tags span { font-size: 10px; font-weight: 800; letter-spacing: 0.16em; padding: 3px 7px; border-radius: 2px; background: var(--amber); color: #111; }
+#end-stats .best-tags span.aid { background: none; color: rgba(255,255,255,0.75); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.45); }
 #end-stats .best-line { margin-top: 6px; font-size: 12px; color: var(--dim); letter-spacing: 0.06em; }
 .next-card { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; padding: 10px 14px; border-left: 3px solid var(--accent); background: rgba(61,123,255,0.08); font-family: var(--font); line-height: 1.4; animation: rowIn 0.5s ease 1s both; }
 .next-card .k { font-size: 10px; letter-spacing: 0.22em; color: var(--dim); }

@@ -155,6 +155,7 @@ export class HUD {
       if (fill.style.width !== w) { fill.style.width = w; chip.style.width = w; } // the chip lags behind (CSS transition delay)
       const st = $('boss-state');
       const txt = bi.state === 'defeated' ? 'DOWN — ARREST HIM' : bi.state === 'transition' ? `PHASE ${bi.phase + 1}` : bi.open ? 'OPENING' : '';
+      $('boss-lock').classList.toggle('hidden', !this.game.player.lockTarget);
       if (st.textContent !== txt) { st.textContent = txt; st.className = bi.open || bi.state === 'defeated' ? 'open' : bi.state === 'transition' ? 'phase' : ''; }
     }
 

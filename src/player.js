@@ -33,6 +33,7 @@ export class Player {
     this.health = 100;
     this.stamina = 100;
     this.attack = null;      // {phase, t, target, hit}
+    this.lockTarget = null;  // the boss while locked on (main.js)
     this.attackBuffer = 0;
     this.blocking = false;
     this.blockK = 0;
@@ -137,13 +138,19 @@ export class Player {
     const camF = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
     const camR = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
     const wish = new THREE.Vector3();
+    // locked on (main.js): the controls follow the line to the boss, not the (lagging) camera, so
+    // A/D circle him at the same distance and W/S close in or back off
+    const lk = this.lockTarget;
+    const lkd = lk ? Math.hypot(lk.pos.x - this.pos.x, lk.pos.z - this.pos.z) : 0;
+    const mF = lkd > 0.8 ? new THREE.Vector3((lk.pos.x - this.pos.x) / lkd, 0, (lk.pos.z - this.pos.z) / lkd) : camF;
+    const mR = lkd > 0.8 ? new THREE.Vector3(-mF.z, 0, mF.x) : camR;
     if (!this.dead) {
-      if (input.down('KeyW')) wish.add(camF);
-      if (input.down('KeyS')) wish.sub(camF);
-      if (input.down('KeyD')) wish.add(camR);
-      if (input.down('KeyA')) wish.sub(camR);
+      if (input.down('KeyW')) wish.add(mF);
+      if (input.down('KeyS')) wish.sub(mF);
+      if (input.down('KeyD')) wish.add(mR);
+      if (input.down('KeyA')) wish.sub(mR);
       // analog stick (touch): partial deflection walks slower
-      if (input.axis.x || input.axis.y) wish.addScaledVector(camF, -input.axis.y).addScaledVector(camR, input.axis.x);
+      if (input.axis.x || input.axis.y) wish.addScaledVector(mF, -input.axis.y).addScaledVector(mR, input.axis.x);
     }
     if (wish.lengthSq() > 1) wish.normalize();
 
@@ -159,7 +166,9 @@ export class Player {
       this.attackBuffer = 0;
       const aims = [camF];
       if (wish.lengthSq() > 0.04) aims.push(wish.clone().normalize());
-      const target = this._findTarget(aims);
+      // locked on (main.js): the boss whenever he is in reach, whichever way the officer is turned
+      const lockHit = lk && this._strikeable(lk) && lkd < 3.6;
+      const target = lockHit ? lk : this._findTarget(aims);
       this.attack = { phase: 'windup', t: 0, target, hit: false };
       // the whoosh peaks as the baton comes down, just before the impact
       g.audio.swing(this.pos);
@@ -247,6 +256,7 @@ export class Player {
       const tp = this.attack.target.pos;
       want = Math.atan2(tp.x - this.pos.x, tp.z - this.pos.z);
     } else if (this.attack || this.gear.throwT > 0) want = this.heading;
+    else if (this.lockTarget && !this.sprinting && this.dodgeT <= 0) want = Math.atan2(this.lockTarget.pos.x - this.pos.x, this.lockTarget.pos.z - this.pos.z); // strafe facing the boss
     else if (this.speed > 0.3 && this.dodgeT <= 0) want = Math.atan2(this.vel.x, this.vel.z);
     const turnRate = this.attack ? 24 : this.blocking ? 14 : this.sprinting ? 9 : 13;
     this.heading = angleLerp(this.heading, want, 1 - Math.exp(-dt * turnRate));

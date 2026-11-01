@@ -26,6 +26,7 @@ import { SHIELD_POSE, giveItem, clearItem, attachFireAxe, removeFireAxe, crouch,
 const V = () => new THREE.Vector3();
 const tmp = V();
 const DODGE_COOLDOWN = 0.75; // player.js
+export const ASSIST = { wind: 1.2, rec: 1.4, dmg: 0.6 }; // Assisted boss fights (Options)
 const STRIKE_T = 0.12;       // a strike's own duration before the next attack of a combination winds up
 const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 // a straight-line run at the officer (the Enforcer's charge, the Fixer's rush): aimed when the
@@ -412,6 +413,13 @@ export class Boss {
 
   _wind(a, feinting = false) {
     const g = this.game, n = this.n;
+    // Assisted (Options): slower wind-ups, longer openings, lighter hits. Scaled once per attack
+    // (a feint's real attack and the parts of a combination come back through here)
+    if (g.aids().assisted && !a.aided) {
+      a = { ...a, aided: true, wind: a.wind * ASSIST.wind, rec: a.rec * ASSIST.rec, dmg: a.dmg * ASSIST.dmg };
+      if (a.stun) a.stun *= ASSIST.rec;
+      if (g.missions.stats) g.missions.stats.assisted = true; // the run is marked ASSISTED on the results
+    }
     this.cur = a; this.s = 'wind'; this.t = 0;
     if (feinting) this.lastFeint = true;
     if (Math.random() < 0.5) g.audio.shout(n.pos);

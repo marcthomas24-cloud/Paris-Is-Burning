@@ -45,7 +45,7 @@ const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // What a finished run is judged on (the same fields in every level).
 export function summarize(m, win) {
   const s = m.stats;
-  return { win: !!win, score: m.score, arrests: s.arrests, damage: Math.round(s.damageTaken || 0), peaceful: s.peaceful, time: m.t };
+  return { win: !!win, score: m.score, arrests: s.arrests, damage: Math.round(s.damageTaken || 0), peaceful: s.peaceful, time: m.t, assisted: !!s.assisted };
 }
 
 // The four citations and the medal they add up to. No medal without completion.
@@ -59,7 +59,7 @@ export function assess(id, run) {
   ];
   const n = citations.filter((c) => c.ok).length;
   const medal = !run.win ? 0 : n === 4 ? 3 : n === 3 ? 2 : n >= 1 ? 1 : 0;
-  return { citations, count: n, medal };
+  return { citations, count: n, medal, assisted: !!run.assisted };
 }
 
 export const medalDisc = (medal, extra = '') => `<span class="medal ${MEDALS[Math.max(0, medal)].key}${extra}" aria-label="${MEDALS[Math.max(0, medal)].name}"></span>`;
@@ -87,13 +87,14 @@ export function medalBlock(a, flags, rec) {
     if (flags.score) tags.push('NEW BEST SCORE');
     if (flags.time) tags.push('NEW BEST TIME');
   }
+  if (a.assisted) tags.push('ASSISTED');
   const best = rec && rec.wins && !flags.firstWin && !flags.score
     ? `<div class="best-line">Best ${fmtScore(rec.bestScore)} · ${MEDALS[Math.max(0, rec.bestMedal)].name}${rec.bestTime ? ' · ' + fmtTime(rec.bestTime) : ''}</div>` : '';
   return `<div class="medal-block">${medalDisc(a.medal, ' big')}<div class="medal-info">`
     + `<div class="rank">${a.medal ? m.name + ' · ' : ''}${m.rank}</div>`
     + `<ul class="citations">${a.citations.map((c) => `<li class="${c.ok ? 'ok' : 'no'}"><span>${esc(c.label)}</span><b>${esc(c.value)}</b></li>`).join('')}</ul>`
     + `</div></div>`
-    + (tags.length ? `<div class="best-tags">${tags.map((t) => `<span>${t}</span>`).join('')}</div>` : '') + best;
+    + (tags.length ? `<div class="best-tags">${tags.map((t) => `<span${t === 'ASSISTED' ? ' class="aid"' : ''}>${t}</span>`).join('')}</div>` : '') + best;
 }
 
 // "what comes next" under the results: the next level's first objective, or the campaign's end
@@ -157,7 +158,7 @@ export class CampaignUI {
       + `<h3>${esc(c.title)}</h3><p>${esc(c.briefing)}</p>`
       + `<div class="cmp-cols"><div><div class="lbl">OBJECTIVES</div><ul class="objectives">${c.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ul></div>`
       + `<div><div class="lbl">MEDAL CITATIONS${best ? ' · BEST RUN' : ''}</div><ul class="citations">${cites.map((x) => `<li class="${best && x.ok ? 'ok' : 'no'}"><span>${esc(x.label)}</span></li>`).join('')}</ul></div></div>`
-      + (rec && rec.wins ? `<div class="cmp-best">${medalDisc(rec.bestMedal)}<span>BEST ${fmtScore(rec.bestScore)} · ${MEDALS[Math.max(0, rec.bestMedal)].rank}${rec.bestTime ? ' · ' + fmtTime(rec.bestTime) : ''} · ${rec.wins} ${rec.wins === 1 ? 'completion' : 'completions'}</span></div>`
+      + (rec && rec.wins ? `<div class="cmp-best">${medalDisc(rec.bestMedal)}<span>BEST ${fmtScore(rec.bestScore)} · ${MEDALS[Math.max(0, rec.bestMedal)].rank}${rec.bestTime ? ' · ' + fmtTime(rec.bestTime) : ''} · ${rec.wins} ${rec.wins === 1 ? 'completion' : 'completions'}${best && best.assisted ? ' · assisted' : ''}</span></div>`
         : !open ? `<div class="cmp-best dim">Complete Level ${c.id - 1} to unlock${this.game.dev ? ' · developer build: START plays it anyway' : ''}</div>` : '');
     this.el.start.textContent = comp ? `REPLAY · LEVEL ${sel}` : `START · LEVEL ${sel}`;
     this.el.start.disabled = !this.canStart(sel);

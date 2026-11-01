@@ -53,7 +53,7 @@
       <div id="threat-warning" class="hidden">⚠ PETROL BOMB</div>
       <div id="title-card"><div class="tc-title"></div><div class="tc-sub"></div></div>
       <div id="banner"><div class="bn-title"></div><div class="bn-sub"></div></div>
-      <div id="boss-bar" class="hidden"><div class="boss-name"><span id="boss-name"></span><span id="boss-sub"></span></div><div id="boss-hp"><div class="chip"></div><div class="fill"></div></div><div id="boss-state"></div></div>
+      <div id="boss-bar" class="hidden"><div class="boss-name"><span id="boss-name"></span><span id="boss-sub"></span></div><div id="boss-hp"><div class="chip"></div><div class="fill"></div></div><div id="boss-state"></div><div id="boss-lock" class="hidden">LOCKED<span class="desk-only"> · TAB</span></div></div>
 
       <div id="hud-buttons">
         <button data-action="mute" id="hud-mute" class="hud-btn" aria-label="Mute sound" aria-pressed="false"><span class="ico-on">🔊</span><span class="ico-off">🔇</span></button>
@@ -171,6 +171,7 @@
           <tr><td>Left mouse</td><td>Baton strike — wind-up, strike, recovery</td></tr>
           <tr><td>Right mouse (hold)</td><td>Shield stance — blocks frontal hits &amp; projectiles, push through crowds</td></tr>
           <tr><td>Space</td><td>Dodge / quick step</td></tr>
+          <tr><td>Tab</td><td>Boss lock-on on / off (on by default; also under Options). Locked, A/D circle the boss while facing him</td></tr>
           <tr><td>E</td><td>Arrest a downed aggressor · respond to incident</td></tr>
           <tr><td>G</td><td>Throw a tear-gas grenade where the camera looks (aim higher to throw further). 3 per phase, none during boss fights</td></tr>
           <tr><td>B</td><td>Police barrier: shows a preview in front of you (green where it fits); B again or left mouse places it, right mouse or G cancels. B beside one of your barriers picks it up. 4 carried; the crowd walks round them</td></tr>
@@ -198,6 +199,10 @@
           <label for="vol-mute">Mute</label><input type="checkbox" id="vol-mute" /><span class="dim small desk-only">M key</span>
           <label for="opt-sens">Mouse sensitivity</label><input type="range" id="opt-sens" min="30" max="250" step="5" /><output id="opt-sens-out" for="opt-sens"></output>
           <label for="opt-invert">Invert look</label><input type="checkbox" id="opt-invert" /><span></span>
+          <label for="opt-lockon">Boss lock-on</label><input type="checkbox" id="opt-lockon" /><span class="dim small desk-only">Tab key</span>
+          <span class="dim small opt-note">In boss fights the camera keeps the boss ahead and the officer faces him: W/S close in or back off, A/D circle him, and a strike in reach always goes at him.</span>
+          <label for="opt-assisted">Assisted boss fights</label><input type="checkbox" id="opt-assisted" /><span></span>
+          <span class="dim small opt-note">Bosses hit for 60% damage, wind up 20% slower and stay open 40% longer. Medals are still awarded; the run is marked ASSISTED.</span>
           <label for="opt-brutality">Police brutality</label><input type="checkbox" id="opt-brutality" /><span></span>
           <span class="dim small opt-note">On: downed and cuffed suspects can be struck with no score penalty. Off: they still react, but it counts as excessive force.</span>
         </div>

@@ -3,10 +3,12 @@
 // old saves, blocked storage, RESET CAMPAIGN, the pause briefing. Each returns plain data with a
 // `pass` flag. The device's own progress and settings are put back afterwards.
 //   await __testCampaign()    everything above
+//   await __testAids()        boss lock-on and Assisted boss fights (Options): see below
 //   __campaignLayout()        the visible screen's horizontal overflow and off-screen buttons (run it
 //                             at phone sizes with the campaign, results or finale showing)
 import { Progress } from './levels.js';
-import { assess, nextMission, mission } from './campaign.js';
+import { assess, nextMission, mission, summarize, medalBlock } from './campaign.js';
+import { LEADER, ASSIST } from './boss.js';
 
 const KEY = 'parisBurning.progress.v1';
 const KEEP = [KEY, 'parisBurning.gameplay.v1', 'parisBurning.audio.v1'];
@@ -167,6 +169,93 @@ export function installTests7(game) {
   };
 
   // Horizontal overflow of the screen showing now, and any of its buttons outside the viewport.
+  // Player aids. Lock-on: the officer side-on to le Patron (the camera looking away) circles him
+  // with A and stays facing him, the camera turns onto him, and a strike in an opening lands on him;
+  // the same strike with lock-on off goes elsewhere. Tab turns it off and on. Assisted: a wind-up,
+  // a feint's real attack (scaled once), the damage and the opening; the run's results say ASSISTED.
+  // Harness runs ignore the device's settings unless game.testAids is set.
+  window.__testAids = async () => {
+    const saved = {}; for (const k of KEEP) { try { saved[k] = localStorage.getItem(k); } catch (e) { /* blocked */ } }
+    const prefs0 = { ...game.prefs }, out = {};
+    const wrap = (a) => Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
+    const fight = () => {
+      game.skipCinematics = true;
+      window.__level(2); window.__start({ audio: false, seed: 12 });
+      game.input.keys.clear(); game.input.buttons.clear();
+      window.__boss('leader');
+      for (let i = 0; i < 300 && (!game.missions.boss || game.missions.boss.s === 'intro' || game.cinematic); i++) step(1 / 30);
+      const b = game.missions.boss; b.s = 'idle'; b.cool = 99; b.queue = [];
+      return b;
+    };
+    // the officer 2.4 m east of him, turned south, the camera looking south too (him off to the left)
+    const place = (b) => {
+      const p = game.player, n = b.n;
+      p.pos.set(n.pos.x + 2.4, 0, n.pos.z); p.vel.set(0, 0, 0); p.knock.set(0, 0, 0); p.heading = 0; p.attack = null; p.health = 100;
+      game.cameraRig.yaw = Math.PI; n.vel.set(0, 0, 0);
+    };
+    const facing = (b) => { const p = game.player, n = b.n; return +wrap(p.heading - Math.atan2(n.pos.x - p.pos.x, n.pos.z - p.pos.z)).toFixed(2); };
+    const camErr = (b) => { const p = game.player, n = b.n; return +wrap(game.cameraRig.yaw - Math.atan2(-(n.pos.x - p.pos.x), -(n.pos.z - p.pos.z))).toFixed(2); };
+    const strike = (b) => {
+      const hits0 = b.hits; b.s = 'rec'; b.t = 0; b.dur = 9; b.openHits = 0;
+      game.input.edges.add('Mouse0'); step(1 / 60);
+      const target = game.player.attack && game.player.attack.target;
+      step(0.6, () => { b.s = 'rec'; b.n.vel.set(0, 0, 0); });
+      return { atBoss: target === b.n, landed: b.hits > hits0 };
+    };
+    try {
+      // the harness ignores the device's settings
+      game.prefs.lockOn = true; game.prefs.assisted = true; game.testAids = null;
+      out.harnessOk = !game.aids().lockOn && !game.aids().assisted;
+
+      // lock-on
+      game.testAids = { lockOn: true, assisted: false };
+      let b = fight(); place(b);
+      const before = { facing: facing(b), camera: camErr(b) };
+      const r0 = Math.hypot(game.player.pos.x - b.n.pos.x, game.player.pos.z - b.n.pos.z);
+      step(1.0, () => { game.input.keys.add('KeyA'); b.n.vel.set(0, 0, 0); b.cool = 99; b.s = 'idle'; });
+      game.input.keys.delete('KeyA');
+      const r1 = Math.hypot(game.player.pos.x - b.n.pos.x, game.player.pos.z - b.n.pos.z);
+      out.lock = { before, after: { facing: facing(b), camera: camErr(b) }, radius: [+r0.toFixed(2), +r1.toFixed(2)], marker: !$('boss-lock').classList.contains('hidden') };
+      place(b); out.lock.strike = strike(b);
+      out.lockOk = out.lock.after.facing < 0.25 && out.lock.after.camera < 0.35 && Math.abs(r1 - r0) < 1.2 && out.lock.marker && out.lock.strike.atBoss && out.lock.strike.landed;
+      // Tab: off, then on again (the option follows)
+      game.prefs.lockOn = true; game.testAids = null; game.manualStep = false;
+      game.input.edges.add('Tab'); game.update(1 / 60); const afterTab = game.prefs.lockOn, box = $('opt-lockon').checked;
+      game.input.edges.add('Tab'); game.update(1 / 60);
+      game.manualStep = true;
+      out.tab = { off: afterTab === false && box === false, on: game.prefs.lockOn === true };
+      out.tabOk = out.tab.off && out.tab.on;
+      // lock-on off: the same strike, him off to the side, does not go at him
+      game.testAids = { lockOn: false, assisted: false };
+      b = fight(); place(b); game.input.edges.add('Mouse0'); step(1 / 60);
+      out.unlockedAtBoss = !!(game.player.attack && game.player.attack.target === b.n);
+      out.unlockedOk = !out.unlockedAtBoss && $('boss-lock').classList.contains('hidden');
+
+      // Assisted
+      game.testAids = { lockOn: false, assisted: true };
+      b = fight();
+      const chop = LEADER.attacks.chop;
+      b._wind({ ...chop }); const w = { wind: b.cur.wind, rec: b.cur.rec, dmg: b.cur.dmg };
+      b._wind({ ...b.cur, feint: false }); // a feint's real attack comes back through _wind
+      const near = (x, y) => Math.abs(x - y) < 1e-6;
+      out.assist = { scaled: near(w.wind, chop.wind * ASSIST.wind) && near(w.rec, chop.rec * ASSIST.rec) && near(w.dmg, chop.dmg * ASSIST.dmg), once: near(b.cur.wind, w.wind), marked: !!game.missions.stats.assisted };
+      const run = summarize(game.missions, true), a = assess(2, run);
+      out.assist.tag = medalBlock(a, {}, null).includes('ASSISTED');
+      // and nothing is scaled without it
+      game.testAids = { lockOn: false, assisted: false };
+      b = fight(); b._wind({ ...chop });
+      out.assist.plain = near(b.cur.wind, chop.wind) && !game.missions.stats.assisted && !medalBlock(assess(2, summarize(game.missions, true)), {}, null).includes('ASSISTED');
+      out.assistOk = Object.values(out.assist).every(Boolean);
+    } finally {
+      game.testAids = null; game.skipCinematics = false;
+      Object.assign(game.prefs, prefs0); game._savePrefs(); // (the Options screen follows)
+      game.input.keys.clear(); game.input.buttons.clear();
+      for (const k of KEEP) { try { if (saved[k] == null) localStorage.removeItem(k); else localStorage.setItem(k, saved[k]); } catch (e) { /* blocked */ } }
+    }
+    out.pass = !!(out.harnessOk && out.lockOk && out.tabOk && out.unlockedOk && out.assistOk);
+    return out;
+  };
+
   window.__campaignLayout = () => {
     const scr = [...document.querySelectorAll('.screen')].find((s) => !s.classList.contains('hidden'));
     if (!scr) return 'no screen showing';

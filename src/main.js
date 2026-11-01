@@ -22,7 +22,9 @@ import { CampaignUI, mission, nextMission, completedCount, summarize, assess } f
 const $ = (id) => document.getElementById(id);
 // controls during a cinematic: nothing pressed
 const PREFS_KEY = 'parisBurning.gameplay.v1';
-const PREF_DEFAULTS = { sens: 1, invertY: false, brutality: false };
+const PREF_DEFAULTS = { sens: 1, invertY: false, brutality: false, lockOn: true, assisted: false };
+const NO_AIDS = { lockOn: false, assisted: false };
+const wrapAngle = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 function loadPrefs() {
   try { return { ...PREF_DEFAULTS, ...JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') }; } catch (e) { return { ...PREF_DEFAULTS }; }
 }
@@ -188,12 +190,15 @@ class Game {
       const p = this.prefs;
       $('opt-sens').value = Math.round(p.sens * 100); $('opt-sens-out').textContent = Math.round(p.sens * 100) + '%';
       $('opt-invert').checked = p.invertY; $('opt-brutality').checked = p.brutality;
+      $('opt-lockon').checked = p.lockOn; $('opt-assisted').checked = p.assisted;
       this.cameraRig.sens = p.sens; this.cameraRig.invertY = p.invertY;
     };
-    const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(this.prefs)); } catch (e) { /* storage blocked */ } syncPrefs(); };
+    const savePrefs = this._savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(this.prefs)); } catch (e) { /* storage blocked */ } syncPrefs(); };
     $('opt-sens').addEventListener('input', (e) => { this.prefs.sens = e.target.value / 100; savePrefs(); });
     $('opt-invert').addEventListener('change', (e) => { this.prefs.invertY = e.target.checked; savePrefs(); });
     $('opt-brutality').addEventListener('change', (e) => { this.prefs.brutality = e.target.checked; savePrefs(); });
+    $('opt-lockon').addEventListener('change', (e) => { this.prefs.lockOn = e.target.checked; savePrefs(); });
+    $('opt-assisted').addEventListener('change', (e) => { this.prefs.assisted = e.target.checked; savePrefs(); });
     syncPrefs();
   }
 
@@ -437,6 +442,18 @@ class Game {
   onPeacefulStruck(n) { this.missions.onPeacefulStruck(n); }
   onDownedStruck(n) { this.missions.onDownedStruck(n, this.prefs.brutality); }
   onPoliceLineHit(d) { this.missions.onPoliceLineHit(d); }
+  // Player aids (Options): lock-on in boss fights and Assisted boss fights. Harness-driven runs
+  // ignore the device's settings (a test sets game.testAids instead), so seeded results and the
+  // boss tests are the same on every device.
+  aids() { return this.manualStep ? (this.testAids || NO_AIDS) : this.prefs; }
+
+  // the boss the officer locks on to: one in a fight, past his introduction, not yet down
+  _lockTarget() {
+    const b = this.missions && this.missions.boss;
+    if (!this.aids().lockOn || !b || !b.active || b.s === 'intro' || this.cinematic || this.player.dead) return null;
+    return b.n;
+  }
+
   onPlayerDown() { this.hud.alert('Officer down', 'bad', 3); this.missions.fail('You were incapacitated.'); }
   hitStop(t) { this.hitStopT = t; }
 
@@ -591,6 +608,17 @@ class Game {
     if (input.down('ArrowDown')) my += 500 * rawDt;
     const cine = this.cinematic;
     if (!cine) this.cameraRig.rotate(mx, my);
+    // Tab: lock-on on or off (kept in Options); while locked the camera keeps the boss ahead,
+    // so W/S close in or back off and A/D circle him (player.js keeps the officer facing him)
+    if (input.pressed('Tab') && !cine && this.missions && this.missions.boss && this.missions.boss.active) {
+      this.prefs.lockOn = !this.prefs.lockOn; this._savePrefs();
+      this.hud.alert(`Boss lock-on ${this.prefs.lockOn ? 'ON' : 'OFF'} · Tab`, 'good', 1.4, 'lockon');
+    }
+    const lock = this.player.lockTarget = this._lockTarget();
+    if (lock) {
+      const dx = lock.pos.x - this.player.pos.x, dz = lock.pos.z - this.player.pos.z;
+      if (dx * dx + dz * dz > 0.64) this.cameraRig.yaw += wrapAngle(Math.atan2(-dx, -dz) - this.cameraRig.yaw) * (1 - Math.exp(-rawDt * 6));
+    }
     if (cine) {
       if (input.pressed('Space') || input.pressed('Enter') || input.pressed('Mouse0')) cine.skip();
       this.player.invuln = Math.max(this.player.invuln, 0.1); // nobody lands a hit during a cinematic
