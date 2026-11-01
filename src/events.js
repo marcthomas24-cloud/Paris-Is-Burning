@@ -218,15 +218,25 @@ export class IncidentScheduler {
 
   carFire(at) {
     const g = this.game;
-    // a parked car near the player's area bursts into flames (not too close)
+    // a parked car near the player's area bursts into flames (not too close). It is a real car
+    // (burn.js): it burns out to a shell. A scripted spot takes the car parked nearest it; with
+    // none there (or no burn system) the fire stands on its own as before.
     const p = g.player.pos;
-    const spot = at ? at.clone() : V(R(-1, 1) > 0 ? 7.7 : -7.7, 1.0, p.z + R(-60, 60) * (Math.random() < 0.5 ? 1 : -1));
-    spot.z = Math.max(this.cfg.carFireZ[0], Math.min(this.cfg.carFireZ[1], spot.z));
-    if (!at && spot.distanceTo(p) < 18) return;
-    g.effects.explosion(spot, 1.1);
-    g.effects.addFire(spot, 1.4, 2.0);
+    let car = null, spot;
+    if (at) {
+      car = g.burn ? g.burn.nearest(at.x, at.z, 6) : null;
+      spot = car ? V(car.x, 1.0, car.z) : at.clone();
+    } else {
+      if (!g.burn) return;
+      const [z0, z1] = this.cfg.carFireZ;
+      const cands = g.burn.vehicles.filter((v) => v.z >= z0 && v.z <= z1 && g.burn.canIgnite(v) && Math.hypot(v.x - p.x, v.z - p.z) > 18 && Math.hypot(v.x - p.x, v.z - p.z) < 70);
+      if (!cands.length) return;
+      car = cands[Math.floor(Math.random() * cands.length)];
+      spot = V(car.x, 1.0, car.z);
+    }
+    if (car) g.burn.ignite(car, { blast: true });
+    else { g.effects.explosion(spot, 1.1); g.effects.addFire(spot, 1.4, 2.0); g.audio.alarm(spot, 16 + Math.random() * 10); }
     g.audio.explosion(spot, 1.1);
-    g.audio.alarm(spot, 16 + Math.random() * 10);
     g.crowd.disturb(spot, 22, 1.0, 'explosion');
     this._shakeFrom(spot, 0.5);
     if (spot.distanceTo(p) < 60) g.hud.alert('A vehicle has caught fire', 'warn', 2.2, 'carfire');

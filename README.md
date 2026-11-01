@@ -232,6 +232,8 @@ The same far system (with a coarser bake) draws about 1,300 background people be
 - About 45 fires: bins, rubbish heaps, barricades, cars, side streets and the far end. Six burning piles of wheelie bins with crowd barriers thrown on top stand in the road, and some bins have the yellow recycling lid. There are also embers, soot stains, and the four nearest fires cast flickering light.
 - Explosions have a flash, fireball, sparks, an expanding smoke cloud, a dust ring, debris, dynamic light, camera shake and spatialised, delayed and echoing sound.
 - An **incident scheduler** (`events.js`) keeps several areas active. It schedules petrol bombs, firework mortars, projectile volleys, fire flare-ups and parked cars catching fire, with randomised timing, size and direction.
+- **Vehicle fires** (`burn.js`). A car fire sets a real parked car alight: the scheduler picks one 18–70 m from the officer, and a scripted fire takes the car parked nearest its spot. It catches at the engine bay (4–7 s), burns fully for 25–40 s with a big fire and a thick column, smoulders for 45–70 s and is left a burnt-out shell with a thin wisp of smoke and a scorch mark on the road, until the level restarts. While fully alight it can set the next car along the kerb going. The paint chars to black, the glass goes dark, embers glow in patches of the bodywork and the car settles onto its rims. All of this reads a per-vehicle burn texture in the car materials' shaders, so a burning car adds no geometry and no draw call. Every car and civilian van is registered (`world.vehicles`); service and police vans never burn. No vehicle catches fire inside a boss arena (plus 6 m) or beside a Level 3 hazard, and these fires are scenery: they hurt nobody.
+- Fires added during play (shops set alight, car fires, arenas) die down to a smoulder instead of vanishing: at most 24 burn at full strength and 60 in all.
 
 **Look.** Post-processing (half-resolution bloom, a split-tone filmic grade, ACES tone mapping, vignette, grain and slight chromatic fringing), wet reflective roads and puddles using a procedural environment map, and reflective visors.
 
@@ -239,6 +241,7 @@ The same far system (with a coarser bake) draws about 1,300 background people be
 - Frustum culling with padded skinned bounds.
 - Shadows only for nearby characters, and the shadow map is refreshed every other frame.
 - Particle pools with a near-camera fade to limit overdraw.
+- **Fire and smoke levels of detail** (`FX` in `effects.js`). Fires within 35 m are drawn with full flame tongues, those to 110 m with two or three large flame cards, and those beyond with one glow sprite (with a 10 m blend between tiers). Embers come from a shared field round the camera that thickens near fire. Smoke columns thin out from 20 m (fewer, bigger puffs: a quarter of the rate from 50 m), and columns within 8 m of each other become one past 35 m. When a pool is full the most distant and ambient particles go first; petrol fires and explosions are never dropped for scenery. In Level 2's opening the flame pool holds about 330 particles (2,400 available; it used to fill all 1,300), and smoke about 1,400 (3,000 available; it used to fill all 2,000).
 - Dynamic resolution between 0.85× and 1.5×, depending on frame time.
 
 On an AMD Radeon integrated laptop GPU, the dense crowd areas run at roughly 50 fps and the open areas at 60 fps.
@@ -304,6 +307,7 @@ src/
   effects.js     Particle systems (smoke/fire atlases), explosions, mortars, petrol fires, projectiles,
                  debris, fire lights
   events.js      Ambient incident scheduler (molotovs, mortars, volleys, flare-ups, car fires)
+  burn.js        Vehicle fires: the burn texture and material patch, ignition to burnt shell, spread
   post.js        Bloom, colour grade, vignette / grain
   world.js       Procedural Paris: buildings, streets, props, barricades, fires, puddles, colliders
   vehicles.js    Procedural cars (city car, hatchback, saloon, estate; burnt-out shells) and vans
@@ -348,6 +352,8 @@ Add `?dev` to the URL to load the test helpers (`src/dev.js`):
 | `__walkRoute(name)` | Walk a route with the normal controls; reports stuck points, the closest camera distance and any frame with the camera inside a collider |
 | `__npcNav(n, seconds)` | Send crowd agents to far points of the level; arrivals, progress, stuck agents, agents inside colliders or out of bounds |
 | `__worldPerf({ frames })` | Frame cost, draw calls and triangles at each named viewpoint |
+| `__fireBudget({ seconds, views })` | Fire and smoke pool occupancy, particles evicted and dropped per second, fires per tier and the vehicles' burn states, here or at every viewpoint (`views: true`). Passes with 25% headroom and evictions under 5% of a pool a second |
+| `__testVehicleFires()` | Vehicle fires: ids on every vehicle mesh, the registry, a scripted fire on a real car through to its shell, the scheduler's picks, spreading, arenas refused, petrol fires never dropped, restart |
 
 URL shortcuts: `?dev&level=2` starts in Level 2, and `?dev&level=2&stage=3` starts at its fourth section. `?dev&level=3` starts Level 3 (ignoring the unlock); `&stage=0-3` picks the act, `&stage=fixer` (or `__boss('fixer')`) starts the Fixer's fight, `&route=A|B` (or `__route('B')`) the route the bot takes, and `game.missions.jumpToSection(n)` any of its six sections. `?seed=N` makes a run reproducible: with `__start({ audio: false })` and `__step` / `__botRun`, a whole playthrough replays identically. To make that hold, the simulation never runs on wall-clock time: staggered effects use game-time timers, the menu's background simulation is frozen in seeded runs, and the dynamic-resolution system leaves crowd detail alone while the harness steps the game.
 

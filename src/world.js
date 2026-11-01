@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as T from './textures.js';
 import { carParts, carTypeAt, vanParts } from './vehicles.js';
+import { patchVehicleMaterial } from './burn.js';
 
 export const LAYOUT = {
   roadHalf: 9,
@@ -66,6 +67,8 @@ export class World {
     this.blocks = [];       // building footprints for minimap
     this.flags = [];        // static waving flags (cloth meshes)
     this.lightBars = [];
+    this.vehicles = [];     // every car and van built: { id, kind, x, z, ry, L, W, state, burnable } (burn.js)
+    this._vid = 0;          // while a vehicle is being built: its id + 1, written into its vertices
     this.gatherPoints = []; // crowd anchors
     this.bounds = LAYOUT.bounds; // playable area of the current level (setBounds)
     T.setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
@@ -137,6 +140,9 @@ export class World {
     m.fireRed = std({ color: 0x8e1414, roughness: 0.4, metalness: 0.3 });
     m.samuStripe = std({ color: 0xe86a12, roughness: 0.5 });
     m.soot = new THREE.MeshStandardMaterial({ map: T.sootTexture(), transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 });
+    // vehicles read their burn state (burn.js); patched here, before anything compiles
+    for (const k of ['glass', 'tyre', 'rim', 'plastic', 'headlight', 'taillight', 'amber', 'plate']) patchVehicleMaterial(m[k]);
+    m.cars.forEach(patchVehicleMaterial);
 
     // Waving cloth shader shared by all flags/banners.
     this.clothUniforms = { uTime: { value: 0 } };
@@ -183,6 +189,7 @@ export class World {
     // normalise attribute sets so merging works
     if (!geo.index) geo = geo; // all our primitives are indexed
     for (const name of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(name)) geo.deleteAttribute(name);
+    if (this._vid) geo.setAttribute('vid', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count).fill(this._vid), 1));
     this.buckets.get(matKey).push(geo);
   }
 
@@ -321,6 +328,10 @@ export class World {
       gate.forEach((g) => g.dispose());
     }
     for (const [key, geos] of this.buckets) {
+      // a batch drawn with a vehicle material needs `vid` on every vertex (0: not a vehicle)
+      if (this.mat(key).userData.vburn || geos.some((g) => g.attributes.vid)) {
+        for (const g of geos) if (!g.attributes.vid) g.setAttribute('vid', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count), 1));
+      }
       const merged = mergeGeometries(geos, false);
       if (!merged) { console.warn('merge failed', key); continue; }
       merged.computeBoundingSphere();
@@ -815,7 +826,10 @@ export class World {
     const rz = state === 'flipped' ? Math.PI : state === 'side' ? Math.PI / 2 : 0;
     const lift = state === 'flipped' ? H : state === 'side' ? W / 2 + 0.08 : 0;
     const M = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(0, ry, rz, 'YXZ'));
+    const v = { id: this.vehicles.length, kind: 'car', x, z, ry, L, W, state, burnable: state === 'ok' };
+    this.vehicles.push(v); this._vid = v.id + 1;
     for (const [m, g] of parts) { g.applyMatrix4(M); g.translate(x, lift, z); this.add(m, g); }
+    this._vid = 0;
     this.addColliderRotated(x, z, state === 'side' ? 1.6 : W + 0.12, L + 0.1, ry, 1.6);
   }
 
@@ -830,7 +844,12 @@ export class World {
     const body = variant === 'fire' ? 'fireRed' : variant === 'samu' ? 'vanBody' : police ? 'vanBody' : `cars:${Math.floor(rnd() * 8)}`;
     if (variant === 'fire' || variant === 'samu') police = false;
     const V = vanParts(police || variant === 'fire' || variant === 'samu' ? 'service' : 'civ', body);
+    // only civilian vans burn (their materials are the cars'); the services' stay as they are
+    const civ = !police && variant === 'civ';
+    const v = { id: this.vehicles.length, kind: 'van', x, z, ry, L: V.L, W: V.W, state: 'ok', burnable: civ };
+    this.vehicles.push(v); if (civ) this._vid = v.id + 1;
     for (const [m, g] of V.parts) { g.rotateY(ry); g.translate(x, 0, z); this.add(m, g); }
+    this._vid = 0;
     const barZ = 0.55; // roof light bar, just behind the windscreen
     if (police) {
       // side livery panels over the load area

@@ -122,12 +122,31 @@ class ParticleSystem {
     this.mesh.renderOrder = additive ? 6 : 5;
     scene.add(this.mesh);
     this.p = [];
+    // priority of new particles (0 distant / ambient, 1 normal, 2 never evicted for a lower one)
+    this.pri = 1;
+    this.evicted = 0; this.dropped = 0;
   }
   spawn(o) {
-    if (this.p.length >= this.max) this.p.splice(0, 1 + Math.floor(this.max * 0.02));
-    const q = { age: 0, rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 0.8, drag: 0.5, grow: 1, frame: o.frame ?? Math.floor(Math.random() * 3.99), ...o, pos: o.pos.clone(), vel: o.vel ? o.vel.clone() : new THREE.Vector3() };
+    const pri = o.pri ?? this.pri;
+    if (this.p.length >= this.max) this._evict(pri);
+    const q = { age: 0, rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 0.8, drag: 0.5, grow: 1, frame: o.frame ?? Math.floor(Math.random() * 3.99), ...o, pri, pos: o.pos.clone(), vel: o.vel ? o.vel.clone() : new THREE.Vector3() };
+    if (this.p.length >= this.max) { this.dropped++; return q; } // everything left outranks it
     this.p.push(q);
     return q;
+  }
+  // full pool: make room by dropping the lowest priority first (oldest first within one),
+  // never anything that outranks the newcomer
+  _evict(pri) {
+    let need = 1 + Math.floor(this.max * 0.02);
+    for (let lv = 0; lv <= pri && need > 0; lv++) {
+      let w = 0;
+      for (let i = 0; i < this.p.length; i++) {
+        const q = this.p[i];
+        if (need > 0 && q.pri === lv) { need--; this.evicted++; continue; }
+        this.p[w++] = q;
+      }
+      this.p.length = w;
+    }
   }
   update(dt, wind, fog, glowFn) {
     this.mat.uniforms.fogColor.value.copy(fog.color);
@@ -164,11 +183,31 @@ class ParticleSystem {
 const C = (r, g, b) => new THREE.Color(r, g, b);
 const R = (a, b) => a + Math.random() * (b - a);
 
+// Fire and smoke budget. Each fire picks a tier from its distance to the camera:
+//  near  full flame tongues (about 35 particles each)
+//  mid   two or three large flame cards
+//  far   one glow sprite
+// with a 10 m blend at each boundary so nothing pops. Smoke columns thin out with distance
+// (fewer, bigger puffs) and columns close together merge past `smokeMerge`. Distant tiers,
+// embers and haze spawn at priority 0, so a full pool drops them first.
+export const FX = {
+  fireMax: 2400, smokeMax: 3000,
+  near: 35, mid: 110, far: 170, blend: 10,
+  smokeNear: 20, smokeThin: 50, smokeMerge: 35, smokeFar: 230, mergeR: 8,
+  emberR: 40,
+  burningCap: 24, fireCap: 60, // addFire: fires at full strength, and all of them with the smoulders
+};
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
 export class Effects {
   constructor(scene, world, audio) {
     this.scene = scene; this.world = world; this.audio = audio;
-    this.smoke = new ParticleSystem(scene, 2000, false, smokeAtlas());
-    this.fire = new ParticleSystem(scene, 1300, true, fireAtlas());
+    this.smoke = new ParticleSystem(scene, FX.smokeMax, false, smokeAtlas());
+    this.fire = new ParticleSystem(scene, FX.fireMax, true, fireAtlas());
+    this.stats = { near: 0, mid: 0, far: 0, columns: 0, merged: 0 }; // last emission step (__fireBudget)
+    this.heat = 0;     // fire around the camera: drives the shared ember field
+    this.heatT = 0;
+    this.clusterT = 0; this.clusterN = -1;
     this.wind = new THREE.Vector3(0.9, 0, -0.5); // steady wind blowing smoke north-east
     this.emitAcc = 0;
     this.lights = [];
@@ -231,6 +270,7 @@ export class Effects {
   // Explosion burst (flash, fireball, sparks, expanding smoke, dust ring, debris)
   explosion(pos, s = 1, opts = {}) {
     const p = pos.clone();
+    this.fire.pri = this.smoke.pri = 2; // a blast is never thinned out for scenery
     // brief flash
     this.fire.spawn({ pos: p.clone().setY(p.y + 0.8), size: 7 * s, grow: 1.4, life: 0.14, alpha: 1, color: C(1, 0.92, 0.75), frame: 3, drag: 0, fadeIn: 0.01 });
     this.flash(p.clone().setY(p.y + 1.5), 0xffb060, 55 * s, 0.45, 30 * s);
@@ -253,6 +293,7 @@ export class Effects {
       const a = (i / (18 * s)) * 6.28;
       this.smoke.spawn({ pos: p.clone().setY(0.25), vel: new THREE.Vector3(Math.cos(a) * 6 * s, 0.3, Math.sin(a) * 6 * s), size: 0.8 * s, grow: 4, life: R(1.5, 2.5), alpha: 0.35, color: C(0.45, 0.42, 0.38), drag: 3, windK: 0.4 });
     }
+    this.fire.pri = this.smoke.pri = 1;
     if (!opts.noDebris) this.spawnDebris(p.clone().setY(0.3), Math.round(12 * s), 5 * s);
   }
 
@@ -264,17 +305,23 @@ export class Effects {
     for (let i = 0; i < 18; i++) this.fire.spawn({ pos: pos.clone().setY(0.2), vel: new THREE.Vector3(R(-6, 6), R(0, 3), R(-6, 6)), size: 0.05, life: 0.4, alpha: 1, color: C(0.7, 1, 0.8), grav: 12, drag: 0.5, frame: 3 }); // glass
   }
 
-  // A new persistent fire (car / bin catching fire). Returns handle.
-  addFire(pos, scale = 1, smokeRate = 1.5) {
+  // A new persistent fire (a shop, a bin, an arena's). Returns its handle; fire.smoke is its column.
+  // own: its owner runs its life (vehicle fires, burn.js) and it never counts against the cap.
+  // Past FX.burningCap fires the oldest dies down to a smoulder instead of vanishing; only past
+  // FX.fireCap is the oldest smoulder taken away.
+  addFire(pos, scale = 1, smokeRate = 1.5, { own = false } = {}) {
     const fire = { pos: pos.clone(), scale, dynamic: true };
     const smoke = { pos: pos.clone().setY(pos.y + 1), rate: smokeRate, scale: 1 + scale * 0.4 };
+    fire.smoke = smoke;
     this.world.fires.push(fire); this.world.smokes.push(smoke);
-    this.dynamicFires.push({ fire, smoke });
-    if (this.dynamicFires.length > 9) {
-      const old = this.dynamicFires.shift();
-      this.world.fires.splice(this.world.fires.indexOf(old.fire), 1);
-      this.world.smokes.splice(this.world.smokes.indexOf(old.smoke), 1);
+    this.dynamicFires.push({ fire, smoke, own, smoulder: false });
+    const capped = this.dynamicFires.filter((f) => !f.own);
+    const live = capped.filter((f) => !f.smoulder);
+    if (live.length > FX.burningCap) {
+      const old = live[0];
+      old.smoulder = true; old.fire.scale *= 0.4; old.smoke.rate *= 0.5;
     }
+    if (capped.length > FX.fireCap) this.removeFire(capped.find((f) => f.smoulder).fire);
     return fire;
   }
 
@@ -307,37 +354,79 @@ export class Effects {
     const fogObj = this.scene.fog;
     this.emitAcc += dt;
     const step = 1 / 30;
-    const near = (p, r) => (p.x - camPos.x) ** 2 + (p.z - camPos.z) ** 2 < r * r;
+    // smoke columns close together share one column at a distance (re-grouped when the list
+    // changes, and once a second for fires that move)
+    this.clusterT -= dt;
+    if (this.clusterN !== this.world.smokes.length || this.clusterT <= 0) this._clusterSmokes();
+    // fire around the camera, for the ember field (four times a second is plenty)
+    this.heatT -= dt;
+    if (this.heatT <= 0) {
+      this.heatT = 0.25;
+      let h = 0;
+      for (const f of this.world.fires) { const d = Math.hypot(f.pos.x - camPos.x, f.pos.z - camPos.z); if (d < FX.emberR) h += f.scale * (f.boost || 1) * Math.exp(-d / 12); }
+      this.heat = h;
+    }
     while (this.emitAcc > step) {
       this.emitAcc -= step;
+      const st = this.stats; st.near = st.mid = st.far = st.columns = st.merged = 0;
       for (const f of this.world.fires) {
-        if (!near(f.pos, 170)) continue;
+        const d = Math.hypot(f.pos.x - camPos.x, f.pos.z - camPos.z);
+        if (d > FX.far) continue;
         const sc = f.scale * (f.boost || 1);
-        // flame tongues
-        const n = sc > 1.6 ? 2 : 1;
-        for (let i = 0; i < n; i++) {
-          if (Math.random() < 0.9) this.fire.spawn({ pos: f.pos.clone().add(new THREE.Vector3(R(-0.4, 0.4) * sc, R(-0.1, 0.2), R(-0.4, 0.4) * sc)), vel: new THREE.Vector3(R(-0.2, 0.2), R(1.2, 2.6), R(-0.2, 0.2)), size: R(0.6, 1.1) * sc, grow: 0.5, life: R(0.4, 0.8), alpha: 0.85, color: C(1, 0.72, 0.32), color2: C(0.8, 0.14, 0.02), drag: 1, windK: 0.5, frame: Math.floor(Math.random() * 3), spin: R(-0.3, 0.3) });
+        // tier weights: nearK for the tongues, midK for the cards, the rest is the glow
+        const nearK = clamp01((FX.near + FX.blend / 2 - d) / FX.blend);
+        const farK = clamp01((d - FX.mid + FX.blend / 2) / FX.blend);
+        const midK = 1 - nearK - farK;
+        if (nearK > 0) {
+          st.near++;
+          // flame tongues
+          const n = sc > 1.6 ? 2 : 1;
+          for (let i = 0; i < n; i++) {
+            if (Math.random() < 0.9 * nearK) this.fire.spawn({ pos: f.pos.clone().add(new THREE.Vector3(R(-0.4, 0.4) * sc, R(-0.1, 0.2), R(-0.4, 0.4) * sc)), vel: new THREE.Vector3(R(-0.2, 0.2), R(1.2, 2.6), R(-0.2, 0.2)), size: R(0.6, 1.1) * sc, grow: 0.5, life: R(0.4, 0.8), alpha: 0.85, color: C(1, 0.72, 0.32), color2: C(0.8, 0.14, 0.02), drag: 1, windK: 0.5, frame: Math.floor(Math.random() * 3), spin: R(-0.3, 0.3) });
+          }
+          // embers off the fire itself (the field round the camera adds the rest)
+          if (d < 18 && Math.random() < 0.18 * sc) this.fire.spawn({ pos: f.pos.clone().add(new THREE.Vector3(R(-0.5, 0.5), 0.6, R(-0.5, 0.5))), vel: new THREE.Vector3(R(-0.8, 0.8), R(1.5, 3.5), R(-0.8, 0.8)), size: R(0.04, 0.08), life: R(1.5, 3.2), alpha: 1, color: C(1, 0.6, 0.2), color2: C(0.6, 0.1, 0), drag: 0.6, windK: 1.4, frame: 3, buoy: 0.2, pri: 0 });
         }
-        // embers
-        if (Math.random() < 0.35 * sc) this.fire.spawn({ pos: f.pos.clone().add(new THREE.Vector3(R(-0.5, 0.5), 0.6, R(-0.5, 0.5))), vel: new THREE.Vector3(R(-0.8, 0.8), R(1.5, 3.5), R(-0.8, 0.8)), size: R(0.04, 0.08), life: R(1.5, 3.2), alpha: 1, color: C(1, 0.6, 0.2), color2: C(0.6, 0.1, 0), drag: 0.6, windK: 1.4, frame: 3, buoy: 0.2 });
+        if (midK > 0) {
+          st.mid++;
+          // a few large flame cards stand in for the tongues
+          if (Math.random() < 0.2 * midK) this.fire.spawn({ pos: f.pos.clone().add(new THREE.Vector3(R(-0.25, 0.25) * sc, R(0.2, 0.5) * sc, R(-0.25, 0.25) * sc)), vel: new THREE.Vector3(0, R(0.9, 1.6), 0), size: R(1.6, 2.3) * sc, grow: 0.6, life: R(0.5, 0.8), alpha: 1, color: C(1, 0.7, 0.3), color2: C(0.8, 0.15, 0.02), drag: 1, windK: 0.4, frame: Math.floor(Math.random() * 3), spin: R(-0.2, 0.2), pri: 0 });
+        }
+        if (farK > 0) {
+          st.far++;
+          if (Math.random() < 0.08 * farK) this.fire.spawn({ pos: f.pos.clone().setY(f.pos.y + 0.5 * sc), size: R(2.6, 3.4) * sc, grow: 1.1, life: R(0.5, 0.8), alpha: 0.6, color: C(1, 0.55, 0.2), color2: C(0.8, 0.2, 0.03), drag: 0, frame: 3, pri: 0 });
+        }
+      }
+      // shared ember field: sparks drifting through the air round the camera, denser near fire
+      if (this.heat > 0.05 && Math.random() < Math.min(0.9, 0.12 * this.heat)) {
+        const a = Math.random() * 6.28, r = R(2, 16);
+        this.fire.spawn({ pos: new THREE.Vector3(camPos.x + Math.cos(a) * r, R(0.4, 3.5), camPos.z + Math.sin(a) * r), vel: new THREE.Vector3(R(-0.6, 0.6), R(0.8, 2.2), R(-0.6, 0.6)), size: R(0.03, 0.07), life: R(2, 4), alpha: 1, color: C(1, 0.6, 0.2), color2: C(0.6, 0.1, 0), drag: 0.6, windK: 1.6, frame: 3, buoy: 0.15, pri: 0 });
       }
       for (const s of this.world.smokes) {
-        if (!near(s.pos, 230)) continue;
-        const dfar = !near(s.pos, 80);
-        const sc = (s.scale || 1) * (dfar ? 1.5 : 1);
+        const d = Math.hypot(s.pos.x - camPos.x, s.pos.z - camPos.z);
+        if (d > FX.smokeFar) continue;
+        // merged into a nearby column's leader at a distance
+        if (d > FX.smokeMerge && s._mk === 0) { st.merged++; continue; }
+        st.columns++;
+        // rate falls to a quarter between smokeNear and smokeThin; puffs grow to keep the column whole
+        const k = d < FX.smokeNear ? 1 : d < FX.smokeThin ? 1 - 0.75 * (d - FX.smokeNear) / (FX.smokeThin - FX.smokeNear) : d < 150 ? 0.25 : 0.18;
+        const big = 1 / Math.sqrt(k), lead = d > FX.smokeMerge ? (s._mk || 1) : 1;
+        const sc = (s.scale || 1) * big * (lead > 1 ? 1.2 : 1);
+        const rate = s.rate * k * (1 + 0.5 * (lead - 1));
         // tall dark column: dense near the source, expanding and greying as it rises
-        if (Math.random() < 0.15 * s.rate * (dfar ? 0.6 : 1)) this.smoke.spawn({ pos: s.pos.clone().add(new THREE.Vector3(R(-0.5, 0.5), 0, R(-0.5, 0.5))), vel: new THREE.Vector3(R(-0.3, 0.3), R(2.2, 3.2), R(-0.3, 0.3)), size: R(2.0, 2.8) * sc, grow: 6, life: R(11, 16), alpha: 0.82, color: C(0.035, 0.032, 0.03), color2: C(0.2, 0.19, 0.185), colorK: 1.1, drag: 0.12, buoy: 0.05, windK: 1.5, glow: 1.4, glowT: 1.6, fadeIn: 0.6, fadeCurve: 'late' });
+        if (Math.random() < 0.15 * rate) this.smoke.spawn({ pos: s.pos.clone().add(new THREE.Vector3(R(-0.5, 0.5), 0, R(-0.5, 0.5))), vel: new THREE.Vector3(R(-0.3, 0.3), R(2.2, 3.2), R(-0.3, 0.3)), size: R(2.0, 2.8) * sc, grow: 6 / (1 + (big - 1) * 0.5), life: R(11, 16), alpha: 0.82, color: C(0.035, 0.032, 0.03), color2: C(0.2, 0.19, 0.185), colorK: 1.1, drag: 0.12, buoy: 0.05, windK: 1.5, glow: 1.4, glowT: 1.6, fadeIn: 0.6, fadeCurve: 'late', pri: d > FX.smokeThin ? 0 : 1 });
         // low haze rolling downwind through the street
-        if (!dfar && near(s.pos, 55) && Math.random() < 0.03 * s.rate) this.smoke.spawn({ pos: s.pos.clone().add(new THREE.Vector3(R(-2, 2), R(-0.6, 0.6), R(-2, 2))), vel: new THREE.Vector3(R(-0.3, 0.3), 0.05, R(-0.3, 0.3)), size: R(5, 8), grow: 1.6, life: R(12, 16), alpha: 0.11, color: C(0.24, 0.23, 0.22), drag: 0.1, windK: 1.0, fadeIn: 3 });
+        if (d < 45 && Math.random() < 0.025 * s.rate) this.smoke.spawn({ pos: s.pos.clone().add(new THREE.Vector3(R(-2, 2), R(-0.6, 0.6), R(-2, 2))), vel: new THREE.Vector3(R(-0.3, 0.3), 0.05, R(-0.3, 0.3)), size: R(5, 8), grow: 1.6, life: R(12, 16), alpha: 0.11, color: C(0.24, 0.23, 0.22), drag: 0.1, windK: 1.0, fadeIn: 3, pri: 0 });
       }
       // ambient drifting street haze (tear gas remnants) around the camera
       if (Math.random() < 0.14) {
         const a = Math.random() * 6.28, r = 8 + Math.random() * 34;
         const p = new THREE.Vector3(camPos.x + Math.cos(a) * r, 0.5 + Math.random() * 1.8, camPos.z + Math.sin(a) * r);
         p.x = Math.max(-14, Math.min(14, p.x));
-        this.smoke.spawn({ pos: p, vel: new THREE.Vector3(0, 0.05, 0), size: R(3.5, 7), grow: 1.6, life: 10, alpha: 0.06, color: C(0.55, 0.53, 0.5), drag: 0.1, windK: 0.8, fadeIn: 3 });
+        this.smoke.spawn({ pos: p, vel: new THREE.Vector3(0, 0.05, 0), size: R(3.5, 7), grow: 1.6, life: 10, alpha: 0.06, color: C(0.55, 0.53, 0.5), drag: 0.1, windK: 0.8, fadeIn: 3, pri: 0 });
       }
-      // temporary petrol fires
+      // temporary petrol fires: they can hurt, so they are never thinned out for scenery
+      this.fire.pri = this.smoke.pri = 2;
       for (const f of this.flames) {
         const k = 1 - f.t / f.life;
         for (let i = 0; i < 3; i++) {
@@ -347,6 +436,7 @@ export class Effects {
         if (Math.random() < 0.35) this.smoke.spawn({ pos: f.pos.clone().add(new THREE.Vector3(R(-0.5, 0.5) * f.radius, 1.4, R(-0.5, 0.5) * f.radius)), vel: new THREE.Vector3(0, 2, 0), size: 1.4, grow: 5, life: R(5, 8), alpha: 0.5, color: C(0.06, 0.055, 0.05), color2: C(0.3, 0.29, 0.28), drag: 0.25, windK: 1.3, glow: 1.2, fadeCurve: 'late' });
         if (Math.random() < 0.3) this.fire.spawn({ pos: f.pos.clone().setY(0.4), vel: new THREE.Vector3(R(-1, 1), R(2, 4), R(-1, 1)), size: 0.06, life: R(1, 2), alpha: 1, color: C(1, 0.6, 0.2), drag: 0.6, windK: 1.2, frame: 3 });
       }
+      this.fire.pri = this.smoke.pri = 1;
     }
     for (let i = this.flames.length - 1; i >= 0; i--) { this.flames[i].t += dt; if (this.flames[i].t > this.flames[i].life) this.flames.splice(i, 1); }
     for (const f of this.world.fires) if (f.boost) { f.boostT -= dt; if (f.boostT <= 0) f.boost = 0; }
@@ -430,6 +520,23 @@ export class Effects {
 
     this.smoke.update(dt, this.wind, fogObj);
     this.fire.update(dt, this.wind, fogObj);
+  }
+
+  // Group smoke sources within mergeR of each other: the first of a group leads (_mk = group
+  // size) and the rest follow (_mk = 0). Past smokeMerge only leaders emit, as one larger column.
+  _clusterSmokes() {
+    const S = this.world.smokes, r2 = FX.mergeR * FX.mergeR;
+    this.clusterN = S.length; this.clusterT = 1;
+    for (const s of S) s._mk = -1;
+    for (let i = 0; i < S.length; i++) {
+      const a = S[i];
+      if (a._mk !== -1) continue;
+      a._mk = 1;
+      for (let j = i + 1; j < S.length; j++) {
+        const b = S[j];
+        if (b._mk === -1 && (a.pos.x - b.pos.x) ** 2 + (a.pos.z - b.pos.z) ** 2 < r2) { b._mk = 0; a._mk++; }
+      }
+    }
   }
 
   // remove a fire added with addFire (boss arenas take theirs down when the fight ends)

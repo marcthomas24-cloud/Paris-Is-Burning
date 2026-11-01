@@ -1,8 +1,9 @@
 // Paris Burning — bootstrap, game loop and state machine.
 import { SEED, isolateRender } from './seed.js'; // first: seeds Math.random when ?seed=N is given
 import * as THREE from 'three';
-import { World } from './world.js';
+import { World, quietly } from './world.js';
 import { Effects } from './effects.js';
+import { VehicleFires } from './burn.js';
 import { Audio, BOULEVARD_SIREN_LANES } from './audio.js';
 import { Crowd } from './crowd.js';
 import { Brawls } from './brawls.js';
@@ -83,6 +84,7 @@ class Game {
     makeEnvMap(this.renderer);
     this.world = new World(this.scene, this.renderer);
     this.effects = new Effects(this.scene, this.world, this.audio);
+    this.burn = quietly(() => new VehicleFires(this)); // parked cars that catch fire and burn out (burn.js)
     this.hud = new HUD(this);
     this.cameraRig = new CameraRig(this.camera, this.world);
     try {
@@ -309,6 +311,7 @@ class Game {
     this.brawls.reset();
     this.missions.reset();
     this.effects.reset();
+    this.burn.reset();
     this.events.reset();
     this.cameraRig.reset(this.player);
     this.cameraRig.intro(2.4);
@@ -526,6 +529,7 @@ class Game {
     this.brawls.update(dt, this.time);
     this.missions.update(dt);
     this.events.update(dt);
+    this.burn.update(dt);
     this.effects.update(dt, this.time, this.camera.position);
     this._atmosphere(dt);
     this.world.update(dt, this.time);

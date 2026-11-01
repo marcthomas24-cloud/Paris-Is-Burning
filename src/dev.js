@@ -13,6 +13,7 @@ import { lintBoss, ENFORCER, LEADER, FIXER } from './boss.js';
 import { installTests } from './devtests.js';
 import { installTests3 } from './devtests3.js';
 import { installTests5 } from './devtests5.js';
+import { installTests6 } from './devtests6.js';
 import * as THREE from 'three';
 import { areaAt as DISTRICT_AREA, DISTRICT } from './district.js';
 
@@ -20,6 +21,7 @@ export function installDev(game) {
   installTests(game); // regression and fairness checks (devtests.js)
   installTests3(game); // Level 3: the van, hazards, radio, checkpoints, both routes (devtests3.js)
   installTests5(game); // quality gate: van QA, progression, leaks between levels, shortcuts, performance (devtests5.js)
+  installTests6(game); // fire budget and vehicle fires (devtests6.js)
   // Fixed-step simulation. The first call hands the simulation to the harness:
   // the real-time loop then only renders (see Game.frame), so runs are reproducible.
   window.__step = (sec, fn) => {
