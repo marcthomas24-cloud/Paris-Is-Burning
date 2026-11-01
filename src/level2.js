@@ -202,6 +202,7 @@ export class Level2 extends Missions {
     const g = this.game;
     this.t += dt; this.stageT += dt;
     this.tension.update(dt);
+    this._trackDamage();
     switch (this.stage) {
       case 'intro':
         if (this.stageT > 1.2) { this._startSection(0); g.hud.titleCard('NUIT', 'Boulevard de la République · 01h12'); }
@@ -386,13 +387,15 @@ export class Level2 extends Missions {
         ['The Enforcer', fmt(this.bossTimes.enforcer)],
         ['Le Patron', fmt(this.bossTimes.leader)],
         ['Strikes blocked by a guard / dodges', `${s.blocked} / ${s.dodges}`],
-        ['Peaceful people struck', s.peaceful],
-        ['Crowd tension · peak', `${Math.round(this.tension.peak)} / 100`],
-        ['Downed suspects struck', s.downed || 0],
+        ['Peaceful people struck', s.peaceful, s.peaceful > 0],
+        ['Downed suspects struck', s.downed || 0, s.downed > 0],
+        ['Damage received', Math.round(s.damageTaken)],
+        ['Crowd tension · peak', `${Math.round(this.tension.peak)} / 100`, this.tension.peak >= 70],
         ['Mission time', t],
       ],
       hook: win ? HOOK : '',
-      rank: win ? 'RATING · ' + (this.score >= 9000 && s.peaceful === 0 ? 'COMMENDATION' : this.score >= 7000 ? 'PROFESSIONAL' : this.score >= 5000 ? 'ADEQUATE' : 'UNDER REVIEW') : this.cp ? 'Retry from the start of this section, or restart' : 'Restart to try again',
+      // a win shows the campaign's medal instead (campaign.js)
+      rank: this.cp ? 'Retry from the start of this section, or restart' : 'Restart to try again',
     };
   }
 }

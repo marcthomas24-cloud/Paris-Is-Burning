@@ -17,6 +17,7 @@ import { IncidentScheduler, BOULEVARD_EVENTS } from './events.js';
 import { Post } from './post.js';
 import { Cinematic } from './cinematic.js';
 import { TouchControls } from './touch.js';
+import { CampaignUI, mission, nextMission, completedCount, summarize, assess } from './campaign.js';
 
 const $ = (id) => document.getElementById(id);
 // controls during a cinematic: nothing pressed
@@ -102,12 +103,15 @@ class Game {
     // wet, reflective street surfaces
     for (const k of ['road', 'roadPlain', 'cobble']) { const m = this.world.materials[k]; m.envMap = Humans.envMap; m.envMapIntensity = 0.32; m.roughness = 0.66; m.metalness = 0.05; }
     this.world.addPuddles(Humans.envMap);
-    // level: Level 1 by default; ?dev&level=N jumps straight to a level for testing
+    // level: the one the campaign leads to; ?dev&level=N jumps straight to a level for testing
+    // (developer and seeded pages start in Level 1 otherwise, whatever this device has played)
     const q = new URLSearchParams(location.search);
-    const devLevel = q.has('dev') && LEVELS[q.get('level')] ? +q.get('level') : 1;
-    this.setLevel(devLevel);
+    this.dev = q.has('dev');
+    const devLevel = this.dev && LEVELS[q.get('level')] ? +q.get('level') : 1;
+    this.setLevel(this.dev || SEED !== null ? devLevel : nextMission());
     // a section number, or a boss's name (?dev&level=3&stage=fixer)
     this.devStage = q.has('dev') && q.has('stage') ? (Number.isNaN(+q.get('stage')) ? q.get('stage') : +q.get('stage')) : null;
+    this.campaign = new CampaignUI(this);
     this._syncLevelMenu();
     this.post = new Post(this.renderer, this.scene, this.camera);
     this.audio._randomCrowdPos = () => this.crowd.randomCrowdPos();
@@ -148,7 +152,13 @@ class Game {
       this.audio.init();
       this.audio.ui('click');
       const a = b.dataset.action;
-      if (a === 'play') this.play();
+      if (a === 'play') this._menuPlay();
+      else if (a === 'campaign') this.campaign.open(this.screen);
+      else if (a === 'cmp-start') this.campaign.start();
+      else if (a === 'cmp-back') this.campaign.back();
+      else if (a === 'finale') this.campaign.showFinale(this.screen);
+      else if (a === 'main-menu') this.toMenu();
+      else if (a === 'reset-progress') this._resetProgress(b);
       else if (a === 'controls') { this.prevScreen = this.state === 'paused' ? 'pause-screen' : 'menu'; this._screen('controls-screen'); }
       else if (a === 'audio') { this.prevScreen = this.state === 'paused' ? 'pause-screen' : 'menu'; this._screen('audio-screen'); }
       else if (a === 'pause') { if (this.state === 'playing') this.pause(); }
@@ -157,7 +167,7 @@ class Game {
       else if (a === 'restart') this.restart();
       else if (a === 'resume') this.resume();
       else if (a === 'retry') { const cp = this.missions.cp; this.restart(); if (cp && this.missions.resume) this.missions.resume(cp); }
-      else if (a === 'continue' || a === 'level') this.startLevel(a === 'continue' ? this.level.id + 1 : +b.dataset.level);
+      else if (a === 'continue') this.startLevel(this.level.id + 1);
     }));
     $('onboarding').addEventListener('click', () => this._dismissOnboarding());
     $('cine').addEventListener('pointerdown', (e) => { e.preventDefault(); if (this.cinematic) this.cinematic.skip(); });
@@ -229,11 +239,48 @@ class Game {
     return this.cinematic;
   }
 
-  // Start (or restart) a level from a menu or the end screen. Locked levels are refused.
-  startLevel(id) {
-    if (!LEVELS[id] || !Progress.unlocked(id)) return;
+  // Start (or restart) a level from a menu or the end screen. Locked levels are refused
+  // (force: the campaign screen of a developer build).
+  startLevel(id, { force = false } = {}) {
+    if (!LEVELS[id] || !(force || Progress.unlocked(id))) return;
     this.setLevel(id);
-    if (this.state === 'menu') this.play(); else this.restart();
+    if (this.state === 'menu' && !this.played) this.play(); else this.restart();
+  }
+
+  // the title screen's first button: the level the campaign leads to (a developer page: the level loaded)
+  _menuPlay() {
+    const id = this.dev ? this.level.id : nextMission();
+    if (this.played || id !== this.level.id) this.startLevel(id, { force: this.dev }); else this.play();
+  }
+
+  // back to the title screen from the results or the finale
+  toMenu() {
+    if (this.cinematic) this.cinematic.finish(true, true);
+    this.state = 'menu';
+    this.pendingEnd = null;
+    $('app').classList.remove('ended');
+    this.hud.show(false);
+    this.input.unlock();
+    this.audio.setPaused(false);
+    this._syncLevelMenu();
+    this._screen('menu');
+  }
+
+  // Options: RESET CAMPAIGN takes a second tap within 4 s; settings are kept
+  _resetProgress(b) {
+    clearTimeout(this._resetT);
+    if (!this._resetArmed) {
+      this._resetArmed = true;
+      b.textContent = 'TAP AGAIN TO CONFIRM'; b.classList.add('armed');
+      this._resetT = setTimeout(() => { this._resetArmed = false; b.textContent = 'RESET CAMPAIGN'; b.classList.remove('armed'); }, 4000);
+      return;
+    }
+    this._resetArmed = false;
+    Progress.reset();
+    this.campaign.sel = null;
+    this._syncLevelMenu();
+    b.textContent = 'CAMPAIGN RESET'; b.classList.remove('armed');
+    this._resetT = setTimeout(() => { b.textContent = 'RESET CAMPAIGN'; }, 2500);
   }
 
   // Colours, intensities, fog and sky uniforms only: the light count never changes,
@@ -255,17 +302,23 @@ class Game {
     this.effects.smoke.mat.uniforms.uTint.value.setRGB(...L.smokeTint);
   }
 
+  // the title screen follows the campaign: where the next level is, and PLAY / CONTINUE into it
   _syncLevelMenu() {
-    document.querySelectorAll('[data-action="level"]').forEach((b) => b.classList.toggle('hidden', !Progress.unlocked(+b.dataset.level)));
+    const id = this.dev ? this.level.id : nextMission(), c = mission(id);
+    const fresh = !completedCount() && id === 1;
+    $('btn-play').textContent = fresh ? 'PLAY' : Progress.completed(id) ? `REPLAY · LEVEL ${id}` : `CONTINUE · LEVEL ${id}`;
+    $('menu-tag').textContent = `${c.place} · ${c.time}${fresh ? '' : ` · Level ${id} of 3`}`;
   }
 
   _screen(id) {
-    for (const s of ['menu', 'controls-screen', 'audio-screen', 'pause-screen', 'end-screen']) $(s).classList.toggle('hidden', s !== id);
+    this.screen = id;
+    for (const s of ['menu', 'campaign-screen', 'finale-screen', 'controls-screen', 'audio-screen', 'pause-screen', 'end-screen']) $(s).classList.toggle('hidden', s !== id);
   }
 
   play() {
     if (this.state === 'paused') return this.resume();
     if (this.state === 'ended') return this.restart();
+    this.played = true;
     this._screen(null);
     this.hud.show(true);
     this.state = 'playing';
@@ -276,6 +329,7 @@ class Game {
     if (this.firstPlay) {
       this.firstPlay = false;
       this.onboarding = true;
+      $('ob-where').textContent = mission(this.level.id).opening; // where this first level puts you
       $('onboarding').classList.remove('hidden');
       this.onboardT = 0;
     } else this.input.lock();
@@ -292,8 +346,18 @@ class Game {
     if (this.state !== 'playing') return;
     this.state = 'paused';
     this.touch.releaseAll();
+    this._pauseBrief();
     this._screen('pause-screen');
     this.audio.setPaused(true);
+  }
+
+  // the pause screen keeps the mission in view: the level, what is happening now, its objectives
+  _pauseBrief() {
+    const c = mission(this.level.id), now = this.missions.hudInfo ? this.missions.hudInfo().text : '';
+    const esc = (v) => String(v).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+    $('pause-brief').innerHTML = `<div class="pb-k">LEVEL ${c.id} · ${c.time} · ${esc(c.title)}</div>`
+      + (now ? `<div class="pb-now"><span class="chip">NOW</span> ${esc(now)}</div>` : '')
+      + `<ul class="objectives">${c.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ul>`;
   }
 
   resume() {
@@ -347,12 +411,22 @@ class Game {
     const { win, reason } = this.pendingEnd;
     this.pendingEnd = null;
     this.state = 'ended';
-    this.hud.showEnd(win, reason, this.missions);
+    // the campaign's record of the run: its medal and the device's bests (runs the test harness
+    // drives are recorded only when a test asks, so a bot never leaves medals on a developer's device)
+    const id = this.level.id, run = summarize(this.missions, win), assessment = assess(id, run);
+    const flags = !this.manualStep || this.recordRuns ? Progress.addRun(id, run, assessment.medal) : {};
+    this.lastResult = { id, run, assessment, flags };
+    this.hud.showEnd(win, reason, this.missions, { id, assessment, flags, rec: Progress.record(id) });
     $('app').classList.add('ended'); // results over a clean picture: the gameplay HUD fades out
-    const next = LEVELS[this.level.id + 1];
-    $('btn-continue').classList.toggle('hidden', !(win && next && !next.devOnly && Progress.unlocked(next.id)));
+    const next = LEVELS[id + 1];
+    const cont = !!(win && next && !next.devOnly && Progress.unlocked(next.id)), finale = win && !next, retry = !win && !!this.missions.cp;
+    $('btn-continue').classList.toggle('hidden', !cont);
     if (next) $('btn-continue').textContent = `CONTINUE · LEVEL ${next.id}`;
-    $('btn-retry').classList.toggle('hidden', !(!win && this.missions.cp)); // section checkpoint (Level 2)
+    $('btn-finale').classList.toggle('hidden', !finale);
+    $('btn-retry').classList.toggle('hidden', !retry); // section checkpoint (Levels 2 and 3)
+    $('btn-restart').textContent = win ? 'REPLAY' : 'RESTART';
+    $('btn-restart').classList.toggle('primary', !(cont || finale || retry));
+    this._syncLevelMenu();
     this._screen('end-screen');
     this.input.unlock();
     this.audio.ui(win ? 'good' : 'bad');

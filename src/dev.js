@@ -14,6 +14,7 @@ import { installTests } from './devtests.js';
 import { installTests3 } from './devtests3.js';
 import { installTests5 } from './devtests5.js';
 import { installTests6 } from './devtests6.js';
+import { installTests7 } from './devtests7.js';
 import * as THREE from 'three';
 import { areaAt as DISTRICT_AREA, DISTRICT } from './district.js';
 
@@ -22,6 +23,7 @@ export function installDev(game) {
   installTests3(game); // Level 3: the van, hazards, radio, checkpoints, both routes (devtests3.js)
   installTests5(game); // quality gate: van QA, progression, leaks between levels, shortcuts, performance (devtests5.js)
   installTests6(game); // fire budget and vehicle fires (devtests6.js)
+  installTests7(game); // campaign: records, medals, the campaign screen and the finale (devtests7.js)
   // Fixed-step simulation. The first call hands the simulation to the harness:
   // the real-time loop then only renders (see Game.frame), so runs are reproducible.
   window.__step = (sec, fn) => {
@@ -55,7 +57,9 @@ export function installDev(game) {
   window.__level = (id, stage = null) => { if (!LEVELS[id]) return 'no such level'; game.devStage = stage; game.setLevel(id); game.restart(); return { level: id, stage }; };
   window.__jump = (i) => { if (!game.missions.jumpTo) return 'this level has no sections'; game.missions.jumpTo(i); return game.missions.section; };
   window.__unlock = (id = 2) => { Progress.unlock(id); game._syncLevelMenu(); return Progress.unlocked(id); };
-  window.__resetProgress = () => { Progress.reset(); game._syncLevelMenu(); return Progress.unlocked(2); };
+  window.__resetProgress = () => { Progress.reset(); game.campaign.sel = null; game._syncLevelMenu(); return Progress.unlocked(2); };
+  window.__unlockAll = () => { for (const id of Object.keys(LEVELS)) Progress.unlock(+id); game._syncLevelMenu(); return Object.keys(LEVELS).map((id) => Progress.unlocked(+id)); };
+  window.__campaign = () => Progress._read(); // what this device has stored: unlocks, records, the finale
   // bosses: jump to a fight, land a hit through the real hit path, check the fairness rules
   // 'enforcer' | 'leader' (Level 2) | 'fixer' (Level 3: the van parked in the arena, the fight starting)
   window.__boss = (name = 'enforcer') => (name === 'fixer' ? window.__level(3, 'fixer') : window.__level(2, name === 'leader' ? 4 : 2));

@@ -1,6 +1,7 @@
 // DOM HUD: objective panel, compass, minimap, bars, alerts, prompts, feedback.
 import * as THREE from 'three';
 import { LAYOUT } from './world.js';
+import { medalBlock, nextCard } from './campaign.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -280,25 +281,9 @@ export class HUD {
     ctx.fillText('N', nx, ny);
   }
 
-  showEnd(win, reason, m) {
-    if (m.endInfo) return this._showEndInfo(win, m.endInfo(win, reason));
-    $('end-title').textContent = win ? 'MISSION COMPLETE' : 'MISSION FAILED';
-    $('end-title').style.color = win ? 'var(--text)' : 'var(--red)';
-    $('end-sub').textContent = win ? `Line held · ${m.stats.bombsStopped ? 'petrol bomb stopped' : 'bomber dealt with'} · officers extracted from Rue Oberkampf` : reason || '';
-    const s = m.stats;
-    const rank = m.score >= 4500 && s.peaceful === 0 ? 'COMMENDATION' : m.score >= 3000 ? 'PROFESSIONAL' : m.score >= 1500 ? 'ADEQUATE' : 'UNDER REVIEW';
-    $('end-stats').innerHTML = `
-      <div class="row"><span>Aggressors neutralised</span><span>${s.neutralized}</span></div>
-      <div class="row"><span>Arrests</span><span>${s.arrests}</span></div>
-      <div class="row"><span>Petrol bombs prevented</span><span>${s.bombsStopped} / ${s.bombsStopped + s.bombsThrown}</span></div>
-      <div class="row"><span>Peaceful demonstrators struck</span><span style="color:${s.peaceful ? 'var(--red)' : 'inherit'}">${s.peaceful}</span></div>
-      <div class="row"><span>Downed suspects struck</span><span style="color:${s.downed ? 'var(--red)' : 'inherit'}">${s.downed}</span></div>
-      <div class="row"><span>Crowd tension · peak</span><span style="color:${m.tension.peak >= 70 ? 'var(--red)' : 'inherit'}">${Math.round(m.tension.peak)} / 100</span></div>
-      <div class="row"><span>Phases completed</span><span>${m.completed.filter(Boolean).length} / 3</span></div>
-      <div class="row"><span>Mission time</span><span>${Math.floor(m.t / 60)}:${String(Math.floor(m.t % 60)).padStart(2, '0')}</span></div>
-      <div class="row total"><span>SCORE</span><span>${m.score.toLocaleString('fr-FR')}</span></div>
-      <div class="rank">${win ? 'RATING · ' + rank : 'Restart to try again'}</div>`;
-  }
+  // the results, as the level's mission script describes them (endInfo), with the campaign's
+  // medal block after a win (res: the assessment, new bests and the record, from main.js)
+  showEnd(win, reason, m, res) { this._showEndInfo(win, m.endInfo(win, reason), res); }
 
   // Non-blocking title card (level start): fades in and out over `dur` seconds.
   titleCard(title, sub, dur = 3.5) {
@@ -316,15 +301,16 @@ export class HUD {
     clearTimeout(this._bnT); this._bnT = setTimeout(() => el.classList.remove('show'), dur * 1000);
   }
 
-  // end screen described by the level's own mission script (Level 2 onwards)
-  _showEndInfo(win, e) {
+  // rows are [label, value] or [label, value, bad] (a bad value shows red)
+  _showEndInfo(win, e, res) {
     const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     $('end-title').textContent = e.title;
     $('end-title').style.color = win ? 'var(--text)' : 'var(--red)';
     $('end-sub').textContent = e.sub;
-    $('end-stats').innerHTML = e.rows.map(([k, v]) => `<div class="row"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')
+    $('end-stats').innerHTML = e.rows.map(([k, v, bad]) => `<div class="row"><span>${esc(k)}</span><span${bad ? ' class="bad"' : ''}>${esc(v)}</span></div>`).join('')
       + `<div class="row total"><span>SCORE</span><span>${this.game.missions.score.toLocaleString('fr-FR')}</span></div>`
-      + `<div class="rank">${esc(e.rank)}</div>`
-      + (e.hook ? `<div class="hook">${esc(e.hook)}</div>` : '');
+      + (win && res ? medalBlock(res.assessment, res.flags, res.rec) : `<div class="rank">${esc(e.rank)}</div>`)
+      + (e.hook ? `<div class="hook">${esc(e.hook)}</div>` : '')
+      + (win && res ? nextCard(res.id) : '');
   }
 }

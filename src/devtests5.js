@@ -3,7 +3,7 @@
 // where a pass or fail applies.
 //   await __testVanQA()        the van: full condition, one attacker, six at once, the officer moving
 //                              round it, a cinematic, one petrol bomb, the HUD bar, failure and retry
-//   await __testProgression()  unlocks (1 -> 2 -> 3), the menu buttons, CONTINUE, storage, locked refusal
+//   await __testProgression()  unlocks (1 -> 2 -> 3), the campaign screen's levels, CONTINUE, storage, locked refusal
 //   await __testLeaks()        nothing of Level 3 (van, props, Fixer, crews, district, music) in Levels 1-2
 //   await __testShortcuts()    the ?dev helpers: __level, __jump, __boss for every boss, stage names
 //   await __perfL3()           frame cost at Level 3's heaviest moments, and memory across retries
@@ -100,7 +100,8 @@ export function installTests5(game) {
     const KEY = 'parisBurning.progress.v1';
     let saved = null; try { saved = localStorage.getItem(KEY); } catch (e) { /* blocked */ }
     const out = {};
-    const btn = (n) => { const b = document.querySelector(`[data-action="level"][data-level="${n}"]`); return !!b && !b.classList.contains('hidden'); };
+    // a level is open on the campaign screen (which replaced the menu's level buttons)
+    const btn = (n) => { game.campaign.render(); const b = document.querySelector(`[data-mission="${n}"]`); return !!b && !b.classList.contains('locked'); };
     const cont = () => { const b = document.getElementById('btn-continue'); return b.classList.contains('hidden') ? null : b.textContent; };
     game.skipCinematics = true;
     try {
@@ -124,7 +125,7 @@ export function installTests5(game) {
       // stored on the device
       let raw = null; try { raw = localStorage.getItem(KEY); } catch (e) { /* blocked */ }
       out.stored = raw;
-      out.menuButton3 = (() => { const b = document.querySelector('[data-action="level"][data-level="3"]'); return b ? b.textContent : null; })();
+      out.menuButton3 = (() => { const b = document.querySelector('[data-mission="3"] .cmp-name'); return b ? b.textContent : null; })();
     } finally {
       try { if (saved === null) localStorage.removeItem(KEY); else localStorage.setItem(KEY, saved); } catch (e) { /* blocked */ }
       game._syncLevelMenu(); game.skipCinematics = false;

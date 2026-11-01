@@ -58,18 +58,19 @@ parisBurning.progress.v1 = {
 ```
 - `plays` counts runs that reached a results screen; `wins` counts completions.
 - Best score, best medal and fastest completion are kept separately. A worse run never overwrites a better one.
-- `last` is the summary of the latest completed run (score, medal, citations, arrests, peaceful struck, damage, time). The finale adds these up.
+- `bestRun` is the run with the best medal (the higher score breaks a tie). The campaign screen ticks its citations.
+- `last` is the summary of the latest completed run (score, medal, arrests, peaceful struck, damage, time).
 - Old saves that only contain `unlocked` are read as they are. When storage is blocked the game still plays, but nothing is remembered.
 - Runs driven by the test harness (`manualStep`) don't write records unless a test asks them to. A bot run shouldn't leave a gold medal on the developer's own campaign.
 
 ### 4. Campaign screen — `#campaign-screen`
-PLAY now opens the campaign screen. On a fresh device it shows the night's opening line, with Level 1 selected and the others locked.
+The title screen keeps one fast button. On a fresh device PLAY goes straight into Level 1. After that it reads CONTINUE · LEVEL N (REPLAY once everything is complete) and starts the level the campaign leads to. A new **CAMPAIGN** button opens the mission select. On a fresh device that screen shows Level 1 as next and the others locked.
 - **Timeline:** three stops connected by a line, each showing its time (18h47 · 01h12 · 02h20), name, state (LOCKED / NEXT / COMPLETE) and best medal. It runs across the screen on desktop and down it on narrow portrait screens.
 - **Detail panel** for the selected mission: briefing, objectives, medal targets with the citations already earned ticked, best score, best time, wins.
 - **Buttons:** START (REPLAY if completed), BACK. A locked mission says what unlocks it, and START is disabled.
 - The mission selected first is the next one to play: the first unlocked mission not yet completed, or the last one played if all are complete.
 - Under `?dev`, locked missions can be selected and started (marked DEV), so the shortcuts still work from the menu. `?dev&level=N` still boots straight into that level.
-- The menu's LEVEL 2 / LEVEL 3 buttons are removed; the campaign screen replaces them. PLAY's tag line shows campaign progress ("2 / 3 complete").
+- The menu's LEVEL 2 / LEVEL 3 buttons and its RESTART are removed; the campaign screen replaces them. The title's tag line gives the next level's place and time ("· Level 2 of 3"). On a normal page the city behind the menu is the next level's.
 
 ### 5. Results — one path for every level
 - Level 1's results move into a `Missions.endInfo()` like the other two. `hud.showEnd` keeps a single path, and rows can be marked red.
@@ -81,7 +82,8 @@ PLAY now opens the campaign screen. On a fresh device it shows the night's openi
 ### 6. Campaign completion — `#finale-screen`
 This appears when the player presses CAMPAIGN COMPLETE after Level 3. It's always available afterwards from the campaign screen, as a button below the timeline.
 - "05h40 · DAWN" and a short epilogue: the boulevard is quiet, le Patron and the Fixer are in custody, and most of the people on the street came to demonstrate and went home.
-- Three medal discs, campaign totals from each level's latest completion (score, arrests, peaceful people struck, damage received, time), and a campaign rating equal to the lowest medal of the three.
+- For each level, its best medal, best score and fastest time. Then the campaign score, which is the sum of the best scores, and a campaign rating equal to the lowest of the three medals.
+- The epilogue's last line is about the people on the street. It acknowledges a campaign in which no peaceful person was struck in any level's best run.
 - Buttons: CAMPAIGN (replay any level), MAIN MENU.
 
 ### 7. Briefing and next objective

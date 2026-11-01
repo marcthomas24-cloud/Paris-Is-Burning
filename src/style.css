@@ -344,3 +344,120 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 #boss-bar .boss-name { white-space: nowrap; overflow: hidden; }
 #boss-sub { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .ended #hud { opacity: 0; transition: opacity 0.4s; }
+
+/* ---------- campaign (campaign.js): medals, the night's timeline, results, finale ---------- */
+.medal { --m: #b97a45; display: inline-block; flex: none; width: 22px; height: 22px; border-radius: 50%; vertical-align: middle; position: relative;
+  background: radial-gradient(circle at 34% 30%, rgba(255,255,255,0.55) 0, rgba(255,255,255,0) 42%), var(--m);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.5); }
+.medal::after { content: '★'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.6em; color: rgba(30,20,8,0.7); }
+.medal.gold { --m: #d9ad44; } .medal.silver { --m: #b9bec7; } .medal.bronze { --m: #b97a45; }
+.medal.none { background: none; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.22); }
+.medal.none::after { content: ''; }
+.medal.big { width: 58px; height: 58px; font-size: 26px; animation: medalIn 0.6s cubic-bezier(.2,1.4,.4,1) 0.5s both; }
+@keyframes medalIn { from { opacity: 0; transform: scale(0.4) rotate(-30deg); } to { opacity: 1; transform: none; } }
+
+.citations { list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.75; }
+.citations li { display: flex; justify-content: space-between; gap: 12px; color: var(--dim); }
+.citations li::before { content: '○'; width: 16px; flex: none; color: var(--dim); }
+.citations li.ok { color: var(--text); }
+.citations li.ok::before { content: '✓'; color: var(--green); font-weight: 800; }
+.citations li span { flex: 1; }
+.citations li b { font-weight: 700; }
+.citations li.no b { color: var(--amber); }
+
+#end-stats .row .bad { color: var(--red); }
+#end-stats .medal-block { display: flex; gap: 16px; align-items: center; margin-top: 12px; padding: 12px 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--panel-border); border-radius: 4px; animation: rowIn 0.4s ease 0.45s both; }
+#end-stats .medal-info { flex: 1; min-width: 0; }
+#end-stats .medal-block .rank { margin: 0 0 4px; }
+#end-stats .best-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; animation: rowIn 0.4s ease 0.7s both; }
+#end-stats .best-tags span { font-size: 10px; font-weight: 800; letter-spacing: 0.16em; padding: 3px 7px; border-radius: 2px; background: var(--amber); color: #111; }
+#end-stats .best-line { margin-top: 6px; font-size: 12px; color: var(--dim); letter-spacing: 0.06em; }
+.next-card { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; padding: 10px 14px; border-left: 3px solid var(--accent); background: rgba(61,123,255,0.08); font-family: var(--font); line-height: 1.4; animation: rowIn 0.5s ease 1s both; }
+.next-card .k { font-size: 10px; letter-spacing: 0.22em; color: var(--dim); }
+.next-card b { font-size: 16px; letter-spacing: 0.14em; }
+.next-card span:last-child { font-size: 13px; color: var(--dim); }
+.next-card.final { border-left-color: var(--amber); background: rgba(255,176,46,0.08); }
+#end-screen .menu-inner { max-width: 520px; }
+#end-screen .menu-buttons { width: 100%; max-width: 320px; }
+
+.menu-inner.campaign { width: min(820px, 100%); max-width: 820px; }
+#cmp-track { --reach: 0; list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; position: relative; }
+/* the road through the night: a line between the three stops, lit as far as the campaign has reached */
+#cmp-track::before, #cmp-track::after { content: ''; position: absolute; top: 25px; left: 16.67%; height: 2px; }
+#cmp-track::before { right: 16.67%; background: rgba(255,255,255,0.14); }
+#cmp-track::after { width: calc(66.67% * var(--reach)); background: var(--amber); transition: width 0.5s; }
+.cmp-stop { pointer-events: auto; position: relative; z-index: 1; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 6px 10px; background: none; border: 1px solid transparent; border-radius: 4px; color: var(--text); font-family: var(--font); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.cmp-stop:hover { background: rgba(255,255,255,0.05); }
+.cmp-stop.sel { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); }
+.cmp-stop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cmp-node { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #15181e; box-shadow: 0 0 0 2px rgba(255,255,255,0.2); }
+.cmp-node .medal { width: 52px; height: 52px; font-size: 24px; }
+.cmp-node .num { font-size: 20px; font-weight: 900; font-family: var(--mono); }
+.cmp-stop.next .cmp-node { box-shadow: 0 0 0 2px var(--amber), 0 0 18px rgba(255,176,46,0.35); }
+.cmp-stop.done .cmp-node { box-shadow: 0 0 0 2px var(--green); }
+.cmp-stop.locked { opacity: 0.5; }
+.cmp-stop.locked .cmp-node .num { font-size: 18px; }
+.cmp-time { font-family: var(--mono); font-size: 12px; color: var(--amber); margin-top: 4px; }
+.cmp-name { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-align: center; line-height: 1.25; }
+.cmp-state { font-size: 10px; letter-spacing: 0.16em; color: var(--dim); }
+#cmp-detail { padding: 14px 16px; font-size: 14px; line-height: 1.5; }
+#cmp-detail h3 { margin: 6px 0 4px; font-size: 22px; letter-spacing: 0.1em; }
+#cmp-detail p { margin: 0 0 12px; color: #cfccc4; }
+.cmp-head { display: flex; gap: 10px; align-items: center; font-size: 11px; letter-spacing: 0.16em; color: var(--dim); }
+.cmp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.cmp-cols .lbl { font-size: 10px; letter-spacing: 0.22em; color: var(--dim); margin-bottom: 4px; }
+.objectives { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+.cmp-best { display: flex; gap: 10px; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; letter-spacing: 0.1em; }
+.menu-buttons.wide { flex-direction: row; flex-wrap: wrap; width: auto; }
+.menu-buttons.wide button { flex: 1 1 200px; }
+.menu-buttons button.armed { border-left-color: var(--red); color: var(--red); }
+
+.menu-inner.finale { max-width: 560px; }
+#fin-text p { margin: 0 0 10px; line-height: 1.6; color: #cfccc4; }
+#fin-stats { font-family: var(--mono); font-size: 14px; line-height: 2.1; margin-top: 14px; }
+#fin-stats .row { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); animation: rowIn 0.4s ease both; }
+#fin-stats .row span:first-child { display: flex; align-items: center; gap: 10px; }
+#fin-stats .row span:last-child { white-space: nowrap; }
+#fin-stats .total { font-size: 20px; font-weight: 700; margin-top: 8px; border: none; }
+#fin-stats .rank { margin-top: 8px; font-size: 13px; color: var(--amber); letter-spacing: 0.2em; }
+#fin-stats .fin-note { margin-top: 10px; font-family: var(--font); letter-spacing: 0.04em; }
+
+#pause-brief { max-width: 420px; margin-bottom: 4px; font-size: 13px; }
+#pause-brief .pb-k { font-size: 11px; letter-spacing: 0.2em; color: var(--dim); margin-bottom: 6px; }
+#pause-brief .pb-now { display: flex; gap: 8px; align-items: center; font-weight: 600; margin-bottom: 6px; }
+#pause-brief .objectives { color: var(--dim); }
+
+@media (max-width: 900px), (max-height: 560px) {
+  .menu-inner.campaign { width: 100%; }
+  #cmp-detail { padding: 10px 12px; font-size: 13px; }
+  #cmp-detail h3 { font-size: 18px; }
+  .menu-buttons.wide { width: 100%; }
+  .menu-buttons.wide button { flex: 1 1 140px; }
+  #end-stats .medal-block { padding: 10px; gap: 12px; }
+  .medal.big { width: 46px; height: 46px; font-size: 20px; }
+  #fin-stats { font-size: 12px; }
+}
+/* short landscape phones: a smaller timeline, so START stays close */
+@media (max-height: 480px) and (min-width: 561px) {
+  #cmp-track { margin-bottom: 8px; }
+  #cmp-track::before, #cmp-track::after { top: 19px; }
+  .cmp-stop { gap: 1px; padding-bottom: 6px; }
+  .cmp-node, .cmp-node .medal { width: 38px; height: 38px; font-size: 18px; }
+  .cmp-time { margin-top: 2px; }
+  .cmp-name { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  #cmp-detail p { margin-bottom: 8px; }
+}
+/* narrow portrait: the timeline runs down the screen, one row per stop */
+@media (max-width: 560px) {
+  #cmp-track { grid-template-columns: 1fr; gap: 4px; }
+  #cmp-track::before, #cmp-track::after { left: 33px; top: 26px; width: 2px; height: auto; }
+  #cmp-track::before { bottom: 26px; right: auto; }
+  #cmp-track::after { height: calc((100% - 52px) * var(--reach)); transition: height 0.5s; }
+  .cmp-stop { display: grid; grid-template-columns: 52px 1fr; column-gap: 12px; padding: 5px 6px; align-items: center; text-align: left; }
+  .cmp-node { grid-row: 1 / span 3; width: 44px; height: 44px; margin-left: 4px; }
+  .cmp-node .medal { width: 44px; height: 44px; font-size: 20px; }
+  .cmp-time { margin-top: 0; }
+  .cmp-name { text-align: left; }
+  .cmp-cols { grid-template-columns: 1fr; gap: 10px; }
+  .menu-buttons.wide button.primary { flex-basis: 100%; }
+}

@@ -269,7 +269,7 @@ export class Level3 extends Missions {
     this.section = 0; this.act = 0;
     this.route = null; this.flags = {};
     this.cp = null;
-    Object.assign(this.stats, { blocked: 0, dodges: 0, vanHits: 0, vanLost: 0, damageTaken: 0, hazardTakedowns: 0, breachesStopped: 0, breachesDone: 0 });
+    Object.assign(this.stats, { blocked: 0, dodges: 0, vanHits: 0, vanLost: 0, hazardTakedowns: 0, breachesStopped: 0, breachesDone: 0 });
     this.radioQ = []; this.radioGap = 0; this.radioLog = []; this.radioSaid = {};
     this.vanAtExtract = null; this.bossTimes = {}; this.fixerMet = false;
     this.busy = null; this.promptE = false; this.searched = false;
@@ -277,7 +277,6 @@ export class Level3 extends Missions {
     this.passageDamage = 0;
     this.igniter = null; this.firer = null;
     this.musicTier = 0;
-    this.lastHealth = this.game.player ? this.game.player.health : 100;
     if (this.boss) { this.boss.stop(); this.boss = null; }
     if (!this.enc) return; // first call, from the Missions constructor
     this.enc.reset();
@@ -435,10 +434,7 @@ export class Level3 extends Missions {
     this.tension.update(dt);
     this.promptE = false; this.dt = dt;
     this._radioUpdate(dt);
-    // damage received (health lost, whatever the source)
-    const h = g.player.health;
-    if (h < this.lastHealth) this.stats.damageTaken += this.lastHealth - h;
-    this.lastHealth = h;
+    this._trackDamage();
     if (this.stage === 'intro') {
       if (this.stageT > 1.2) {
         this._startSection(0);
@@ -919,17 +915,17 @@ export class Level3 extends Missions {
         ['Crew members neutralised', s.neutralized],
         ['Arrests', s.arrests],
         ['Hazard takedowns', s.hazardTakedowns],
-        ['Peaceful people struck', s.peaceful],
-        ['Downed suspects struck', s.downed || 0],
+        ['Peaceful people struck', s.peaceful, s.peaceful > 0],
+        ['Downed suspects struck', s.downed || 0, s.downed > 0],
         ['Damage received', Math.round(s.damageTaken)],
         ['The Fixer', this.bossTimes.fixer !== undefined ? fmt(this.bossTimes.fixer) : '—'],
         ['Strikes stopped by his guard / dodges', `${s.blocked} / ${s.dodges}`],
-        ['Crowd tension · peak', `${Math.round(this.tension.peak)} / 100`],
+        ['Crowd tension · peak', `${Math.round(this.tension.peak)} / 100`, this.tension.peak >= 70],
         ['Mission time', fmt(this.t)],
       ],
       hook: win ? HOOK : '',
-      // (the Fixer's arrest adds 1500, his hits 25 each: the bands sit that much higher than before)
-      rank: win ? 'RATING · ' + (this.score >= 12000 && s.peaceful === 0 ? 'COMMENDATION' : this.score >= 9500 ? 'PROFESSIONAL' : this.score >= 7000 ? 'ADEQUATE' : 'UNDER REVIEW') : this.cp ? (this.cp.fight ? 'Retry the fight with the Fixer, or restart' : 'Retry from the start of this section, or restart') : 'Restart to try again',
+      // a win shows the campaign's medal instead (campaign.js)
+      rank: this.cp ? (this.cp.fight ? 'Retry the fight with the Fixer, or restart' : 'Retry from the start of this section, or restart') : 'Restart to try again',
     };
   }
 }

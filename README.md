@@ -78,7 +78,7 @@ A complete run takes about 2–3 minutes. A fast, efficient run is around 1:45; 
 
    At the junction, a final wave attacks the officers. Repel it, then press **E** beside the officers to extract them.
 
-**Completion screen:** shows score, aggressors neutralised, arrests, bombs prevented, peaceful demonstrators struck, phases completed and mission time. RESTART starts a new run immediately.
+**Completion screen:** shows phases completed, aggressors neutralised, arrests, bombs prevented, peaceful demonstrators struck, downed suspects struck, damage received, peak tension, mission time and score, then the campaign medal (see Campaign below). REPLAY starts a new run immediately.
 
 **Variety between runs:** who turns violent, the bomber locations, surge composition, the ambush side, the final-wave size, and the timing of ambient events (molotovs, mortars, projectile volleys, flare-ups, car fires, tear gas) all change.
 
@@ -107,7 +107,27 @@ While the crowd is *tense* or *volatile*, ambient attackers come sooner (up to 2
 
 ## Levels
 
-**Level 1** is the mission described above. Completing it unlocks **Level 2 · Nuit** on that device (saved in `localStorage`; a CONTINUE button appears on the results screen and a LEVEL 2 button on the main menu). Completing Level 2 unlocks **Level 3 · The Breakout** the same way.
+**Level 1** is the mission described above. Completing it unlocks **Level 2 · Nuit** on that device (saved in `localStorage`; a CONTINUE button appears on the results screen). Completing Level 2 unlocks **Level 3 · The Breakout** the same way.
+
+### Campaign
+
+The three levels form one campaign, *one night in Paris* from 18h47 to dawn (`src/campaign.js`; design in `docs/campaign-plan.md`).
+
+- **Title screen.** PLAY starts Level 1 on a new device. After that the button reads CONTINUE · LEVEL N (or REPLAY once everything is complete) and goes straight into the level the campaign leads to. The tag line says where and when that level is.
+- **CAMPAIGN** opens the mission select. The three levels sit on a line through the night (it runs down the screen on narrow phones), each marked LOCKED, NEXT or COMPLETE, with its best medal and score. The selected level shows its briefing, its objectives, its medal citations (ticked for the best run) and its record: best score, rating, fastest time and number of completions. START or REPLAY plays it. CAMPAIGN is also on the pause and results screens.
+- **Medals.** You only get a medal if you complete the level. Four citations decide which one: a score target, an arrest target, a damage-received cap, and no peaceful person struck.
+
+  | | Score | Arrests | Damage received |
+  |---|---|---|---|
+  | Level 1 | 4,500 | 6 | 120 |
+  | Level 2 | 9,000 | 10 | 180 |
+  | Level 3 | 12,000 | 8 | 150 |
+
+  All four citations earn **Gold · Commendation**, three **Silver · Professional**, one or two **Bronze · Adequate**, and none leaves the run **Under review**. The score targets are the old Commendation bands. The scripted bot usually earns Bronze or Silver.
+- **Results.** Every level has the same results layout: its rows (now including damage received), the score, the medal with the four citations and their values, any NEW BEST / FIRST COMPLETION tags (or your best so far), the radio hook, and a card for the next level and its first objective. The buttons are CONTINUE · LEVEL N, REPLAY (RESTART after a failure), RETRY SECTION after a failure at a checkpoint, and CAMPAIGN.
+- **Finale.** Winning Level 3 offers CAMPAIGN COMPLETE: dawn at 05h40, a short epilogue, each level's best medal, score and time, the campaign score (the sum of the best scores) and a campaign rating (the lowest of the three medals). After that it can be reached from the campaign screen, and every level stays replayable.
+- **Records** are kept per level on the device: plays, completions, best score, best medal, fastest time, the best run and the latest one. A worse run never replaces a better one. Saves from before the campaign (unlocks only) still load. If storage is blocked the game plays normally and remembers nothing. **Options → RESET CAMPAIGN** (tap twice) clears unlocks and records but keeps the settings, which are already saved.
+- **Briefing.** The first-play briefing names the level you start in. Level 1 now opens with a title card, as Levels 2 and 3 do. The pause screen shows the level, what is happening now, and its objectives.
 
 **Level 2** takes place on the same boulevard later that night, pushing back down it from Rue Oberkampf towards the CRS staging area, through the looting crews of the man they call *le Patron* (the Leader). It has five sections:
 
@@ -315,7 +335,8 @@ src/
   brawls.js      Background street-fight set pieces
   player.js, camera.js, missions.js, hud.js, audio.js, input.js, textures.js
   levels.js      Level definitions (mission script, lighting preset, player start), lighting presets,
-                 progression / unlocks
+                 progression: unlocks and per-level records
+  campaign.js    The campaign: briefings and objectives, the medal rule, the campaign screen, the finale
   level2.js      Level 2 mission script: sections, encounters, the Leader's first appearance, checkpoints
   level3.js      Level 3 mission script: acts and sections, the route choice, interactions, radio queue,
                  checkpoints, results
@@ -327,7 +348,7 @@ src/
   cinematic.js   Skippable camera sequences (shots, letterbox, name cards, subtitles)
   music.js       Synthesised score and stings (Levels 2 and 3: a theme per level, Level 3 builds by act)
   seed.js        ?seed=N: seeded Math.random for reproducible runs
-  dev.js         Test helpers, loaded only with ?dev in the URL (with devtests.js and devtests3.js)
+  dev.js         Test helpers, loaded only with ?dev in the URL (with devtests.js to devtests7.js)
 ```
 
 ## Development and testing
@@ -341,7 +362,8 @@ Add `?dev` to the URL to load the test helpers (`src/dev.js`):
 | `__botRun(ms)` | Scripted bot that plays with the normal controls for up to `ms` of wall time; call repeatedly until `ended`. It skips cinematics with a key press unless `__bot.watch = true`. Its state is reset by every seeded `__start`; in Level 3 only, it also detours when it makes no progress towards its goal for 3 s (Levels 1 and 2 keep the bot their baselines were recorded with) |
 | `__perf(frames)` | Average simulation and render cost per frame, draw calls and triangles summed over all post-processing passes, and the number of compiled shader programs |
 | `__level(id, stage)` / `__jump(i)` | Switch level (ignores unlocks) / jump to a Level 2 section |
-| `__unlock(id)` / `__resetProgress()` | Unlock a level / clear saved progress |
+| `__unlock(id)` / `__unlockAll()` / `__resetProgress()` | Unlock a level / every level / clear saved progress and records |
+| `__campaign()` | What the device has stored: unlocks, per-level records, last level played, finale seen |
 | `__auditAppearance({ seeds, level })` | Appearance audit for Level 1 or 2 (below) |
 | `__boss(name)` / `__bossHit(from)` / `__lintBosses()` | Jump to the Enforcer or Leader fight / land a hit from the back or front through the real hit path / check the attack tables against the fairness rules |
 
@@ -375,7 +397,6 @@ Baseline results for Level 1 from before the Level 2 work are kept in `tools/bas
 - NPC steering is local (no navmesh). Agents can briefly bunch up behind wrecked cars before detouring, and an attacker can stay pinned against a long obstacle (the Avenue's roadblock barricade, two parked cars nose to tail) while pursuing the officer on the other side. The group then stays "still fighting" until the officer walks round to him (the marker points at him).
 - Seeded runs reproduce exactly from a fresh page load. A second seeded run on the same page does not: characters' blink and eye-movement timers carry over and draw on the same random stream. Gameplay is unaffected.
 - On phones the BAR / GAS counters overlap the ENDURANCE label in the bars column (cosmetic).
-- The first-play controls briefing describes Boulevard de la République even when the first level played is Level 3.
 - Mixamo assets may be used inside games, but on the web the `.glb` files are technically downloadable from the hosting site. Check that this fits your use, and especially the Ready Player Me avatar's terms, before a commercial release.
 - The automated playthrough uses a scripted bot, so how it feels to a human player (difficulty, mouse sensitivity) still needs a hands-on pass.
 

@@ -78,7 +78,7 @@
     <!-- Onboarding -->
     <div id="onboarding" class="hidden">
       <div class="ob-title">BRIEFING</div>
-      <p>You are a CRS officer on Boulevard de la République. Most demonstrators are peaceful.
+      <p><span id="ob-where">You are a CRS officer on Boulevard de la République.</span> Most demonstrators are peaceful.
          Only act against individuals who are <b class="red">actively aggressive</b> — they are marked with a red ring and red minimap blip.</p>
       <div class="ob-grid touch-only">
         <div><b>Left thumb</b><span>Move</span></div>
@@ -121,17 +121,43 @@
     <div id="menu" class="screen">
       <div class="menu-inner">
         <div class="logo"><span>PARIS</span><span class="accent">BURNING</span></div>
-        <div class="tag">Boulevard de la République · 18h47</div>
+        <div class="tag" id="menu-tag">Boulevard de la République · 18h47</div>
         <div class="menu-buttons">
-          <button data-action="play" class="primary">PLAY</button>
-          <button data-action="level" data-level="2" class="hidden">LEVEL 2 · NUIT</button>
-          <button data-action="level" data-level="3" class="hidden">LEVEL 3 · THE BREAKOUT</button>
+          <button data-action="play" id="btn-play" class="primary">PLAY</button>
+          <button data-action="campaign" id="btn-campaign">CAMPAIGN</button>
           <button data-action="controls">CONTROLS</button>
           <button data-action="audio">OPTIONS</button>
-          <button data-action="restart">RESTART</button>
         </div>
         <div id="loading" class="dim small">Building the city…</div>
         <div id="rotate-hint" class="dim small">Best played in landscape — rotate your device.</div>
+      </div>
+    </div>
+
+    <!-- Campaign: the night's three levels, a briefing, records (campaign.js) -->
+    <div id="campaign-screen" class="screen hidden">
+      <div class="menu-inner campaign">
+        <h2>CAMPAIGN</h2>
+        <div class="tag" id="cmp-tag">One night in Paris · 18h47 to dawn</div>
+        <ol id="cmp-track"></ol>
+        <div id="cmp-detail" class="panel"></div>
+        <div class="menu-buttons wide">
+          <button data-action="cmp-start" id="cmp-start" class="primary">START</button>
+          <button data-action="finale" id="cmp-finale" class="hidden">CAMPAIGN COMPLETE</button>
+          <button data-action="cmp-back">BACK</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="finale-screen" class="screen hidden">
+      <div class="menu-inner finale">
+        <div class="tag">05h40 · Dawn</div>
+        <h2>THE NIGHT IS OVER</h2>
+        <div id="fin-text"></div>
+        <div id="fin-stats"></div>
+        <div class="menu-buttons">
+          <button data-action="campaign" class="primary">CAMPAIGN</button>
+          <button data-action="main-menu">MAIN MENU</button>
+        </div>
       </div>
     </div>
 
@@ -175,19 +201,21 @@
           <label for="opt-brutality">Police brutality</label><input type="checkbox" id="opt-brutality" /><span></span>
           <span class="dim small opt-note">On: downed and cuffed suspects can be struck with no score penalty. Off: they still react, but it counts as excessive force.</span>
         </div>
-        <p class="dim small">Settings are saved on this device.</p>
-        <div class="menu-buttons"><button data-action="back" class="primary">BACK</button></div>
+        <p class="dim small">Settings and campaign progress are saved on this device.</p>
+        <div class="menu-buttons"><button data-action="back" class="primary">BACK</button><button data-action="reset-progress" id="btn-reset-progress">RESET CAMPAIGN</button></div>
       </div>
     </div>
 
     <div id="pause-screen" class="screen hidden">
       <div class="menu-inner">
         <h2>PAUSED</h2>
+        <div id="pause-brief"></div>
         <div class="menu-buttons">
           <button data-action="resume" class="primary">RESUME</button>
           <button data-action="audio">OPTIONS</button>
           <button data-action="controls">CONTROLS</button>
           <button data-action="restart">RESTART</button>
+          <button data-action="campaign">CAMPAIGN</button>
         </div>
       </div>
     </div>
@@ -199,8 +227,10 @@
         <div id="end-stats"></div>
         <div class="menu-buttons">
           <button data-action="continue" id="btn-continue" class="primary hidden">CONTINUE · LEVEL 2</button>
+          <button data-action="finale" id="btn-finale" class="primary hidden">CAMPAIGN COMPLETE</button>
           <button data-action="retry" id="btn-retry" class="primary hidden">RETRY SECTION</button>
-          <button data-action="restart" class="primary">RESTART</button>
+          <button data-action="restart" id="btn-restart" class="primary">RESTART</button>
+          <button data-action="campaign">CAMPAIGN</button>
         </div>
       </div>
     </div>

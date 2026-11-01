@@ -14,6 +14,8 @@ const OBJECTIVE_POS = new THREE.Vector3(-3, 0, -112);
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export const PHASES = ['STREET ENTRY', 'ESCALATION', 'MAIN INCIDENT'];
+// the hook for the next level: the night is not over
+const HOOK = 'Control: "The looting crews are still on the boulevard. Hold at Oberkampf. This night is not over."';
 
 export class Missions {
   constructor(game) {
@@ -40,7 +42,8 @@ export class Missions {
     this.t = 0;
     this.stageT = 0;
     this.score = 0;
-    this.stats = { neutralized: 0, arrests: 0, peaceful: 0, downed: 0, bombsStopped: 0, bombsThrown: 0, damage: 0, gas: 0 };
+    this.stats = { neutralized: 0, arrests: 0, peaceful: 0, downed: 0, bombsStopped: 0, bombsThrown: 0, damage: 0, gas: 0, damageTaken: 0 };
+    this.lastHealth = this.game.player ? this.game.player.health : 100;
     this.line = 100;
     this.officers = 100;
     this.hostiles1 = [];
@@ -132,6 +135,7 @@ export class Missions {
   _startP1() {
     const g = this.game, crowd = g.crowd;
     this.stage = 'p1'; this.phase = 0; this.stageT = 0;
+    g.hud.titleCard('RÉPUBLIQUE', 'Boulevard de la République · 18h47');
     // appearance plays no part in who turns violent: random individuals near the line
     this.hostiles1 = this._pickFromCrowd((n) => n.pos.z > 92 && n.pos.z < 121, 3);
     const styles = Math.random() < 0.5 ? ['melee', 'melee', 'thrower'] : ['melee', 'thrower', 'melee'];
@@ -354,10 +358,18 @@ export class Missions {
     this.game.endGame(true);
   }
 
+  // damage received (health lost, whatever the source), counted the same way in every level
+  _trackDamage() {
+    const h = this.game.player.health;
+    if (h < this.lastHealth) this.stats.damageTaken += this.lastHealth - h;
+    this.lastHealth = h;
+  }
+
   // ------------------------------------------------------------- update
   update(dt) {
     const g = this.game;
     this.t += dt; this.stageT += dt;
+    this._trackDamage();
     const crowd = g.crowd;
     const alive = (list) => list.filter((n) => !n.neutralized && !n.arrested && n.temperament === 'hostile').length;
     switch (this.stage) {
@@ -495,5 +507,27 @@ export class Missions {
     }
     info.completed = this.completed;
     return info;
+  }
+
+  // the results screen (hud.js); a win adds the campaign's medal block in place of `rank`
+  endInfo(win, reason) {
+    const s = this.stats, peak = Math.round(this.tension.peak);
+    return {
+      title: win ? 'LEVEL 1 COMPLETE' : 'MISSION FAILED',
+      sub: win ? `Line held · ${s.bombsStopped ? 'petrol bomb stopped' : 'bomber dealt with'} · officers extracted from Rue Oberkampf` : reason || '',
+      rows: [
+        ['Phases completed', `${this.completed.filter(Boolean).length} / ${PHASES.length}`],
+        ['Aggressors neutralised', s.neutralized],
+        ['Arrests', s.arrests],
+        ['Petrol bombs prevented', `${s.bombsStopped} / ${s.bombsStopped + s.bombsThrown}`],
+        ['Peaceful demonstrators struck', s.peaceful, s.peaceful > 0],
+        ['Downed suspects struck', s.downed, s.downed > 0],
+        ['Damage received', Math.round(s.damageTaken)],
+        ['Crowd tension · peak', `${peak} / 100`, peak >= 70],
+        ['Mission time', `${Math.floor(this.t / 60)}:${String(Math.floor(this.t % 60)).padStart(2, '0')}`],
+      ],
+      hook: win ? HOOK : '',
+      rank: 'Restart to try again',
+    };
   }
 }

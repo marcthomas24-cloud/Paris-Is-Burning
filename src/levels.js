@@ -63,13 +63,46 @@ export const LEVELS = {
   },
 };
 
-// Unlocks persist on this device. Storage can be unavailable (private windows,
-// blocked site data), so every access is guarded and failure means "locked".
+// Unlocks and records persist on this device. Storage can be unavailable (private windows,
+// blocked site data), so every access is guarded and failure means "locked" and "no record".
+//   { unlocked: { 2: true }, records: { 1: { plays, wins, bestScore, bestMedal, bestTime, bestRun, last } },
+//     lastPlayed: 1, finaleSeen: true }
+// Saves from before the campaign hold only `unlocked`; they read as they are.
 const KEY = 'parisBurning.progress.v1';
 export const Progress = {
-  _read() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } },
+  _read() { try { const p = JSON.parse(localStorage.getItem(KEY)); return p && typeof p === 'object' ? p : {}; } catch { return {}; } },
   _write(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* not persisted */ } },
   unlocked(id) { return id === 1 || !!(this._read().unlocked || {})[id]; },
   unlock(id) { if (!LEVELS[id]) return; const p = this._read(); p.unlocked = { ...(p.unlocked || {}), [id]: true }; this._write(p); },
+  // completed: won at least once (or, in a save from before records, the next level is unlocked)
+  completed(id) { const r = this.record(id); return !!(r && r.wins) || this.unlocked(id + 1) && !!LEVELS[id + 1]; },
+  record(id) { const r = (this._read().records || {})[id]; return r && typeof r === 'object' ? r : null; },
+  lastPlayed() { const id = +this._read().lastPlayed; return LEVELS[id] ? id : null; },
+  finaleSeen() { return !!this._read().finaleSeen; },
+  setFinaleSeen() { const p = this._read(); p.finaleSeen = true; this._write(p); },
+  // One finished run (won or failed) with its medal. Only completed runs set bests, and a worse run
+  // never replaces a better one. Returns what it improved, for the results' NEW BEST tags.
+  addRun(id, run, medal) {
+    if (!LEVELS[id]) return {};
+    const p = this._read(), recs = p.records = p.records || {};
+    const r = recs[id] = { plays: 0, wins: 0, bestScore: 0, bestMedal: -1, bestTime: null, bestRun: null, last: null, ...(recs[id] || {}) };
+    r.plays++;
+    p.lastPlayed = id;
+    const out = { firstWin: false, score: false, medal: false, time: false };
+    if (run.win) {
+      const sum = { score: run.score, arrests: run.arrests, damage: run.damage, peaceful: run.peaceful, time: Math.round(run.time), medal, win: true };
+      out.firstWin = !r.wins;
+      out.score = run.score > r.bestScore; out.medal = medal > r.bestMedal; out.time = r.bestTime === null || run.time < r.bestTime;
+      r.wins++;
+      if (out.score) r.bestScore = run.score;
+      if (out.time) r.bestTime = Math.round(run.time);
+      // the best run is the one with the best medal (the higher score breaks a tie)
+      if (out.medal || (medal === r.bestMedal && (!r.bestRun || run.score > r.bestRun.score))) r.bestRun = sum;
+      if (out.medal) r.bestMedal = medal;
+      r.last = sum;
+    }
+    this._write(p);
+    return out;
+  },
   reset() { this._write({}); },
 };
