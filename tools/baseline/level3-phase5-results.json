@@ -1,0 +1,85 @@
+{
+  "description": "Level 3 Phase 5: integration, regression and quality gate. Branch level3 on top of 3790e71 (Phase 4). Dev server (vite :5174) and a clean-install production build (npm ci + npm run build in a fresh copy, served by python http.server at the root :5187 and from a sub-folder :5188/dist/). Claude desktop app built-in Chromium. No physical phone.",
+  "dates": "2026-10-31 to 2026-11-01",
+  "classification": "PASS = executed and passed; FAIL = executed and failed; NOT RUN = not executed; UNVERIFIED = evidence insufficient",
+  "defectsFixed": [
+    { "id": 1, "severity": "high", "what": "Level 3 unreachable by players: still devOnly, no menu button; finishing Level 2 did not unlock it", "fix": "levels.js devOnly removed; index.html LEVEL 3 button", "verified": "__testProgression PASS; production: Level 2 won -> CONTINUE · LEVEL 3, reload -> menu button -> Level 3 starts" },
+    { "id": 2, "severity": "medium", "what": "After any visit to Level 3, two of its prop colliders (x -12.6 z 162, x 12.4 z 176) stayed active as invisible obstacles inside the Level 1/2 bounds", "fix": "world.setDistrict switches district colliders off and back on (each keeps its own state); level3.js lists them at build", "verified": "__testLeaks PASS (303 active colliders before and after); round trip L3 -> L1 -> L3 restores all 194 and the roadblock state; __vanSweep, __navMap PASS" },
+    { "id": 3, "severity": "high", "what": "Soft-lock on the Passage (seed 7): a looting crew's rally point sat 0.35 m from the van's path; the van waited for them for ever", "fix": "level3.js L3_CROWD crew site moved to the west pavement (door 35.5,296 / rally 37.0,297; 3.6 m from the path); no other site is within 3.6 m of either path", "verified": "seed 7 route B LEVEL 3 COMPLETE" },
+    { "id": 4, "severity": "high", "what": "Soft-lock: the scaffold's rubble collider was created on top of anyone under it; the officer could end up trapped between rubble and façade (or the van)", "fix": "hazards.js _collapse moves the officer and anyone else in the footprint to the nearest free spot", "verified": "__testHazards scaffoldUnder.officerFree (new check) PASS" },
+    { "id": 5, "severity": "high", "what": "Soft-lock in the square: a fireworks runner held against the parked van stayed in its surge for ever; the Fixer's reveal waits for the surge, so the section never completed", "fix": "hazards.js: 25 s after the fireworks' smoke clears (HAZARD.surgeOver) any runner still surging stops, as one who arrives does", "verified": "__testHazards fireworks.stuckRunnerReleased (new check) PASS; seed 7 route A completes" },
+    { "id": 6, "severity": "low", "what": "Desktop HUD: from about 1150 to 1400 px wide the boss health bar ran under the control-hint panel (regression from the gas/barrier hints growing the panel; Levels 2 and 3)", "fix": "style.css #boss-bar bottom 92 -> 116 px", "verified": "__hudLayout no overlaps at 1280x720 (L2, L3), 1366x768, 1920x1080" },
+    { "id": 7, "severity": "low", "what": "Portrait phones: radio lines and alerts covered the right half of the boss health bar during a fight", "fix": "hud.js marks #hud boss-on; style.css drops the alerts below the bar in portrait while it shows", "verified": "375x812 touch emulation screenshot and __hudLayout" },
+    { "id": 8, "severity": "doc", "what": "README said strikes and stones on the van are 'capped at 8 a second'; the token bucket allows a burst of 8 on top (8·T + 8 over T seconds)", "fix": "README wording; __testVanQA bound", "verified": "six attackers: worst second 11.5, 26.5 over 5 s" }
+  ],
+  "testHarnessFixes": [
+    "dev.js: the bot's state is reset by every seeded __start (it carried detour state into the next run)",
+    "dev.js: Level 3 only, the bot detours (growing detours) when it makes no progress for 3 s; Levels 1-2 keep the baseline bot",
+    "devtests3.js: __testRetryClean counted naturally ended (pruned) sounds as still playing; fixed",
+    "devtests3.js / devtests5.js: test fixtures clear the dev stage and held input left by earlier tests",
+    "devtests5.js (new): __testVanQA, __testProgression, __testLeaks, __testShortcuts, __perfL3, __traceObjectives"
+  ],
+  "level3": {
+    "fullMission": {
+      "command": "__traceObjectives(() => __testRoutes({ seed })) on the final code (cinematics skipped), + __auditRun({ seed: 5, watch: true })",
+      "seed5": { "A": { "title": "LEVEL 3 COMPLETE", "t": 314.9, "score": 11705, "van": 98, "minHp": 69, "issues": [] }, "B": { "title": "LEVEL 3 COMPLETE", "t": 347.61, "score": 12125, "van": 95, "minHp": 53, "issues": [] }, "trace": "6738 ticks, no tick without objective text, no gap without a marker" },
+      "seed7": { "A": { "title": "LEVEL 3 COMPLETE", "t": 348.67, "score": 12355, "van": 98, "minHp": 85, "issues": [] }, "B": { "title": "LEVEL 3 COMPLETE", "t": 388.68, "score": 11975, "van": 100, "minHp": 80, "issues": [] }, "trace": "7488 ticks, 0 / 0" },
+      "seed11": { "A": { "title": "LEVEL 3 COMPLETE", "t": 347.05, "score": 11395, "van": 97, "minHp": 67, "issues": [] }, "B": { "title": "LEVEL 3 COMPLETE", "t": 347.65, "score": 12475, "van": 100, "minHp": 73, "issues": [] }, "trace": "7063 ticks, 0 / 0" },
+      "watched": { "seed": 5, "route": "A", "title": "LEVEL 3 COMPLETE", "t": 329.15, "cinematics": ["transfer", "fixerGlimpse", "fixer", "custody", "victory"], "issues": [], "trace": "3348 ticks, 0 / 0" },
+      "allSections": "012345 in every run; shortfall 0; no hit above 25; no boss damage during a phase change or after defeat; score = sum of awarded events",
+      "peacefulStruck": "0-2 per run, all by the bot's swings in the fireworks surge (the proportionate-force penalty applies)",
+      "verdict": "PASS"
+    },
+    "replay": { "command": "same seed twice on one page (seed 7, Avenue)", "both": "LEVEL 3 COMPLETE, no issues", "identical": false, "freshPageDeterminism": "identical at 1, 5, 15, 40, 80 s across two page loads", "cause": "humans.js face blink / saccade timers persist across restarts and draw Math.random during the simulation; diverges at the first encounter's shuffle (13.2 s)", "verdict": "replay PASS; same-page reproducibility FAIL (known limitation, harness only)" },
+    "suite": {
+      "lint": "enforcer [], leader [], fixer [] PASS",
+      "vanSweep": "A 0 / B 0 hits PASS", "navMap": "0 leaks, 0 pockets, 5/5 landmarks PASS",
+      "testVan": "PASS (damage table 3/4/2/12/30, cap 8 one frame, grace 0, parked 0, peaceful 0, ambient 0, stone wall/roof 0, side 2, out of reach 0, retry at section start)",
+      "testVanQA": "PASS (full 100 % and bar 100 %; one attacker 3 per strike; six at once worst second 11.53, 26.53 over 5 s; officer moving 3 per strike; cinematic 0 entries; petrol one 12 burst + pool, 2 incidents; bar 62 % / 21 % red; failure, retry 100 %)",
+      "testHazards": "PASS incl. scaffold officerFree and fireworks stuckRunnerReleased",
+      "testRadio": "PASS", "testL3Checkpoints": "PASS (10 rows)",
+      "testFixer": "PASS (all three phases, rush 0.68/0.78/0.97 s launch to contact, dodged 0, opening 1.5 s; rush into van stunned; kick through wall 0, without 15; miss opening 1.38 vs 1.1; arrest -> section 5)",
+      "fixerTransitions": "12 / 12 PASS", "fixerFeints": "3 feints, 3 safe, 0 heavy hits taken PASS", "fixerCheckpoint": "PASS", "fixerFuzz120s": "PASS no issues",
+      "cinematics": "10 / 10 PASS (5 sequences, skipped and watched)", "retryClean": "PASS",
+      "progression": "PASS", "leaks": "PASS (after fix)", "shortcuts": "PASS"
+    }
+  },
+  "regression": {
+    "level1_seed3_production": { "t": 95.4, "score": 6118, "crowdSum": ["514.815", "3300.723"], "playerPos": ["-2.171", "-111.592"], "verdict": "IDENTICAL to baseline (also identical on the dev server at the start of the phase)" },
+    "level2_seed12_production": { "t": 186.42, "score": 9925, "bossTimes": { "enforcer": 24.5, "leader": 37.4 }, "sections": [[0, 0.1], [1, 24.4], [2, 53.3], [3, 77.8], [4, 142.3]], "crowdSum": ["934.766", "7061.193"], "playerPos": ["2.700", "60.664"], "cinematics": ["glimpse", "enforcer", "leader", "victory"], "issues": [], "verdict": "IDENTICAL to baseline; CONTINUE now offers Level 3" },
+    "level2Bosses": "leader transitions 10/10, feints 5 / 4 safe, checkpoints enforcer + leader, fuzz 90 s both, charge window 0.52/0.63/0.72/0.80/1.03, wall stun: PASS (before the hazard/crowd-site fixes, which do not touch Level 2)",
+    "features": "gas, barriers, tension PASS", "appearanceAudits": "L1 20 seeds, L2 20 seeds, L1 tension 100: no material skew, self-test detects planted bias PASS"
+  },
+  "performance": {
+    "hardware": "AMD Radeon integrated (ANGLE D3D11), 12 logical cores, 16 GB, Windows 11, Chromium 152 inside the Claude desktop app. Browser pane HIDDEN (background page), viewport 571x630, pixel ratio 1. Each frame flushed with gl.finish(). Desktop only: no phone measured.",
+    "frameMs": [
+      { "scenario": "square at its fullest (rally, fireworks panic, surge)", "update": [12.2, 22.3], "render": [30.9, 37.9], "total": [43.0, 55.0, 81.9, 102.5], "calls": 118, "tris": 733418 },
+      { "scenario": "fire and smoke (cook-off, two car fires, two pools)", "update": [11.7, 21.5], "render": [36.6, 122.5], "total": [48.7, 140.0, 163.5, 216.7], "calls": 203, "tris": 997073 },
+      { "scenario": "van under six attackers", "update": [10.1, 19.0], "render": [34.1, 84.2], "total": [43.9, 100.4, 117.3, 147.8], "calls": 244, "tris": 1084827 },
+      { "scenario": "square first encounter", "update": [11.0, 20.3], "render": [33.0, 47.4], "total": [45.3, 69.2, 100.5, 117.4], "calls": 149, "tris": 820740 },
+      { "scenario": "Fixer phase 3", "update": [10.9, 20.1], "render": [31.5, 33.7], "total": [42.2, 50.2, 57.7, 106.2], "calls": 152, "tris": 751966 },
+      { "scenario": "cinematic: briefing", "update": [9.5, 18.3], "render": [32.1, 71.2], "total": [43.4, 82.3, 86.6, 111.2], "calls": 213, "tris": 1180044 },
+      { "scenario": "cinematic: Fixer introduction", "update": [10.5, 18.2], "render": [30.8, 34.0], "total": [42.0, 48.9, 59.2, 116.6], "calls": 134, "tris": 734880 }
+    ],
+    "frameMsKey": "update / render [p50, p95]; total [p50, p95, p99, max]",
+    "memory": "10 retries (section 3, then the fight): geometries 289 -> 361 then flat, programs 84 -> 85, scene objects 632 flat; 20 further section retries: textures 299 -> 302, geometries 361 flat, programs 85 flat, heap 204-271 MB oscillating with GC, no trend",
+    "verdict": "UNVERIFIED against the budget: measured in a hidden background pane on an integrated GPU with a forced GPU flush per frame (Phase 4 measured the Fixer fight at 29 ms p50 with the pane shown). No leak found. The fire-and-smoke stretch is the heaviest (p95 140 ms here)."
+  },
+  "ui": {
+    "desktop": "__hudLayout 1280x720 (L2 + L3 boss), 1366x768, 1920x1080: no overlaps after fix 6 PASS",
+    "phonePortrait": "375x812 touch emulation: boss bar clear of alerts after fix 7; bars-column label overlap noted PASS with note",
+    "phoneLandscape": "740x360 touch emulation: boss fight clean; alert container box touches the objective but no visible alert overlaps PASS",
+    "objectives": "objective text present and a marker shown (outside the route choice, boss fight and cinematics) on every bot tick of 7 full runs PASS",
+    "results": "LEVEL 3 COMPLETE screen: rows, Fixer time, rating, RESTART, no CONTINUE PASS",
+    "physicalAndroid": "NOT RUN (no device)"
+  },
+  "production": {
+    "npmCi": "PASS (fresh copy, 12 packages; npm 11 notes esbuild's postinstall not run, build unaffected)",
+    "build": "PASS (vite 5.4.10, 21 MB, relative base './')",
+    "assets": "23 audio + 7 models referenced, all present; no external URLs PASS",
+    "servedRoot": "python http.server: 61 requests all 200, no console errors, dev chunk not loaded without ?dev PASS",
+    "servedSubfolder": "/dist/: loads, ?dev&level=3&stage=fixer starts the fight, 33 resources 200 PASS",
+    "unlockPersistence": "Level 2 won -> stored {unlocked:{3:true}} -> plain reload -> LEVEL 3 button -> Level 3 starts PASS",
+    "deploymentConfig": "vite.config.js base './', outDir dist; static hosting only; README instructions unchanged PASS"
+  }
+}

@@ -16,7 +16,9 @@ import { getShared, giveItem, clearItem } from './characters.js';
 
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 const C = (r, g, b) => new THREE.Color(r, g, b);
-export const HAZARD = { blastMax: 24, scaffoldDmg: 18, takedown: 150, lureR: 15 };
+// surgeOver: seconds after the fireworks' smoke clears when their panic ends for everyone (the
+// farthest runners need about that long to cross the square)
+export const HAZARD = { blastMax: 24, scaffoldDmg: 18, takedown: 150, lureR: 15, surgeOver: 25 };
 
 export class HazardDirector {
   constructor(game) {
@@ -235,6 +237,19 @@ export class HazardDirector {
     h.takedowns = this._takedown((n) => inside(n.pos), c, !!h.byCrew && p.distanceTo(c) < HAZARD.lureR);
     this.rubble.position.set(cx, 0.14, h.zc); this.rubble.visible = true;
     this.rubbleCol = g.world.addCollider(h.x0, h.zc - h.len / 2, h.x1, h.zc + h.len / 2, 0.8, 'rubble');
+    // nobody is left inside the rubble (it reaches the façade, so they could never step out): the
+    // officer and anyone else under it end up at the nearest free spot beside it, lane side first
+    const spot = (q) => {
+      if (!(q.x > h.x0 - 0.45 && q.x < h.x1 + 0.45 && Math.abs(q.z - h.zc) < h.len / 2 + 0.45)) return;
+      const cands = [];
+      for (const dz of [0, -1, 1, -2, 2, -3, 3]) for (const x of [h.x0 - 0.5, h.x0 - 1.2, h.x0 - 2.0]) cands.push([x, q.z + dz]);
+      cands.push([cx, h.zc - h.len / 2 - 0.6], [cx, h.zc + h.len / 2 + 0.6]);
+      let best = null, bd = Infinity;
+      for (const [x, z] of cands) { if (g.world.blocked(x, z, 0.42)) continue; const d = Math.hypot(x - q.x, z - q.z); if (d < bd) { bd = d; best = [x, z]; } }
+      if (best) { q.x = best[0]; q.z = best[1]; }
+    };
+    spot(g.player.pos);
+    for (const n of g.crowd.npcs) if (n.state !== 'gone') spot(n.pos);
   }
 
   // ---------------------------------------------------------------- fireworks into the rally
@@ -248,6 +263,11 @@ export class HazardDirector {
       // low smoke drifting over the lanes: thin enough that the rings and silhouettes still read
       if (h.t < h.smokeS && Math.random() < dt * 6) g.effects.smoke.spawn({ pos: V3(h.lane[0] + Math.random() * (h.lane[2] - h.lane[0]), 0.6 + Math.random(), h.lane[1] + Math.random() * (h.lane[3] - h.lane[1])), vel: V3(0.6 + Math.random() * 0.6, 0.15, (Math.random() - 0.5) * 0.4), size: 1.4 + Math.random(), grow: 3, life: 6 + Math.random() * 3, alpha: 0.12, color: C(0.62, 0.6, 0.6), drag: 0.5, windK: 0.8, fadeIn: 0.5 });
       if (h.t >= h.smokeS) this._set(h, 'spent');
+    } else if (h.state === 'spent' && h.runners && !h.released && h.t > HAZARD.surgeOver) {
+      // the panic is over: anyone still running (held up against the parked van, a tree, a lamp)
+      // stops where they are, as a runner who got across does; the square's story waits on this
+      h.released = true;
+      for (const n of h.runners) if (n.surge) { n.surge = null; n.anchor.copy(n.pos); if (n.state === 'surge') g.crowd.setState(n, 'act', 0); n.dur = 2; }
     }
   }
   primeFireworks(h) {

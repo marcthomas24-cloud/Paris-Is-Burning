@@ -12,12 +12,14 @@ import { reseed, SEED } from './seed.js';
 import { lintBoss, ENFORCER, LEADER, FIXER } from './boss.js';
 import { installTests } from './devtests.js';
 import { installTests3 } from './devtests3.js';
+import { installTests5 } from './devtests5.js';
 import * as THREE from 'three';
 import { areaAt as DISTRICT_AREA, DISTRICT } from './district.js';
 
 export function installDev(game) {
   installTests(game); // regression and fairness checks (devtests.js)
   installTests3(game); // Level 3: the van, hazards, radio, checkpoints, both routes (devtests3.js)
+  installTests5(game); // quality gate: van QA, progression, leaks between levels, shortcuts, performance (devtests5.js)
   // Fixed-step simulation. The first call hands the simulation to the harness:
   // the real-time loop then only renders (see Game.frame), so runs are reproducible.
   window.__step = (sec, fn) => {
@@ -41,6 +43,8 @@ export function installDev(game) {
       game.time = 0;
       game.crowd.maxSkinned = 20;
       game.effects.emitAcc = 0; game.effects.smoke.clear();
+      // the bot starts every seeded run as on a fresh page (its route and watch choice are kept)
+      if (window.__bot) Object.assign(window.__bot, { log: [], stuckT: 0, side: 1, last: null, strafeT: 0, prog: null, lastDodged: null, detourRun: 0 });
       game.restart();
     }
   };
@@ -116,6 +120,19 @@ export function installDev(game) {
       const before = p.clone();
       window.__step(0.1);
       if (p.distanceTo(before) < 0.05 && !(fight && d < 1.8)) { B.stuckT += 0.1; if (B.stuckT > 1.2) { B.stuckT = 0; B.side *= -1; B.strafeT = 1.6; } } else B.stuckT = Math.max(0, B.stuckT - 0.05);
+      // Level 3 only (Levels 1-2 keep the bot their baselines were recorded with): jittering in
+      // place against parked cars counts as moving above, so also detour when no progress is made
+      // towards the goal for 3 s (a person would walk round the car)
+      if (g.level.id === 3 && !(fight && d < 1.8) && !(bs && bs.active)) {
+        // (repeated detours grow longer and change side only every other time: a long barricade needs
+        // a long walk to one end)
+        if (!B.prog || B.prog.goal.distanceTo(goal) > 2 || d < B.prog.best - 0.4) { if (B.prog && d < B.prog.best - 0.4) B.detourRun = 0; B.prog = { goal: goal.clone(), best: d, t: 0 }; }
+        else if ((B.prog.t += 0.1) > 3) {
+          B.prog = null; B.detourRun = (B.detourRun || 0) + 1;
+          if (B.detourRun % 2 === 1) B.side *= -1;
+          B.strafeT = 2.4 * Math.min(3, Math.ceil(B.detourRun / 2)); B.detours = (B.detours || 0) + 1;
+        }
+      }
     } else window.__step(0.1);
     if (B.last !== m.stage) { B.log.push([m.stage, +m.t.toFixed(1)]); B.last = m.stage; }
   };

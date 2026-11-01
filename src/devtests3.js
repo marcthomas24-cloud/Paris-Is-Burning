@@ -207,8 +207,9 @@ export function installTests3(game) {
     // scaffold: standing under it, and stepping out during the tell
     m = fresh(seed, 1); m._takeRoute('B'); const hzB = m.hz;
     const sf = hzB.get('scaffold');
-    step(1.4, hold(44, 292));
-    out.scaffoldUnder = { states: hzB.log.filter((e) => e[1] === 'scaffold').map((e) => [e[0], e[2]]), dealt: +(sf.dealt || 0).toFixed(1), rubble: !!hzB.rubbleCol };
+    step(1.4, () => { if (sf.state !== 'spent') hold(44, 292)(); }); // standing under it until it falls
+    const pp = game.player.pos;
+    out.scaffoldUnder = { states: hzB.log.filter((e) => e[1] === 'scaffold').map((e) => [e[0], e[2]]), dealt: +(sf.dealt || 0).toFixed(1), rubble: !!hzB.rubbleCol, officerFree: !game.world.blocked(pp.x, pp.z, 0.3), officerAt: [+pp.x.toFixed(2), +pp.z.toFixed(2)] };
     m = fresh(seed, 1); m._takeRoute('B');
     const sf2 = m.hz.get('scaffold');
     step(0.05, hold(44, 292));
@@ -236,6 +237,11 @@ export function installTests3(game) {
     const runners = fw.runners || [];
     step(8, hold(20, 400));
     out.fireworks = { telegraphS: fw.telegraph, runners: runners.length, allPeaceful: runners.every((n) => n.temperament === 'peaceful'), madeHostile: runners.filter((n) => n.temperament === 'hostile').length };
+    // one runner held up for good (as against the parked van): the panic still ends, so the square
+    // carries on (the Fixer's reveal waits for it)
+    const stuck = runners[0], at = stuck && stuck.pos.clone();
+    if (stuck) step(fw.smokeS + HAZARD.surgeOver + 2, () => { hold(20, 400)(); stuck.pos.copy(at); });
+    out.fireworks.stuckRunnerReleased = !!stuck && !stuck.surge && stuck.state !== 'surge' && !m.hz.surgeLive(fw);
     game.render();
     out.lights = { before: l0, after: lights() };
     // (the program count also moves as new characters come into view, as in Level 2's fights:
@@ -248,9 +254,9 @@ export function installTests3(game) {
     const span = out.cookoffCentre.telegraph;
     out.pass = span.length >= 3 && span[2] - span[1] >= 1.0 && out.cookoffCentre.dealt > 0 && out.cookoffCentre.dealt <= HAZARD.blastMax && out.cookoffWalkOut.dealt === 0
       && out.cookoffTakedown.neutralised === 2 && out.cookoffTakedown.peacefulStruck === 0 && out.cookoffTakedown.score >= 2 * HAZARD.takedown
-      && out.scaffoldUnder.dealt === HAZARD.scaffoldDmg && out.scaffoldUnder.rubble && out.scaffoldStepOut.dealt === 0
+      && out.scaffoldUnder.dealt === HAZARD.scaffoldDmg && out.scaffoldUnder.rubble && out.scaffoldUnder.officerFree && out.scaffoldStepOut.dealt === 0
       && out.trailBlocksVan && out.trailLit.state === 'active' && out.trailBurnsOut === 'spent' && out.trailStruckInTime.state === 'spent' && out.trailStruckInTime.flames === 0
-      && out.fireworks.runners > 0 && out.fireworks.allPeaceful && Object.values(out.telegraphs).every((t) => t >= 1.0)
+      && out.fireworks.runners > 0 && out.fireworks.allPeaceful && out.fireworks.stuckRunnerReleased && Object.values(out.telegraphs).every((t) => t >= 1.0)
       && out.lights.before === out.lights.after && out.materialsShared;
     return out;
   };
@@ -540,7 +546,9 @@ export function installTests3(game) {
     game.skipCinematics = true; // the retry would replay his introduction: keep it out of the check
     document.getElementById('btn-retry').click(); step(0.3);
     const after = {
-      banner: document.getElementById('banner').classList.contains('show'), oldVoicesStillPlaying: [...mine].filter((v) => v.pri >= 0).length,
+      // (still in the mixer's list and not yet over: a short sound that ended by itself is pruned
+      // from the list with its priority untouched)
+      banner: document.getElementById('banner').classList.contains('show'), oldVoicesStillPlaying: [...mine].filter((v) => v.pri >= 0 && a.voices.includes(v) && v.end > a.ctx.currentTime).length,
       cinematic: game.cinematic ? game.cinematic.id : null, letterbox: !document.getElementById('cine').classList.contains('hidden'), cineOn: document.getElementById('app').classList.contains('cine-on'),
       pending: a.pending.length, state: game.state, fight: !!m.boss && m.boss.phaseIdx === 0 && m.boss.hp === FIXER.hp, settingsKept: JSON.stringify(a.getSettings()) === settings0,
     };

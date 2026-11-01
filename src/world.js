@@ -442,8 +442,10 @@ export class World {
   // ---------------------------------------------------------------- districts
   // A district is a part of the city only some levels use (district.js). It is built once,
   // when its level first loads, into its own group, and switched on with its level: shown,
-  // its pavements, fires, smoke and police light bars registered. Its colliders stay in the
-  // grid all the time; they lie outside every other level's bounds.
+  // its pavements, fires, smoke and police light bars registered. Its colliders (d.colliders,
+  // when the builder lists them) stay in the grid but are switched off with it: a few of them
+  // stand inside other levels' bounds. Each keeps its own on/off state across the switch (a
+  // level may have opened some, like a roadblock dragged clear).
   registerDistrict(name, d) { (this.districts || (this.districts = {}))[name] = d; }
   hasDistrict(name) { return !!(this.districts && this.districts[name]); }
   setDistrict(name) {
@@ -457,10 +459,12 @@ export class World {
       // put back what it hid, at the same places in the lists (their order is part of a replay)
       for (const [list, item, i] of D.hidden || []) list.splice(i, 0, item);
       D.hidden = null;
+      if (D.colliders) { D.colOff = D.colliders.map((c) => c.off); for (const c of D.colliders) c.off = true; }
     }
     this.district = want;
     if (want) {
       want.group.visible = true;
+      if (want.colliders && want.colOff) { want.colliders.forEach((c, i) => { c.off = want.colOff[i]; }); want.colOff = null; }
       // fires and smoke of the shared map the district replaces (removed last first)
       want.hidden = [];
       for (const item of want.suppressed || []) for (const list of [this.fires, this.smokes]) { const i = list.indexOf(item); if (i >= 0) want.hidden.push([list, item, i]); }

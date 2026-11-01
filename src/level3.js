@@ -63,7 +63,8 @@ export const L3_CROWD = {
     { door: [-12.5, 318], rally: [-10.3, 317], face: [-1, 0] },
     { door: [12.5, 330], rally: [10.3, 329], face: [1, 0] },
     { door: [35.5, 280], rally: [37.6, 281], face: [-1, 0] },
-    { door: [44.5, 312], rally: [42.4, 311], face: [1, 0] },
+    // (west side too: the van runs along the east pavement here, and a crew gathered there stood in its way)
+    { door: [35.5, 296], rally: [37.0, 297], face: [-1, 0] },
     { door: [40, 233.5], rally: [40, 236.6], face: [0, -1] },
     { door: [-40, 246.5], rally: [-40, 243.4], face: [0, 1] },
     { door: [-47.5, 380], rally: [-44.2, 380], face: [-1, 0] },
@@ -232,7 +233,12 @@ export class Level3 extends Missions {
     super(game);
     game.crowd.addReserveCrews();   // 12 crews at the district's shop fronts
     game.crowd.addDistrictCrews(3); // and Level 3's own three: 60 crew members in all
-    if (!game.world.hasDistrict('l3')) game.world.registerDistrict('l3', buildDistrict(game.world, game.scene, game.renderer, game.camera));
+    if (!game.world.hasDistrict('l3')) {
+      const n0 = game.world.colliders.length;
+      const d = buildDistrict(game.world, game.scene, game.renderer, game.camera);
+      d.colliders = game.world.colliders.slice(n0); // switched off with the district (world.setDistrict)
+      game.world.registerDistrict('l3', d);
+    }
     this.D = game.world.districts.l3;
     this.enc = new EncounterRunner(game, 1, 'escort');
     this.van = game.l3van || (game.l3van = new TransferVan(game));

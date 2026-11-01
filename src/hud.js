@@ -140,6 +140,7 @@ export class HUD {
     // boss bar: name, health with phase marks, and when the guard is down
     const bi = m.bossInfo ? m.bossInfo() : null;
     $('boss-bar').classList.toggle('hidden', !bi);
+    $('hud').classList.toggle('boss-on', !!bi); // (portrait phones move the alerts below the bar)
     if (bi) {
       const key = bi.name + bi.max + bi.phases;
       if (this._bossKey !== key) {

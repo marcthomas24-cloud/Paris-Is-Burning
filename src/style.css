@@ -275,6 +275,7 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
   .touch #objective { width: calc(100% - 136px); }
   .touch #hud-buttons { top: calc(env(safe-area-inset-top, 0px) + 236px); /* below the minimap and three bar rows */ right: calc(env(safe-area-inset-right, 0px) + 8px); flex-direction: column; }
   .touch #alerts { top: 120px; max-width: 70vw; }
+  .touch .boss-on #alerts { top: 168px; } /* below the boss bar, which sits under the objective panel */
   .ob-grid { grid-template-columns: repeat(2, 1fr); }
 }
 /* touch layer sits under the HUD's own tappable elements */
@@ -284,7 +285,8 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 .screen { z-index: 10; }
 
 /* ---------- boss bar (Level 2) ---------- */
-#boss-bar { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); width: min(520px, 60vw); text-align: center; text-shadow: 0 1px 4px rgba(0,0,0,0.9); }
+/* (above the control hints' panel, about 105 px tall since the gas and barrier keys joined it) */
+#boss-bar { position: absolute; bottom: 116px; left: 50%; transform: translateX(-50%); width: min(520px, 60vw); text-align: center; text-shadow: 0 1px 4px rgba(0,0,0,0.9); }
 #boss-bar .boss-name { display: flex; justify-content: center; align-items: baseline; gap: 10px; margin-bottom: 5px; }
 #boss-name { font-size: 15px; font-weight: 800; letter-spacing: 0.22em; }
 #boss-sub { font-size: 11px; letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
