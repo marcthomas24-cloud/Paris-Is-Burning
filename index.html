@@ -120,7 +120,57 @@
     <!-- Menus -->
     <div id="menu" class="screen">
       <div class="menu-inner">
-        <div class="logo"><span>PARIS</span><span class="accent">BURNING</span></div>
+        <!-- Logo: "Charred Flag" (docs/logo-samples.html, C). Tricolore letters with holes burnt
+             through them: flickering ember edges, soot around the holes, CSS embers rising. -->
+        <div class="logo">
+          <svg viewBox="0 0 700 320" role="img" aria-label="Paris Burning">
+            <defs>
+              <linearGradient id="pb-gP" gradientUnits="userSpaceOnUse" x1="10" x2="490" y1="0" y2="0">
+                <stop offset="0" stop-color="#0055A4"/><stop offset=".333" stop-color="#0055A4"/>
+                <stop offset=".333" stop-color="#f5f3ee"/><stop offset=".666" stop-color="#f5f3ee"/>
+                <stop offset=".666" stop-color="#EF4135"/><stop offset="1" stop-color="#EF4135"/>
+              </linearGradient>
+              <linearGradient id="pb-gB" gradientUnits="userSpaceOnUse" x1="10" x2="690" y1="0" y2="0">
+                <stop offset="0" stop-color="#0055A4"/><stop offset=".333" stop-color="#0055A4"/>
+                <stop offset=".333" stop-color="#f5f3ee"/><stop offset=".666" stop-color="#f5f3ee"/>
+                <stop offset=".666" stop-color="#EF4135"/><stop offset="1" stop-color="#EF4135"/>
+              </linearGradient>
+              <filter id="pb-char" x="-5%" y="-10%" width="110%" height="120%" color-interpolation-filters="sRGB">
+                <feTurbulence type="fractalNoise" baseFrequency="0.016" numOctaves="3" seed="21" result="n"/>
+                <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0" result="na"/>
+                <feComponentTransfer in="na" result="holes"><feFuncA type="linear" slope="30" intercept="-18.4"><animate attributeName="intercept" values="-19.2;-17.9;-19.2" dur="14s" repeatCount="indefinite"/></feFuncA></feComponentTransfer>
+                <feComponentTransfer in="na" result="ring"><feFuncA type="linear" slope="30" intercept="-17.4"><animate attributeName="intercept" values="-18.2;-16.9;-18.2" dur="14s" repeatCount="indefinite"/></feFuncA></feComponentTransfer>
+                <feComponentTransfer in="na" result="scorch"><feFuncA type="linear" slope="10" intercept="-5.7"><animate attributeName="intercept" values="-6.0;-5.4;-6.0" dur="14s" repeatCount="indefinite"/></feFuncA></feComponentTransfer>
+                <feComposite in="SourceGraphic" in2="holes" operator="out" result="burnt"/>
+                <feColorMatrix in="burnt" type="matrix" values=".08 0 0 0 .03  0 .05 0 0 .012  0 0 .04 0 .006  0 0 0 1 0" result="dark"/>
+                <feComposite in="dark" in2="scorch" operator="in" result="soot"/>
+                <feFlood flood-color="#ff8a1e"><animate attributeName="flood-color" values="#ff8a1e;#ffc04a;#ff5a10;#ffa030;#ff8a1e" dur="1.4s" repeatCount="indefinite"/></feFlood>
+                <feComposite in2="ring" operator="in"/>
+                <feComposite in2="holes" operator="out"/>
+                <feComposite in2="SourceAlpha" operator="in" result="edge"/>
+                <feGaussianBlur in="edge" stdDeviation="5" result="edgeGlow"/>
+                <feMerge><feMergeNode in="burnt"/><feMergeNode in="soot"/><feMergeNode in="edgeGlow"/><feMergeNode in="edgeGlow"/><feMergeNode in="edge"/></feMerge>
+              </filter>
+            </defs>
+            <g filter="url(#pb-char)" font-size="150" font-family="Impact, 'Arial Black', sans-serif">
+              <text x="10" y="140" textLength="480" lengthAdjust="spacingAndGlyphs" fill="url(#pb-gP)">PARIS</text>
+              <text x="10" y="290" textLength="680" lengthAdjust="spacingAndGlyphs" fill="url(#pb-gB)">BURNING</text>
+            </g>
+          </svg>
+          <span class="ember" style="--x:6%;--y:22%;--d:3.1s;--w:0s"></span>
+          <span class="ember" style="--x:17%;--y:10%;--d:2.6s;--w:1.2s"></span>
+          <span class="ember" style="--x:29%;--y:14%;--d:3.6s;--w:0.5s"></span>
+          <span class="ember" style="--x:41%;--y:9%;--d:2.9s;--w:2.1s"></span>
+          <span class="ember" style="--x:55%;--y:12%;--d:3.3s;--w:1.6s"></span>
+          <span class="ember" style="--x:66%;--y:12%;--d:2.7s;--w:0.3s"></span>
+          <span class="ember" style="--x:9%;--y:58%;--d:3.4s;--w:2.6s"></span>
+          <span class="ember" style="--x:24%;--y:57%;--d:2.8s;--w:0.9s"></span>
+          <span class="ember" style="--x:38%;--y:60%;--d:3.2s;--w:1.9s"></span>
+          <span class="ember" style="--x:52%;--y:56%;--d:2.5s;--w:0.2s"></span>
+          <span class="ember" style="--x:67%;--y:58%;--d:3.5s;--w:1.4s"></span>
+          <span class="ember" style="--x:81%;--y:57%;--d:2.9s;--w:2.3s"></span>
+          <span class="ember" style="--x:93%;--y:60%;--d:3.0s;--w:0.7s"></span>
+        </div>
         <div class="tag" id="menu-tag">Boulevard de la République · 18h47</div>
         <div class="menu-buttons">
           <button data-action="play" id="btn-play" class="primary">PLAY</button>
