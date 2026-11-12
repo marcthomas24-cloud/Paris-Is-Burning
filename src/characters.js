@@ -180,7 +180,8 @@ export function policeOutfit(rng) {
   return { skin: tones[Math.floor(rng() * tones.length)], height: 0.96 + rng() * 0.1, build: 0.95 + rng() * 0.15 };
 }
 const JEANS = [0x2a3a5a, 0x1e2a44, 0x3b4b6b, 0x151a24, 0x222222, 0x4a4a48, 0x5a5040, 0x3a3f46, 0x6a6a70, 0x1b1b1b];
-const SHOES = [0xf0f0f0, 0xe8e8e8, 0x151515, 0x222222, 0x8a2a2a, 0x3a4a6a, 0xc8c0b0, 0xf4f4f4];
+// trainers are off-white: pure white bloomed into glowing feet under the low sun
+const SHOES = [0xcfcfca, 0xc6c6c2, 0x151515, 0x222222, 0x8a2a2a, 0x3a4a6a, 0xb8b0a2, 0xd4d4cf];
 const FOOTBALL = [
   // [pattern, a, b, c]  pattern: 2 vertical stripes, 3 hoops, 4 two-tone, 0 solid
   [2, 0x0b0b0b, 0xf2f2f2], [3, 0x0a7a35, 0xf2f2f2], [0, 0x1f3fa0], [4, 0xf2f2f2, 0x0a7a35], [0, 0xc8102e], [2, 0x7a1d3a, 0x1b2a6a], [0, 0xf2c230], [4, 0x0b0b0b, 0xd4202f],
@@ -685,7 +686,7 @@ export function clearItem(rig) {
 }
 
 // -------------------------------------------------------------------- poses
-const KEYS = ['mouth', 'smile', 'brow', 'y', 'lean', 'spX', 'spY', 'spZ', 'hdX', 'hdY', 'shLX', 'shLY', 'shLZ', 'elL', 'shRX', 'shRY', 'shRZ', 'elR', 'hpLX', 'hpLZ', 'knL', 'hpRX', 'hpRZ', 'knR', 'tiltX', 'tiltZ', 'itemZ', 'itemX'];
+const KEYS = ['mouth', 'smile', 'brow', 'y', 'lean', 'spX', 'spY', 'spZ', 'hdX', 'hdY', 'shLX', 'shLY', 'shLZ', 'elL', 'shRX', 'shRY', 'shRZ', 'elR', 'hpLX', 'hpLZ', 'knL', 'hpRX', 'hpRZ', 'knR', 'tiltX', 'tiltZ', 'itemZ', 'itemX', 'gzY'];
 export function newPose() { const p = {}; for (const k of KEYS) p[k] = 0; return p; }
 
 // Locomotion + idle base layer. speed in m/s.
@@ -721,8 +722,22 @@ export function baseLayer(P, rig, speed, t, dt, combat = false) {
 export function applyPose(rig, P, dt, rate = 14) {
   const cur = rig.pose;
   const k = 1 - Math.exp(-dt * rate);
+  const spY0 = cur.spY, spX0 = cur.spX;
   for (const key of KEYS) cur[key] += (P[key] - cur[key]) * k;
-  if (rig.skinned) { updateHuman(rig, cur, dt, rig.lodFull !== false); return; }
+  // follow-through: the head trails a fast turn or snap of the torso and catches up after it,
+  // so a swing, a throw or a blow taken carries through the neck instead of moving as one block
+  if (dt > 0) {
+    const kf = 1 - Math.exp(-dt * 9);
+    rig.lagY = (rig.lagY || 0) + (Math.max(-0.3, Math.min(0.3, -(cur.spY - spY0) / dt * 0.045)) - (rig.lagY || 0)) * kf;
+    rig.lagX = (rig.lagX || 0) + (Math.max(-0.25, Math.min(0.25, -(cur.spX - spX0) / dt * 0.04)) - (rig.lagX || 0)) * kf;
+  }
+  if (rig.skinned) {
+    const hy = cur.hdY, hx = cur.hdX;
+    cur.hdY += rig.lagY || 0; cur.hdX += rig.lagX || 0;
+    updateHuman(rig, cur, dt, rig.lodFull !== false);
+    cur.hdY = hy; cur.hdX = hx;
+    return;
+  }
   const c = cur;
   rig.hips.position.y = 0.93 + c.y;
   rig.hips.rotation.x = c.lean;

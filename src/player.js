@@ -2,6 +2,7 @@
 // shield stance, damage & reactions.
 import * as THREE from 'three';
 import { buildCharacter, addPoliceGear, newPose, baseLayer, applyPose, updateShield } from './characters.js';
+import { life, motion, breathe, idle, gaze } from './lifelike.js';
 import { Gear, GAS } from './gear.js';
 
 const WINDUP = 0.13, STRIKE = 0.12, RECOVER = 0.3;
@@ -301,6 +302,17 @@ export class Player {
     }
   }
 
+  // the closest active aggressor within a few metres, looked up a few times a second (for his gaze only)
+  _nearThreat(dt) {
+    this._ntT = (this._ntT || 0) - dt;
+    if (this._ntT <= 0) {
+      this._ntT = 0.3;
+      const c = this.game.crowd;
+      this._nt = c ? c.nearest(this.pos, (n) => c.isThreat(n) && n.state !== 'down', 9) : null;
+    }
+    return this._nt && this._nt.state !== 'gone' ? this._nt : null;
+  }
+
   _animate(dt, t) {
     const rig = this.rig;
     const P = newPose();
@@ -320,12 +332,13 @@ export class Player {
     updateShield(rig, bk);
     if (this.attack) {
       const a = this.attack;
-      if (a.phase === 'windup') { rate = 30; P.shRX = -2.6; P.shRZ = -0.45; P.elR = -1.35; P.spY = -0.45; P.spX = -0.05; }
+      // wind-up: the weight goes onto the back foot before the swing comes through
+      if (a.phase === 'windup') { rate = 30; P.shRX = -2.6; P.shRZ = -0.45; P.elR = -1.35; P.spY = -0.45; P.spX = -0.12; P.knR = Math.max(P.knR, 0.28); P.hpRX += 0.12; P.y -= 0.03; }
       else if (a.phase === 'strike') {
         rate = 34; P.shRX = -0.55; P.shRZ = 0.32; P.elR = -0.15; P.spY = 0.5; P.spX = 0.25; P.hpLX = -0.55; P.knL = 0.35; P.hpRX = 0.3;
         if (a.target && this._grounded(a.target)) { P.spX = 0.65; P.shRX = -0.2; P.knL = P.knR = 0.45; P.y = -0.1; } // stoop to someone on the ground
       }
-      else { rate = 10; P.shRX = -0.6; P.elR = -0.6; P.spY = 0.15; }
+      else { rate = 10; P.shRX = -0.6; P.elR = -0.6; P.spY = 0.15; P.spX = 0.1; P.knL = Math.max(P.knL, 0.2); }
     }
     if (this.gear.throwT > 0) {
       // grenade: arm back, then an overarm lob
@@ -338,6 +351,18 @@ export class Player {
       const f = this.forward();
       const back = this.staggerDir.dot(f) < 0; // pushed from the front
       P.spX = back ? -0.35 : 0.35; P.hdX = back ? -0.3 : 0.3; P.shRZ = -0.6; P.shLZ = 0.6;
+    }
+    // body language (lifelike.js): he leans into a run and a turn, breathes harder as his stamina
+    // goes, stoops when badly hurt, and keeps his eyes on whoever is coming for him
+    const L = life(rig, 777);
+    const tired = 1 - Math.min(1, this.stamina / 60), hurt = Math.max(0, 1 - this.health / 45);
+    if (!this.dead) {
+      motion(P, L, this.heading, this.speed, dt);
+      breathe(P, L, t, Math.min(1, tired * 0.8 + hurt * 0.5));
+      if (!this.attack && this.staggerT <= 0 && this.dodgeT <= 0) idle(P, L, t, (1 - Math.min(1, this.speed / 0.5)) * 0.7, false);
+      P.spX += hurt * 0.14 + tired * 0.05; P.hdX += hurt * 0.08;
+      const watch = this.lockTarget || this._nearThreat(dt);
+      if (!this.attack) gaze(P, L, this.pos, this.heading, watch ? watch.pos : null, watch ? 0.8 : 0, dt, t, 1.5);
     }
     if (this.dead) { rate = 6; P.tiltX = -1.5; P.y = 0.05; P.shLZ = 0.9; P.shRZ = -0.9; }
     applyPose(rig, P, dt, rate);

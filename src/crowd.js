@@ -1,6 +1,7 @@
 // Crowd simulation: per-agent state machines, perception with reaction delays,
 // panic contagion, steering/avoidance, spatial hashing and distance-based LOD.
 import * as THREE from 'three';
+import { life, pulse, motion, breathe, idle, gaze, startle, wary, talk, staggered, fallen, rising } from './lifelike.js';
 import { SHIELD_POSE, buildCharacter, randomOutfit, policeOutfit, giveItem, clearItem, newPose, baseLayer, applyPose, crouch, lying, setRingVisible, addPoliceGear, updateShield } from './characters.js';
 import { mulberry } from './textures.js';
 import { LAYOUT } from './world.js';
@@ -759,6 +760,8 @@ export class Crowd {
 
   _react(n, s) {
     if (DISABLED.has(n.state) || n.arrested || n.state === 'surrender') return;
+    // a start at a bang or a blow close by (a pose only: lifelike.js)
+    if (n.rig.life && (s.type === 'explosion' || s.type === 'violence' || s.type === 'projectile') && s.k > 0.12) n.rig.life.startle = Math.max(n.rig.life.startle, Math.min(1, 0.35 + s.k * 0.6));
     if (n.temperament === 'looter') {
       // only tear gas breaks up a looting crew
       if (s.type === 'teargas' && s.k > 0.35 && !n.state.startsWith('arson') && n.state !== 'flee') {
@@ -1135,18 +1138,26 @@ export class Crowd {
         P.shRX = (-2.4 + beat * 0.35) * on; P.elR = (-0.5 - beat * 0.3) * on - 0.15 * (1 - on); P.shRZ = -0.15 * on;
         P.hdX = -0.15 * on; P.y += Math.max(0, beat) * 0.008 * on;
       } else if (role === 'flag') {
-        P.shRX = -2.5; P.elR = -0.25; P.shRZ = -0.1 + Math.sin(t * 4 + n.id) * 0.45;
-        P.itemZ = Math.sin(t * 4 + n.id) * 0.25;
+        // waved overhead, then rested on the shoulder for a while: nobody holds an arm up all evening
+        const rest = pulse(n.id, t, 26, 0.42, 1), up = 1 - rest, w = Math.sin(t * 4 + n.id);
+        P.shRX = -2.5 * up - 0.95 * rest; P.elR = -0.25 * up - 1.75 * rest; P.shRZ = (-0.1 + w * 0.45) * up - 0.1 * rest;
+        P.itemZ = w * 0.25 * up; P.itemX = -0.5 * rest;
       } else if (role === 'bigflag') {
         const sw = Math.sin(t * 1.6 + n.id);
         P.shRX = -2.85; P.elR = -0.2; P.shLX = -2.6; P.elL = -0.6; P.shLZ = -0.2;
         P.spZ = sw * 0.12; P.itemZ = sw * 0.45; P.spX = -0.05;
       } else if (role === 'placard') {
         const b = Math.sin(t * 3 + n.id);
-        if (n.id % 2) { P.shRX = -2.75 + b * 0.1; P.elR = -0.15; P.shLX = -2.4; P.elL = -0.9; P.shLZ = -0.35; } // held aloft
+        if (n.id % 2) {
+          // held aloft, lowered to the chest now and then to rest the arms
+          const rest = pulse(n.id, t, 31, 0.36, 2), up = 1 - rest;
+          P.shRX = (-2.75 + b * 0.1) * up - 0.75 * rest; P.elR = -0.15 * up - 1.0 * rest; P.shLX = -2.4 * up - 0.75 * rest; P.elL = -0.9 * up - 1.0 * rest; P.shLZ = -0.35 * up - 0.2 * rest; P.shRZ = 0.2 * rest;
+        }
         else { P.shRX = P.shLX = -0.75; P.elR = P.elL = -1.0; P.shLZ = -0.2; P.shRZ = 0.2; }                     // held at the chest
       } else if (role === 'film') {
-        P.shRX = -1.45; P.elR = -0.85; P.shRZ = 0.12; P.hdX = 0.05;
+        // filming, then the phone comes down and they look at what they got
+        const chk = pulse(n.id, t, 19, 0.3, 3), up = 1 - chk;
+        P.shRX = -1.45 * up - 0.85 * chk; P.elR = -0.85 * up - 1.75 * chk; P.shRZ = 0.12 * up + 0.2 * chk; P.hdX = 0.05 * up + 0.38 * chk;
       } else if (role === 'banner') {
         P.shRX = P.shLX = -1.0; P.elR = P.elL = -0.6; P.shLZ = 0.2; P.shRZ = -0.2;
       } else if (role === 'shout') {
@@ -1155,7 +1166,9 @@ export class Crowd {
         P.shRX = (-1.6 + b * 0.25) * on; P.elR = -0.15 * on - 0.2 * (1 - on); P.spX += 0.12 * on; P.hdX = -0.2 * on;
       } else if (role === 'watch') {
         // bystander: arms folded, weight on one leg, head turning
-        P.shLX = P.shRX = -0.55; P.elL = P.elR = -2.0; P.shLZ = -0.42; P.shRZ = 0.42; P.hdY = Math.sin(t * 0.4 + n.id) * 0.5;
+        // arms folded for a spell, then loose (the idle layer below fills in what free arms do)
+        const f = pulse(n.id, t, 34, 0.55, 4);
+        P.shLX = P.shRX = -0.55 * f; P.elL = P.elR = -2.0 * f; P.shLZ = -0.42 * f; P.shRZ = 0.42 * f;
       } else if (role === 'photo') {
         // photographer: camera held up to the face, both hands
         P.shRX = -1.25; P.elR = -1.75; P.shRZ = 0.32; P.shLX = -1.25; P.elL = -1.75; P.shLZ = -0.32; P.hdX = 0.05;
@@ -1215,19 +1228,13 @@ export class Crowd {
       P.hpLX = -0.6; P.knL = 0.5; P.hpRX = 0.35;
     } else if (s === 'stagger') {
       rate = 18;
-      const b = n.staggerBack ? -1 : 1;
-      P.spX = 0.4 * b; P.hdX = 0.4 * b; P.shLZ = 0.9; P.shRZ = -0.9; P.shLX = -0.6; P.shRX = -0.4;
-      // a single stumbling step to catch the balance
-      const st = Math.sin(Math.min(1, n.st / Math.max(0.2, n.dur || 0.5)) * Math.PI);
-      P.elL = P.elR = -0.6; P.hpLX = -0.45 * st * b; P.knL = 0.25 + 0.3 * st; P.hpRX = 0.15 * st * b; P.knR = 0.2; P.y = -0.04 * st;
+      staggered(P, n.id, n.staggerBack, n.st, n.dur);
     } else if (s === 'down') {
-      rate = n.st < 0.5 ? 9 : 4;
-      lying(P, n.fallDir, 1, t);
+      rate = n.st < 0.7 ? 16 : 5;
+      fallen(P, n.id, n.fallDir, n.st, t);
     } else if (s === 'recover') {
       rate = 10;
-      const k = n.st / n.dur;
-      if (k < 0.5) { lying(P, n.fallDir, 1 - k * 2, t); crouch(P, k * 2); P.tiltX = n.fallDir * 1.5 * (1 - k * 2); P.shLX = -1.0; P.shRX = -1.0; }
-      else { crouch(P, (1 - k) * 2); P.shLX = -0.4; P.shRX = -0.4; }
+      rising(P, n.id, n.fallDir, Math.min(1, n.st / (n.dur || 1)), t);
     } else if (s === 'surrender') {
       P.shRX = P.shLX = -2.9; P.elR = P.elL = -0.5; P.shLZ = 0.25; P.shRZ = -0.25; P.hdX = 0.25;
     } else if (s === 'arrested') {
@@ -1275,6 +1282,48 @@ export class Crowd {
       P.shRX = -0.5; P.shRZ = 0.25; P.elR = -0.05; P.spY = 0.6; P.spX = 0.45; P.shLX = -0.2;
       P.hpLX = -0.6; P.knL = 0.5; P.hpRX = 0.35;
     }
+    // body language (lifelike.js): how they stand, breathe, lean and what they are looking at
+    const L = life(rig, n.id);
+    const pl = this.game.player;
+    if (!DISABLED.has(s) && s !== 'surrender') {
+      motion(P, L, n.heading, n.speed, dt);
+      const calm = act && n.temperament !== 'hostile';
+      const still = 1 - k01((n.speed - 0.15) / 0.5);
+      const armsFree = Math.abs(P.shRX) < 0.4 && Math.abs(P.shLX) < 0.4 && rig.itemType !== 'banner' && rig.itemType !== 'bigflag' && rig.itemType !== 'loot';
+      breathe(P, L, t, s === 'flee' ? 0.6 : n.gasT > 0 ? 0.8 : 0);
+      if (calm) idle(P, L, t, still, armsFree);
+      // attention: a commotion, the officer coming close, the person they are standing with
+      let look = null, lw = 0, ly = 1.6;
+      const dp = n.distToPlayer;
+      const busy = s === 'flee' || s === 'loot_smash' || s === 'loot_grab' || s.startsWith('arson') || s.startsWith('atk') || s.startsWith('throw') || s.startsWith('bomb');
+      if (tgt || busy) { /* fighters track their target above; the rest keep their eyes on what they are doing */ }
+      else if (n.lookT > 0 && s === 'act') { look = n.focus; lw = 1; ly = 1.2; }
+      else if (dp < 2.6 || (dp < 7 && (pl.attack || pl.sprinting || pulse(n.id, t, 9, 0.3, 6) > 0.5))) { look = pl.pos; lw = 1; ly = 1.7; }
+      else if (calm && still > 0.6) {
+        // someone to talk to: the nearest person standing with them, looked up now and then
+        L.buddyT -= dt;
+        if (L.buddyT <= 0) {
+          L.buddyT = 1.5 + (n.id % 7) * 0.2;
+          let bd = 2.2 * 2.2; L.buddy = null;
+          for (const o of this.query(n.pos.x, n.pos.z, 2.2, [])) {
+            if (o === n || o.id === undefined || o.speed > 0.4 || DISABLED.has(o.state) || o.state === 'gone') continue;
+            const d2 = (o.pos.x - n.pos.x) ** 2 + (o.pos.z - n.pos.z) ** 2;
+            if (d2 < bd) { bd = d2; L.buddy = o; }
+          }
+        }
+        if (L.buddy && n.role !== 'film' && n.role !== 'photo') { look = L.buddy.pos; lw = pulse(n.id, t, 7, 0.6, 7); }
+      }
+      if (!tgt && !busy) gaze(P, L, n.pos, n.heading, look, lw, dt, t, ly);
+      // the officer swinging or charging through at arm's length: open hands come up, weight goes back
+      const menace = calm && dp < 2.4 && (pl.attack || pl.sprinting) ? 1 : 0;
+      L.wary += (menace - L.wary) * (1 - Math.exp(-dt * (menace ? 9 : 2.5)));
+      wary(P, L.wary * (rig.itemType === 'none' || rig.itemType === 'phone' ? 1 : 0.4));
+      startle(P, L, dt);
+      L.chat = calm && still > 0.6 && armsFree && L.buddy ? 1 : 0;
+    } else {
+      breathe(P, L, t, s === 'down' || s === 'recover' ? 0.5 : 0.25);
+      L.chat = 0;
+    }
     // face: mouth and smile follow what the person is doing
     {
       const beat = Math.max(0, Math.sin(t * 5.2 + (n.group || 0)));
@@ -1285,7 +1334,11 @@ export class Crowd {
         else if (r === 'chant' || r === 'flag' || r === 'bigflag' || r === 'placard' || r === 'banner' || s === 'surge') { P.mouth = beat * 0.85; P.smile = n.temperament === 'peaceful' ? 0.25 : 0; P.brow = n.temperament === 'peaceful' ? 0 : 0.4; }
         else if (r === 'shout') { P.mouth = 0.45 + jit * 0.5; P.brow = 0.7; }
         else if (r === 'clap') { P.mouth = beat * 0.5; P.smile = 0.6; }
-        else { P.mouth = jit > 0.75 ? (jit - 0.75) * 1.6 : 0; P.smile = (n.id % 3 === 0) ? 0.35 : 0.1; } // chatting
+        else {
+          // chatting: the mouth moves, and with someone beside them a hand joins in
+          P.mouth = jit > 0.75 ? (jit - 0.75) * 1.6 : 0; P.smile = (n.id % 3 === 0) ? 0.35 : 0.1;
+          if (L.chat) talk(P, L, t, pulse(n.id, t, 11, 0.35, 8) * (L.wary < 0.2 ? 1 : 0));
+        }
       } else if (s === 'flee') { P.mouth = n.temperament === 'civilian' ? 0.6 + jit * 0.4 : 0.45 + jit * 0.35; P.brow = -1; }
       else if (s === 'pursue' || s === 'circle' || s.startsWith('atk') || s.startsWith('throw') || s.startsWith('bomb') || s === 'loot_smash' || s.startsWith('arson')) { P.mouth = 0.35 + jit * 0.6; P.brow = 1; }
       else if (s === 'stagger') { P.mouth = 0.85; P.brow = -1; }
@@ -1383,8 +1436,16 @@ export class Crowd {
       if (p.off) continue;
       const rig = p.rig;
       const P = newPose();
-      baseLayer(P, rig, 0, t + p.pos.x, dt, true);
+      // officers who step out or fall back walk there (they used to slide): the pace comes from how far they moved
+      const px = p.pos.x, pz = p.pos.z;
       if (p.role !== 'injured') this._copCombat(p, P, dt);
+      const mvx = p.pos.x - px, mvz = p.pos.z - pz, mv = dt > 0 ? Math.hypot(mvx, mvz) / dt : 0;
+      p.pace = (p.pace || 0) + (mv - (p.pace || 0)) * (1 - Math.exp(-dt * 10));
+      rig.back = mvx * Math.sin(p.heading) + mvz * Math.cos(p.heading) < -1e-5;
+      const stepKn = P.knL;
+      baseLayer(P, rig, p.pace, t + p.pos.x, dt, true);
+      if (stepKn && !rig.skinned) { P.knL = Math.max(P.knL, 0.3); P.knR = Math.max(P.knR, 0.15); }
+      const CL = life(rig, 900 + (p.lifeId ?? (p.lifeId = this.police.indexOf(p))));
       if (p.role === 'line' || p.role === 'squad') {
         const k = hostileNear ? 1 : 0.5;
         rig.shieldBlend += (k - rig.shieldBlend) * Math.min(1, dt * 4);
@@ -1406,6 +1467,12 @@ export class Crowd {
         if (!p.atk) p.heading = angleLerp(p.heading, headingTo(p.pos, player.pos), 1 - Math.exp(-dt * 1.5));
       }
       if (p.atk) this._copPose(p, P);
+      if (p.role !== 'injured') {
+        // each officer breathes, shifts their weight and scans the crowd on their own clock
+        breathe(P, CL, t, 0);
+        idle(P, CL, t, p.pace > 0.3 ? 0 : 0.6, false);
+        if (!p.atk) gaze(P, CL, p.pos, p.heading, null, 0, dt, t);
+      } else breathe(P, CL, t, 0.7);
       const pd = p.pos.distanceTo(player.pos);
       rig.root.visible = pd < 70;
       const sh = pd < 16;

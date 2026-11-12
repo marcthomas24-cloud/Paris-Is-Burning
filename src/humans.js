@@ -899,7 +899,8 @@ function buildGrip(rig, side) {
       const b = rig.bones[n]; if (!b) continue;
       const wq = new THREE.Quaternion(); rig.T.bind[n].decompose(_v, wq, _v2);
       const axis = new THREE.Vector3(0, 0, sgn).applyQuaternion(wq.clone().invert());
-      out.push({ b, q: new THREE.Quaternion().setFromAxisAngle(axis, i === 1 ? 1.2 : 1.3) });
+      // q: a fist round something held; r: the loose curl of a hand at rest (little finger most)
+      out.push({ b, q: new THREE.Quaternion().setFromAxisAngle(axis, i === 1 ? 1.2 : 1.3), r: new THREE.Quaternion().setFromAxisAngle(axis, (i === 1 ? 0.22 : 0.38) + ['Index', 'Middle', 'Ring', 'Pinky'].indexOf(f) * 0.06) });
     }
   }
   for (let i = 1; i <= 3; i++) {
@@ -907,7 +908,7 @@ function buildGrip(rig, side) {
     const b = rig.bones[n]; if (!b) continue;
     const wq = new THREE.Quaternion(); rig.T.bind[n].decompose(_v, wq, _v2);
     const axis = new THREE.Vector3(0, sgn * 0.6, 0.4).normalize().applyQuaternion(wq.clone().invert());
-    out.push({ b, q: new THREE.Quaternion().setFromAxisAngle(axis, 0.5) });
+    out.push({ b, q: new THREE.Quaternion().setFromAxisAngle(axis, 0.5), r: new THREE.Quaternion().setFromAxisAngle(axis, 0.18) });
   }
   return out;
 }
@@ -946,7 +947,8 @@ export function updateHuman(rig, P, dt, full = true) {
   A.idle.setEffectiveWeight(wIdle);
   A.walk.setEffectiveWeight(wWalk);
   A.run.setEffectiveWeight(wRun);
-  A.walk.timeScale = THREE.MathUtils.clamp(s / rig.walkRef, 0.4, 1.45);
+  // rig.back: stepping backwards while facing the same way (an officer returning to the line)
+  A.walk.timeScale = THREE.MathUtils.clamp(s / rig.walkRef, 0.4, 1.45) * (rig.back ? -1 : 1);
   A.run.timeScale = THREE.MathUtils.clamp(s / rig.runRef, 0.6, 1.4);
   rig.mixer.update(dt);
 
@@ -971,9 +973,10 @@ export function updateHuman(rig, P, dt, full = true) {
   rot3(b.LeftLeg, P.knL, 0, 0);
   rot3(b.RightUpLeg, P.hpRX, 0, P.hpRZ);
   rot3(b.RightLeg, P.knR, 0, 0);
-  // fists around held items
-  if (rig.gripR) { for (const g of rig.grip.R) g.b.quaternion.multiply(g.q); b.RightHand.updateMatrixWorld(true); }
-  if (rig.gripL) { for (const g of rig.grip.L) g.b.quaternion.multiply(g.q); b.LeftHand.updateMatrixWorld(true); }
+  // fists around held items; empty hands hang with the fingers loosely curled
+  for (const g of rig.grip.R) g.b.quaternion.multiply(rig.gripR ? g.q : g.r);
+  for (const g of rig.grip.L) g.b.quaternion.multiply(rig.gripL ? g.q : g.r);
+  b.RightHand.updateMatrixWorld(true); b.LeftHand.updateMatrixWorld(true);
   if (rig.item && (rig.itemType === 'bigflag' || rig.itemType === 'flag' || rig.itemType === 'placard')) {
     rig.item.rotation.z = P.itemZ; rig.item.rotation.x = P.itemX;
   }
@@ -1011,7 +1014,7 @@ function updateFace(rig, P, dt) {
   const b = f.blink > 0 && f.blinkM === undefined ? 0.12 : 1;
   for (const e of f.eyes) {
     e.quaternion.copy(e.userData.restQ);
-    rotWorld(e, cy, f.sx + P.hdY * -0.3);
+    rotWorld(e, cy, f.sx * (P.gzY ? 0.4 : 1) + P.hdY * -0.3 + (P.gzY || 0)); // the eyes lead the head to what it is turning to
     rotWorld(e, cx, f.sy);
     e.scale.set(1, b, 1);
     e.updateMatrixWorld(true);
