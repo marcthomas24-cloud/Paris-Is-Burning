@@ -106,7 +106,7 @@ medics in, gets the organiser to call it, and holds back a line of CRS who want 
 
 **New verb: talk.** Approach with the baton lowered and hold interact to speak with marked people. Short
 exchanges with two or three replies (the Revolution plan's `dialogue.js`). What works depends on the night:
-the campaign records already say whether peaceful people were struck in Levels 1–5, and the square remembers.
+the campaign records already say whether peaceful people were struck in the latest run of each of Levels 1–5, and the square remembers.
 
 **Beats.**
 1. *The walk in (2 min).* No HUD threats. The crowd watches the officer cross the square. This is the body-language layer's set piece: every head turns.
@@ -123,7 +123,7 @@ the campaign records already say whether peaceful people were struck in Levels 1
 | The exhausted crowd | Sitting on kerbs and the monument steps, leaning on each other, wrapped in flags | Sit, lean and huddle poses; slow blink and head-drop; no chanting roles |
 | The CRS line | Impatient: shields tapping, weight forward | Shield-tap loop; a captain who argues back |
 
-**Systems.** Dialogue (shared with the Revolution campaign); a "memory" modifier read from campaign records;
+**Systems.** Dialogue (shared with the Revolution campaign); a "memory" modifier read from each level's latest completed run in the campaign records;
 sitting as a crowd state; the lighting system moving from `night3` to a new `dawn` preset during play, which
 its design already allows since presets only change values.
 
@@ -163,8 +163,8 @@ delivers orders. Level 6 is mostly content on top of both. Rough size relative t
 far): Level 4 about the same, Level 5 somewhat larger because of the squad, Level 6 smaller in systems and
 larger in writing and animation. Do B1 and B11 before any of them.
 
-## Open questions
+## Decisions (2026-11-12)
 
-1. Do Levels 4–6 extend the State campaign to six, or ship as a second act with its own medal table? The brief assumes six.
-2. Is a child character acceptable in a game with crowd violence, even though children are never targets and never struck? If not, Level 4's families become adult pairs.
-3. Should Level 6's "memory" read only Level 1–5 best runs, or the latest runs? Best runs are kinder; latest runs are more honest.
+1. **Six levels, one campaign.** Levels 4–6 extend the State campaign; the campaign table, medals, records and the finale's totals grow from three levels to six. Completing Level 3 unlocks Level 4 instead of the finale.
+2. **Children are in.** Level 4's families are an adult with a child. Children are never targets, are never struck and cannot be struck: blows and projectiles pass to the adult, and a child in a crush is lifted by the adult rather than falling.
+3. **Level 6 remembers the latest runs.** The square's memory reads each level's most recent completed run (`records[id].last` in `Progress`), not the best one. A player who wants a kinder dawn has to go back and play the earlier night better.
