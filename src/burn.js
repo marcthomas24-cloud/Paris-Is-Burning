@@ -155,6 +155,20 @@ export class VehicleFires {
     return true;
   }
 
+  // put a burning vehicle out (Level 5: an officer's extinguisher). The flames go and it stays
+  // as charred as it had got; like a shell, it does not catch again before the level restarts.
+  extinguish(v) {
+    const b = this.burning.get(v.id);
+    if (!b) return false;
+    this.game.effects.removeFire(b.fire);
+    const s = { pos: new THREE.Vector3(v.x, 1.6, v.z), rate: 0.5, scale: 0.9 };
+    this.game.world.smokes.push(s); this.wisps.push(s);
+    v.state = 'shell';
+    data[v.id * 4 + 1] = 0; burnTexture.needsUpdate = true;
+    this.burning.delete(v.id);
+    return true;
+  }
+
   _scorchAt(v) {
     if (this.scorchN + 1 >= BURN.scorchMax) return;
     const i = ++this.scorchN;

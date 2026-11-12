@@ -108,11 +108,11 @@ While the crowd is *tense* or *volatile*, ambient attackers come sooner (up to 2
 
 ## Levels
 
-**Level 1** is the mission described above. Completing it unlocks **Level 2 · Nuit** on that device (saved in `localStorage`; a CONTINUE button appears on the results screen). Completing Level 2 unlocks **Level 3 · The Breakout** the same way, and Level 3 unlocks **Level 4 · Last Train**.
+**Level 1** is the mission described above. Completing it unlocks **Level 2 · Nuit** on that device (saved in `localStorage`; a CONTINUE button appears on the results screen). Completing Level 2 unlocks **Level 3 · The Breakout** the same way, Level 3 unlocks **Level 4 · Last Train**, and Level 4 unlocks **Level 5 · The Quays**.
 
 ### Campaign
 
-The four levels form one campaign, *one night in Paris* from 18h47 to dawn (`src/campaign.js`; design in `docs/campaign-plan.md`).
+The five levels form one campaign, *one night in Paris* from 18h47 to dawn (`src/campaign.js`; design in `docs/campaign-plan.md`).
 
 - **Title screen.** PLAY starts Level 1 on a new device. After that the button reads CONTINUE · LEVEL N (or REPLAY once everything is complete) and goes straight into the level the campaign leads to. The tag line says where and when that level is.
 - **CAMPAIGN** opens the mission select. The three levels sit on a line through the night (it runs down the screen on narrow phones), each marked LOCKED, NEXT or COMPLETE, with its best medal and score. The selected level shows its briefing, its objectives, its medal citations (ticked for the best run) and its record: best score, rating, fastest time and number of completions. START or REPLAY plays it. CAMPAIGN is also on the pause and results screens.
@@ -126,7 +126,7 @@ The four levels form one campaign, *one night in Paris* from 18h47 to dawn (`src
 
   All four citations earn **Gold · Commendation**, three **Silver · Professional**, one or two **Bronze · Adequate**, and none leaves the run **Under review**. The score targets are the old Commendation bands. The scripted bot usually earns Bronze or Silver.
 - **Results.** Every level has the same results layout: its rows (now including damage received), the score, the medal with the four citations and their values, any NEW BEST / FIRST COMPLETION tags (or your best so far), the radio hook, and a card for the next level and its first objective. The buttons are CONTINUE · LEVEL N, REPLAY (RESTART after a failure), RETRY SECTION after a failure at a checkpoint, and CAMPAIGN.
-- **Finale.** Winning Level 4 (the last level built so far; Levels 5 and 6 are briefed in `docs/levels-brief.md`) offers CAMPAIGN COMPLETE: dawn at 05h40, a short epilogue, each level's best medal, score and time, the campaign score (the sum of the best scores) and a campaign rating (the lowest of the levels' medals). After that it can be reached from the campaign screen, and every level stays replayable.
+- **Finale.** Winning Level 5 (the last level built so far; Level 6 is briefed in `docs/levels-brief.md`) offers CAMPAIGN COMPLETE: dawn at 05h40, a short epilogue, each level's best medal, score and time, the campaign score (the sum of the best scores) and a campaign rating (the lowest of the levels' medals). After that it can be reached from the campaign screen, and every level stays replayable.
 - **Records** are kept per level on the device: plays, completions, best score, best medal, fastest time, the best run and the latest one. A worse run never replaces a better one. Saves from before the campaign (unlocks only) still load. If storage is blocked the game plays normally and remembers nothing. **Options → RESET CAMPAIGN** (tap twice) clears unlocks and records but keeps the settings, which are already saved.
 - **Briefing.** The first-play briefing names the level you start in. Level 1 now opens with a title card, as Levels 2 and 3 do. The pause screen shows the level, what is happening now, and its objectives.
 
@@ -200,7 +200,22 @@ His animation is procedural over the shared rigs: a bladed, bouncing guard with 
 
 **Results and medal:** score 7,200 or more, 200 people home or more, damage received 60 or less, and nobody trampled. Five people trampled ends the level. Score: 10 per person home, beat bonuses (400 / 600 / 600 / 1000), +150 for each person pulled clear, +500 for dealing with the crew with no panic wave, +400 for the casualty carried aboard, +800 for nobody trampled, −300 per person trampled, −250 per panic wave. The scripted bot, which fights the crew beside the queue, usually earns Silver. There are no section checkpoints in this level.
 
-**Lighting presets** (`src/levels.js`): `dusk` (Level 1), `night` (Level 2), `night3` (Level 3) and `station` (Level 4). A preset only changes light colours and intensities, fog, sky uniforms, lamp glow and exposure. It never adds or removes lights, so switching does not compile new shaders.
+**Level 5 · The Quays** (unlocked by completing Level 4; `?dev&level=5` opens it directly, `&stage=0-3` picks the beat). 04h05, Canal Saint-Martin (`src/quays.js`, 330 m north of the boulevard: two quays 285 m long either side of 14 m of water, five bridges, eight side streets, the lock and the vault at the far end). The last violent groups work the canal in small fast bands. You lead a squad of four. There is no boss; the problem is that there are more places to be than officers. Four beats (`src/level5.js`):
+
+1. **First Bridge.** The new verb, **order**. **1** (hold): the nearest officer with you stays where you stand. **2** (follow): the nearest officer posted comes back; hold the key and they all do. Post two on the first footbridge and take two across. A band comes for the bridge, finds it held and turns back.
+2. **Two Quays.** Bands of five to eight come out of a side street every 46 to 60 s, jog to a parked car, light it and run for another side street. **3** (advance) sends an officer to where the camera looks (look up to send them further), where they hold. A bridge is *held* while you or an officer stands within 7 m of it; a band plans its way only over bridges nobody holds, and will not go for a car with one of you within 14 m. A band that walks into an officer before it has done anything turns back (+100). Nobody in a band may be struck until the band acts: after that its members are marked, officers within reach go for them, and a runner an officer has hit twice goes down to be arrested. Runners throw bottles at officers as they leave.
+3. **The Fire Engine.** A shop burns on Quai de Valmy. A fire engine drives in and its crew of three needs 200 s on the hose. Bands now also go for the crew: a shove or a bottle among them sends the crew behind the engine for 14 s and the clock stops. An officer within 9 m of the hose keeps bands off it, but the bridges and the cars still need people.
+4. **The Lock.** The last ten gather at the lock on the east quay, the water behind them and one way out, the Passage de l'Écluse. Walk up with the passage open and they run through it: the level ends without a fight (+600). Post an officer at the passage mouth (or stand in it) and they are cornered: all ten turn and fight, most of them the officer in the way.
+
+**The squad.** Four of the crowd's own CRS officers (`crowd.js`), given a post that moves with the order: the existing officer behaviour does the fighting. Each has a call sign on a back patch (VEGA, ORION, LYNX, MISTRAL), a different build, a ring on the ground in the colour of their order (blue follow, green hold, amber advancing, red down) and a letter on the minimap. They raise an arm to acknowledge, tire when they run (a spent officer drops to a jog and bends over to breathe when stopped), arrest runners who are down, and when posted put out a burning car within 13 m of their post. An officer has 4 health: a bottle takes 1, a blow in the lock fight half, and a raised shield stops about half of what comes from the front. At 0 they sit down hurt until you help them up (**E**, back at 2 health). All four down ends the level.
+
+**Fires.** A lit car can be put out until it starts to smoulder (roughly 30 to 45 s): **E** beside it for 2.4 s, or a posted officer in 4 s. A car left blazing with none of you within 14 m for 22 s sets the next one along the kerb alight, once. Fourteen cars burnt out ends the level.
+
+**People.** Twelve late walkers are on the quays and behave like the boulevard's bystanders. Sixteen residents watch from lit windows, some filming (upper bodies only, one mesh each). The pompiers wear dark blue with yellow and silver bands.
+
+**Results and medal:** score 6,500 or more, 4 arrests or more, 3 of 4 squad officers standing or more, and 5 cars burnt out or fewer. Score: beat bonuses (400 / 600 / 600 / 1000), +100 for the first bridge held, +100 per band turned back, +150 per arrest (+100 when an officer makes it), +50 for an officer putting a runner down, +200 for an arson stopped with the bottle in hand, +150 per fire put out, −100 per car burnt out, −50 per spread, −200 per officer down and +100 for helping one up, −100 each time the fire crew is hit, +500 for the building saved (−300 if the crew runs out of time at 400 s), +600 for the lock without a fight, +200 per officer standing at the end, and the proportionate-force rules of the other levels. There are no section checkpoints in this level. The numbers come from bot runs (the bot gives almost no orders) and have not been tuned by a person playing it.
+
+**Lighting presets** (`src/levels.js`): `dusk` (Level 1), `night` (Level 2), `night3` (Level 3), `station` (Level 4) and `canal` (Level 5). A preset only changes light colours and intensities, fog, sky uniforms, lamp glow and exposure. It never adds or removes lights, so switching does not compile new shaders.
 
 ## Fairness rule
 
@@ -356,6 +371,8 @@ src/
                  checkpoints, results
   level4.js      Level 4 mission script: travellers, density and crush, direct, gates and the train, the crew
   station.js     The Level 4 district: Gare de l'Est (forecourt, concourse, platform, the train)
+  level5.js      Level 5 mission script: squad orders, bands and their routes, fires, the fire engine, the lock
+  quays.js       The Level 5 district: Canal Saint-Martin (two quays, bridges, the lock, the fire engine)
   district.js    The Level 3 district: streets, square, landmarks, its own shop fronts, built on first entry
   convoy.js      The transfer van: path following, stop rules, moving collider, integrity, breaches
   hazards.js     Level 3 hazards (cook-off car, petrol trail, scaffold, fireworks) and their crew actors

@@ -2,7 +2,8 @@
 // the campaign screen, the results and the finale; the level scripts know nothing of it.
 // Medals are a record of how a mission was played, never a currency: completion is required,
 // then four citations decide it: score, arrests, damage received and no peaceful person struck;
-// the station (Level 4) cites people home and nobody trampled instead of arrests and force.
+// the station (Level 4) cites people home and nobody trampled instead of arrests and force,
+// the quays (Level 5) officers still standing and cars burnt out instead of damage and force.
 // Records are kept by Progress (levels.js) in the same storage key as the unlocks.
 import { Progress } from './levels.js';
 
@@ -35,6 +36,13 @@ export const CAMPAIGN = [
     objectives: ['Direct people: hold F to point and call', 'Keep the density under the red line', 'Deal with the crew without a stampede', 'Get the last people onto the last train'],
     targets: { score: 7200, home: 200, damage: 60 }, cite: 'station',
   },
+  {
+    id: 5, time: '04h05', title: 'THE QUAYS', card: 'THE QUAYS', place: 'Canal Saint-Martin',
+    opening: 'You are a CRS officer on Quai de Jemmapes, with four officers under your orders.',
+    briefing: 'The last violent groups have left the boulevards for the canal: small fast bands that light a car and vanish over the footbridges. You lead a squad of four along two quays and five bridges. There are more places to be than officers to put there.',
+    objectives: ['Order the squad: 1 hold, 2 follow, 3 advance', 'Hold the bridges and turn the bands back', 'Protect the fire crew at the burning shop', 'End it at the lock'],
+    targets: { score: 6500, arrests: 4, squad: 3, burnt: 5 }, cite: 'quays',
+  },
 ];
 export const mission = (id) => CAMPAIGN.find((c) => c.id === id) || CAMPAIGN[0];
 
@@ -53,13 +61,18 @@ const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // What a finished run is judged on (the same fields in every level).
 export function summarize(m, win) {
   const s = m.stats;
-  return { win: !!win, score: m.score, arrests: s.arrests, damage: Math.round(s.damageTaken || 0), peaceful: s.peaceful, home: s.home, trampled: s.trampled, time: m.t, assisted: !!s.assisted };
+  return { win: !!win, score: m.score, arrests: s.arrests, damage: Math.round(s.damageTaken || 0), peaceful: s.peaceful, home: s.home, trampled: s.trampled, squad: s.squad, burnt: s.burnt, time: m.t, assisted: !!s.assisted };
 }
 
 // The four citations and the medal they add up to. No medal without completion.
 export function assess(id, run) {
   const c = mission(id), t = c.targets, station = c.cite === 'station';
-  const citations = [
+  const citations = c.cite === 'quays' ? [
+    { key: 'score', label: `Score ${fmtScore(t.score)} or more`, value: fmtScore(run.score), ok: run.score >= t.score },
+    { key: 'arrests', label: `${t.arrests} arrests or more`, value: run.arrests, ok: run.arrests >= t.arrests },
+    { key: 'squad', label: `${t.squad} of 4 squad officers standing or more`, value: run.squad ?? '—', ok: run.squad >= t.squad },
+    { key: 'burnt', label: `${t.burnt} cars burnt out or fewer`, value: run.burnt ?? '—', ok: run.burnt >= 0 && run.burnt <= t.burnt },
+  ] : [
     { key: 'score', label: `Score ${fmtScore(t.score)} or more`, value: fmtScore(run.score), ok: run.score >= t.score },
     station ? { key: 'home', label: `${t.home} people home or more`, value: run.home ?? '—', ok: run.home >= t.home }
       : { key: 'arrests', label: `${t.arrests} arrests or more`, value: run.arrests, ok: run.arrests >= t.arrests },
@@ -162,7 +175,7 @@ export class CampaignUI {
     }
     const c = mission(sel), rec = Progress.record(sel), open = Progress.unlocked(sel), comp = Progress.completed(sel);
     const best = rec && rec.bestRun;
-    const cites = best ? assess(sel, best).citations : assess(sel, { win: false, score: -1, arrests: -1, damage: Infinity, peaceful: -1, home: -1, trampled: -1 }).citations;
+    const cites = best ? assess(sel, best).citations : assess(sel, { win: false, score: -1, arrests: -1, damage: Infinity, peaceful: -1, home: -1, trampled: -1, squad: -1, burnt: -1 }).citations;
     const chip = comp ? '<span class="chip done">COMPLETE</span>' : open ? (sel === next ? '<span class="chip">NEXT</span>' : '<span class="chip calm">OPEN</span>') : '<span class="chip calm">LOCKED</span>';
     this.el.detail.innerHTML = `<div class="cmp-head">${chip}<span>LEVEL ${c.id} · ${c.time} · ${esc(c.place)}</span></div>`
       + `<h3>${esc(c.title)}</h3><p>${esc(c.briefing)}</p>`
@@ -194,7 +207,7 @@ export class CampaignUI {
     const rating = Math.min(...medals);
     const total = recs.reduce((a, { r }) => a + (r ? r.bestScore : 0), 0);
     const clean = recs.every(({ r }) => r && r.bestRun && r.bestRun.peaceful === 0);
-    $('fin-text').innerHTML = '<p>The boulevard is quiet. Le Patron is with the gendarmerie, the Fixer is in the cell beside him and their crews have scattered. The last train has left Gare de l\'Est.</p>'
+    $('fin-text').innerHTML = '<p>The boulevard is quiet. Le Patron is with the gendarmerie, the Fixer is in the cell beside him and their crews have scattered. The last train has left Gare de l\'Est and the canal is quiet.</p>'
       + `<p>${clean ? 'Nobody who came out to march tonight was struck by your baton.' : 'Most of the people on the street tonight came to demonstrate, and went home.'}</p>`;
     $('fin-stats').innerHTML = recs.map(({ c, r }) => `<div class="row"><span>${medalDisc(r ? r.bestMedal : 0)} Level ${c.id} · ${esc(c.card)}</span><span>${r && r.wins ? fmtScore(r.bestScore) + (r.bestTime ? ' · ' + fmtTime(r.bestTime) : '') : '—'}</span></div>`).join('')
       + `<div class="row total"><span>CAMPAIGN SCORE</span><span>${fmtScore(total)}</span></div>`

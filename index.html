@@ -42,7 +42,7 @@
 
       <div id="controls-hint" class="panel">
         <div><b>WASD</b> move · <b>Shift</b> sprint · <b>Space</b> dodge</div>
-        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest · <b>Q</b> first aid · <b>G</b> tear gas · <b>B</b> barrier<span id="hint-direct" class="hidden"> · <b>F</b> direct (hold)</span></div>
+        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest · <b>Q</b> first aid · <b>G</b> tear gas · <b>B</b> barrier<span id="hint-direct" class="hidden"> · <b>F</b> direct (hold)</span><span id="hint-order" class="hidden"> · <b>1</b> hold · <b>2</b> follow · <b>3</b> advance</span></div>
         <div><b>Esc</b> pause · <b>H</b> hide hints</div>
       </div>
 
@@ -67,6 +67,9 @@
           <button data-k="ShiftLeft" class="tb toggle" id="tb-sprint" aria-label="Sprint (toggle)">SPRINT</button>
           <button data-k="KeyQ" class="tb" id="tb-medkit" aria-label="First aid">✚ AID</button>
           <button data-k="KeyF" class="tb hidden" id="tb-direct" aria-label="Point and call (hold)">DIRECT</button>
+          <button data-k="Digit1" class="tb hidden" id="tb-hold" aria-label="Order: hold here">HOLD</button>
+          <button data-k="Digit2" class="tb hidden" id="tb-follow" aria-label="Order: follow me (hold: everyone)">FOLLOW</button>
+          <button data-k="Digit3" class="tb hidden" id="tb-advance" aria-label="Order: advance to where you look">ADV</button>
           <button data-k="KeyG" class="tb" id="tb-gas" aria-label="Throw tear gas">GAS</button>
           <button data-k="KeyB" class="tb" id="tb-barrier" aria-label="Place or pick up a barrier">BARRIER</button>
           <button data-k="Space" class="tb" id="tb-dodge" aria-label="Dodge">DODGE</button>
@@ -227,6 +230,7 @@
           <tr><td>G</td><td>Throw a tear-gas grenade where the camera looks (aim higher to throw further). 3 per phase, none during boss fights</td></tr>
           <tr><td>B</td><td>Police barrier: shows a preview in front of you (green where it fits); B again or left mouse places it, right mouse or G cancels. B beside one of your barriers picks it up. 4 carried; the crowd walks round them</td></tr>
           <tr><td>F (hold)</td><td>Direct, from Level 4: point and call. Calm people within about 8 m go the way the camera looks. Call just after swinging the baton and it frightens them instead</td></tr>
+          <tr><td>1 · 2 · 3</td><td>Orders, in Level 5: <b>1</b> the nearest officer with you holds where you stand · <b>2</b> the nearest one posted comes back to you (hold the key: everyone) · <b>3</b> one advances to where the camera looks and holds there. E beside a burning car puts it out; E beside an officer who is down helps them up</td></tr>
           <tr><td>Q</td><td>First aid — restores 40 health (3 kits per run)</td></tr>
           <tr><td>H</td><td>Toggle control hints</td></tr>
           <tr><td>M</td><td>Mute / unmute sound</td></tr>

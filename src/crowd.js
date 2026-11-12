@@ -852,6 +852,8 @@ export class Crowd {
       if (v && v.targetable() && (n.targetMode === 'vehicle' || (pd > 10 && v.distTo(player.pos) > 12))) return v.targetFor(n);
       return { pos: player.pos, isPlayer: true };
     }
+    // Level 5: a cornered fighter goes for the nearest officer of the squad, or the player
+    if (n.targetMode === 'squad') { const m = this.game.missions, t = m.squadTargetFor && m.squadTargetFor(n); return t || { pos: player.pos, isPlayer: true }; }
     if (n.targetMode === 'officers' && pd > 3.5) {
       let best = null, bd = Infinity;
       for (const p of this.police) if (!p.off && (p.role === 'guard' || p.role === 'injured')) { const d = p.pos.distanceToSquared(n.pos); if (d < bd) { bd = d; best = p; } }
@@ -1440,8 +1442,10 @@ export class Crowd {
       const rig = p.rig;
       const P = newPose();
       // officers who step out or fall back walk there (they used to slide): the pace comes from how far they moved
-      const px = p.pos.x, pz = p.pos.z;
+      // (measured since the last frame, so an officer a level script moves walks too: Level 5's squad)
+      const px = p.lx ?? p.pos.x, pz = p.lz ?? p.pos.z;
       if (p.role !== 'injured') this._copCombat(p, P, dt);
+      p.lx = p.pos.x; p.lz = p.pos.z;
       const mvx = p.pos.x - px, mvz = p.pos.z - pz, mv = dt > 0 ? Math.hypot(mvx, mvz) / dt : 0;
       p.pace = (p.pace || 0) + (mv - (p.pace || 0)) * (1 - Math.exp(-dt * 10));
       rig.back = mvx * Math.sin(p.heading) + mvz * Math.cos(p.heading) < -1e-5;
@@ -1458,7 +1462,7 @@ export class Crowd {
         // look toward nearest threat
         let best = null, bd = 400;
         for (const n of this.npcs) if (this.isThreat(n)) { const d = n.pos.distanceToSquared(p.pos); if (d < bd) { bd = d; best = n; } }
-        const want = best ? headingTo(p.pos, best.pos) : Math.PI;
+        const want = best ? headingTo(p.pos, best.pos) : p.face ?? Math.PI; // (face: where a level has them look)
         if (!p.atk) p.heading = angleLerp(p.heading, want, 1 - Math.exp(-dt * 3));
       } else if (p.role === 'injured') {
         P.hpLX = P.hpRX = -1.5; P.knL = 0.2; P.knR = 1.2; P.y = -0.62; P.spX = -0.3; P.shLX = -0.4; P.shLZ = 0.4; P.hdX = 0.2;
@@ -1472,7 +1476,8 @@ export class Crowd {
       if (p.atk) this._copPose(p, P);
       if (p.role !== 'injured') {
         // each officer breathes, shifts their weight and scans the crowd on their own clock
-        breathe(P, CL, t, 0);
+        // (effort: a level's tired officer breathes harder)
+        breathe(P, CL, t, p.effort || 0);
         idle(P, CL, t, p.pace > 0.3 ? 0 : 0.6, false);
         if (!p.atk) gaze(P, CL, p.pos, p.heading, null, 0, dt, t);
       } else breathe(P, CL, t, 0.7);
@@ -1481,6 +1486,7 @@ export class Crowd {
       const sh = pd < 16;
       if (sh !== p.shadow) { p.shadow = sh; for (const m of rig.meshes) m.castShadow = sh; }
       if (!rig.root.visible) continue;
+      if (p.pose) p.pose(P, dt, t); // a level's own layer (Level 5: acknowledging an order, kneeling to arrest)
       applyPose(rig, P, dt, p.atk ? 26 : 8);
       rig.root.position.copy(p.pos);
       rig.root.rotation.y = p.heading;

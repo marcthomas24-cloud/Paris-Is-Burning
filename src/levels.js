@@ -10,6 +10,8 @@ import { Level3, L3_PHASES, L3_CROWD, L3_EVENTS } from './level3.js';
 import { DISTRICT } from './district.js';
 import { Level4, L4_PHASES, L4_CROWD, L4_EVENTS } from './level4.js';
 import { STATION, stationArea } from './station.js';
+import { Level5, L5_PHASES, L5_CROWD, L5_EVENTS } from './level5.js';
+import { QUAYS, quaysArea } from './quays.js';
 
 export const LIGHTING = {
   // the original look, values unchanged
@@ -47,6 +49,15 @@ export const LIGHTING = {
     sky: { horizon: [0.16, 0.12, 0.10], low: [0.07, 0.08, 0.11], top: [0.02, 0.03, 0.05], glow: [0.6, 0.28, 0.12], glowK: 0.3, haze: [0.13, 0.11, 0.10] },
     lamp: 3.4, beaconOn: 24, beaconOff: 3, fireLight: 1.4, puddleEnv: 0.4, smokeTint: [0.5, 0.48, 0.47],
   },
+  // Level 5: the canal an hour before dawn. Mist on the water, the lamps along the promenades,
+  // a cold moon high over the quays.
+  canal: {
+    hemiSky: 0x66769a, hemiGround: 0x46403a, hemiI: 1.7,
+    sunColor: 0xa9bfe6, sunI: 1.25, sunOffset: [-24, 70, 30],
+    exposure: 1.22, baseFog: 0.0095, fogA: 0x141a24, fogB: 0x2a2420,
+    sky: { horizon: [0.12, 0.13, 0.17], low: [0.06, 0.08, 0.13], top: [0.02, 0.03, 0.07], glow: [0.5, 0.3, 0.18], glowK: 0.22, haze: [0.12, 0.12, 0.14] },
+    lamp: 3.8, beaconOn: 24, beaconOff: 3, fireLight: 1.6, puddleEnv: 0.55, smokeTint: [0.42, 0.42, 0.44],
+  },
 };
 
 export const LEVELS = {
@@ -82,6 +93,16 @@ export const LEVELS = {
     crowdLayout: L4_CROWD, events: L4_EVENTS, sirenLanes: [560, 585],
     layout: STATION, areaAt: stationArea, // developer tools
   },
+  // The canal (Level5): a squad of four to place along two quays. Completing Level 4 unlocks it.
+  5: {
+    id: 5, name: 'THE QUAYS', tag: 'Canal Saint-Martin · 04h05',
+    Missions: Level5, phases: L5_PHASES, lighting: 'canal', hazardDir: 1,
+    policeOff: ['line', 'injured', 'guard'], music: true, musicTheme: 'l3',
+    start: QUAYS.start, bounds: QUAYS.bounds,
+    district: 'l5', brawls: false, order: true, // order: the officer commands a squad (1 / 2 / 3)
+    crowdLayout: L5_CROWD, events: L5_EVENTS, sirenLanes: [-880, -520],
+    layout: QUAYS, areaAt: quaysArea, // developer tools
+  },
 };
 
 // Unlocks and records persist on this device. Storage can be unavailable (private windows,
@@ -112,7 +133,7 @@ export const Progress = {
     p.lastPlayed = id;
     const out = { firstWin: false, score: false, medal: false, time: false };
     if (run.win) {
-      const sum = { score: run.score, arrests: run.arrests, damage: run.damage, peaceful: run.peaceful, home: run.home, trampled: run.trampled, time: Math.round(run.time), medal, win: true };
+      const sum = { score: run.score, arrests: run.arrests, damage: run.damage, peaceful: run.peaceful, home: run.home, trampled: run.trampled, squad: run.squad, burnt: run.burnt, time: Math.round(run.time), medal, win: true };
       out.firstWin = !r.wins;
       out.score = run.score > r.bestScore; out.medal = medal > r.bestMedal; out.time = r.bestTime === null || run.time < r.bestTime;
       r.wins++;

@@ -236,6 +236,8 @@ class Game {
     this.applyLighting(def.lighting);
     // the direct verb (F) belongs to the levels that use it
     for (const id of ['hint-direct', 'tb-direct']) $(id).classList.toggle('hidden', !def.direct);
+    // ... and so do the squad's orders (1 / 2 / 3)
+    for (const id of ['hint-order', 'tb-hold', 'tb-follow', 'tb-advance']) $(id).classList.toggle('hidden', !def.order);
   }
 
   // Play a short camera sequence (see cinematic.js). Developer runs can skip them all.

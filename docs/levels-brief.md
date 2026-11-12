@@ -68,7 +68,7 @@ side is general: `LEVELS[n].direct` and `missions.onDirect`, ready for Level 6).
 are the shared bodies scaled and posed, not new bodies (B8 still open). The hand-holding is posed, not IK.
 Density is read per person (neighbours within a metre) and summed over six named places rather than per grid
 cell. There is no pressed-crowd impostor: beyond the 24 rigs the queue is drawn with the standing impostors.
-No section checkpoints. Until Levels 5 and 6 exist the finale follows Level 4.
+No section checkpoints.
 
 ## Level 5 · THE QUAYS · Canal Saint-Martin · 04h05
 
@@ -103,6 +103,18 @@ bridges as chokepoints in the nav map; the bands' route choice reading which bri
 
 **Risks.** Squad AI in the open is the largest new system in the three levels. Keep orders to three and test
 with the bot first. A long thin level strains the impostor and culling ranges; reuse the district bounds work.
+
+**As built (2026-11-12, `src/level5.js`, `src/quays.js`).** All four beats, the three orders (1 hold, 2 follow, 3 advance),
+the squad, bands that plan round held bridges, fires that spread when nobody is near, the fire engine and its crew, residents
+at windows and both endings at the lock are in. Differences from the brief: the quays are 285 m long, not a kilometre, with
+five bridges and eight side streets. Orders go to one officer at a time, chosen by the game (the nearest with you for hold
+and advance, the nearest posted for follow), so there is no selecting. The squad are four of the existing `crowd.js` officers
+with a moving post, not new characters: builds differ by scale only. B1 was not done first, so runners use the walk and run
+clips; the look back over the shoulder is posed, and there is no vault over the quay rail (the rail and the water are one
+collider nobody crosses). The pompiers' hose pose is two single poses, not a paired rig. The fourth citation is "cars burnt
+out, 5 or fewer" rather than "fires put out", which a run with few fires could not earn. Bridge decks are flat (no stairs).
+No section checkpoints. Until Level 6 exists the finale follows Level 5. Not yet tuned by a person playing it: the numbers
+come from bot runs, and the bot gives almost no orders.
 
 ## Level 6 · DAWN · Place de la République · 05h10
 

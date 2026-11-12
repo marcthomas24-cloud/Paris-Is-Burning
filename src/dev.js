@@ -4,6 +4,7 @@
 //  ?dev&level=2&stage=3 start Level 2 at section 3
 //  ?dev&level=3         start in Level 3 (&stage=0-3 picks the act, &stage=fixer the Fixer's fight;
 //                       &route=A|B the route the bot takes)
+//  ?dev&level=4 / 5     the station / the canal (&stage=0-3 picks the beat)
 //  ?seed=N              seeded run: __start({ audio: false }) then __step / __botRun replay exactly
 import { LEVELS, Progress } from './levels.js';
 import { randomOutfit } from './characters.js';
@@ -251,6 +252,7 @@ export function installDev(game) {
       passage: [40, 252, 0], scaffold: [40, 280, 0], squareNorth: [0, 352, 0], squareWide: [40, 440, 225], monument: [-20, 380, 60],
       metro: [27, 386, 180], rally: [-15, 400, 270], arena: [0, 412, 0], exitStreet: [0, 450, 0], extraction: [0, 472, 0],
     },
+    5: { start: [12, -835, 0], bridgeA: [10, -806, 320], valmy: [-12, -780, 0], swing: [11, -708, 330], engine: [-11, -706, 20], blaze: [-12, -690, 270], water: [8.4, -676, 300], lock: [12, -600, 0], yard: [12, -580, 340], vault: [9, -566, 0] },
     4: { forecourt: [5, 606, 0], facade: [0, 618, 0], entrance: [20, 636, 0], concourse: [0, 646, 0], gateA: [-15, 668, 0], gateB: [15, 668, 0], kiosk: [-18, 669, 270], platform: [0, 686, 0], edge: [-20, 694, 90] },
   };
   window.__view = (name) => { const v = (VIEWS[game.level.id] || {})[name]; return v ? window.__goto(...v) : `views: ${Object.keys(VIEWS[game.level.id] || {}).join(', ')}`; };
@@ -331,6 +333,7 @@ export function installDev(game) {
       // round the square's ring road, into both side streets and back past the monument
       square: [[0, 352], [-30, 352], [-36, 365], [-36, 425], [-28, 432], [0, 437], [25, 434], [38, 420], [38, 370], [33, 355], [0, 352], [-20, 384], [-53.5, 395], [-20, 386], [20, 386], [53.5, 395], [20, 405], [0, 412]],
     },
+    5: { main: [[12, -835], [12, -800], [-12, -800], [-12, -700], [12, -700], [12, -606], [-12, -606], [-12, -565], [-12, -650], [12, -650], [12, -562]] },
     4: { main: [[5, 606], [20, 630], [20, 644], [0, 660], [-15, 672], [-16, 683], [-20, 694], [25, 694], [16, 683], [15, 672], [0, 650]] },
     2: { main: [[0, -60], [0, 0], [0, 60]] },
     1: { main: [[0, 100], [0, 0], [0, -105]] },
