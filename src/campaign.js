@@ -1,7 +1,8 @@
-// Campaign: the three levels as one night, 18h47 to dawn. One table (CAMPAIGN) feeds the menu,
+// Campaign: the levels as one night, 18h47 to dawn. One table (CAMPAIGN) feeds the menu,
 // the campaign screen, the results and the finale; the level scripts know nothing of it.
 // Medals are a record of how a mission was played, never a currency: completion is required,
-// then four citations (score, arrests, damage received, no peaceful person struck) decide it.
+// then four citations decide it: score, arrests, damage received and no peaceful person struck;
+// the station (Level 4) cites people home and nobody trampled instead of arrests and force.
 // Records are kept by Progress (levels.js) in the same storage key as the unlocks.
 import { Progress } from './levels.js';
 
@@ -27,6 +28,13 @@ export const CAMPAIGN = [
     objectives: ['Escort the transfer van to the gendarmerie', 'Choose the Avenue or the Passage', 'Stop and arrest the Fixer'],
     targets: { score: 12000, arrests: 8, damage: 150 },
   },
+  {
+    id: 4, time: '03h10', title: 'LAST TRAIN', card: 'LAST TRAIN', place: 'Gare de l\'Est',
+    opening: 'You are a CRS officer in the forecourt of Gare de l\'Est.',
+    briefing: 'The Métro has closed and the last night trains leave from here. Hundreds of people are coming through three entrances and two gate lines. Keep them moving and breathing: the danger is a crush, not a fight.',
+    objectives: ['Direct people: hold F to point and call', 'Keep the density under the red line', 'Deal with the crew without a stampede', 'Get the last people onto the last train'],
+    targets: { score: 7200, home: 200, damage: 60 }, cite: 'station',
+  },
 ];
 export const mission = (id) => CAMPAIGN.find((c) => c.id === id) || CAMPAIGN[0];
 
@@ -45,17 +53,19 @@ const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // What a finished run is judged on (the same fields in every level).
 export function summarize(m, win) {
   const s = m.stats;
-  return { win: !!win, score: m.score, arrests: s.arrests, damage: Math.round(s.damageTaken || 0), peaceful: s.peaceful, time: m.t, assisted: !!s.assisted };
+  return { win: !!win, score: m.score, arrests: s.arrests, damage: Math.round(s.damageTaken || 0), peaceful: s.peaceful, home: s.home, trampled: s.trampled, time: m.t, assisted: !!s.assisted };
 }
 
 // The four citations and the medal they add up to. No medal without completion.
 export function assess(id, run) {
-  const t = mission(id).targets;
+  const c = mission(id), t = c.targets, station = c.cite === 'station';
   const citations = [
     { key: 'score', label: `Score ${fmtScore(t.score)} or more`, value: fmtScore(run.score), ok: run.score >= t.score },
-    { key: 'arrests', label: `${t.arrests} arrests or more`, value: run.arrests, ok: run.arrests >= t.arrests },
+    station ? { key: 'home', label: `${t.home} people home or more`, value: run.home ?? '—', ok: run.home >= t.home }
+      : { key: 'arrests', label: `${t.arrests} arrests or more`, value: run.arrests, ok: run.arrests >= t.arrests },
     { key: 'damage', label: `Damage received ${t.damage} or less`, value: Math.round(run.damage), ok: run.damage <= t.damage },
-    { key: 'civilians', label: 'No peaceful person struck', value: run.peaceful, ok: run.peaceful === 0 },
+    station ? { key: 'trampled', label: 'Nobody trampled', value: run.trampled ?? '—', ok: run.trampled === 0 }
+      : { key: 'civilians', label: 'No peaceful person struck', value: run.peaceful, ok: run.peaceful === 0 },
   ];
   const n = citations.filter((c) => c.ok).length;
   const medal = !run.win ? 0 : n === 4 ? 3 : n === 3 ? 2 : n >= 1 ? 1 : 0;
@@ -100,7 +110,7 @@ export function medalBlock(a, flags, rec) {
 // "what comes next" under the results: the next level's first objective, or the campaign's end
 export function nextCard(id) {
   const n = CAMPAIGN.find((c) => c.id === id + 1);
-  if (!n) return `<div class="next-card final"><span class="k">CAMPAIGN</span><b>THE NIGHT IS OVER</b><span>All three levels complete</span></div>`;
+  if (!n) return `<div class="next-card final"><span class="k">CAMPAIGN</span><b>THE NIGHT IS OVER</b><span>All ${CAMPAIGN.length} levels complete</span></div>`;
   return `<div class="next-card"><span class="k">NEXT · LEVEL ${n.id} · ${n.time}</span><b>${esc(n.title)}</b><span>${esc(n.objectives[0])}</span></div>`;
 }
 
@@ -152,7 +162,7 @@ export class CampaignUI {
     }
     const c = mission(sel), rec = Progress.record(sel), open = Progress.unlocked(sel), comp = Progress.completed(sel);
     const best = rec && rec.bestRun;
-    const cites = best ? assess(sel, best).citations : assess(sel, { win: false, score: -1, arrests: -1, damage: Infinity, peaceful: -1 }).citations;
+    const cites = best ? assess(sel, best).citations : assess(sel, { win: false, score: -1, arrests: -1, damage: Infinity, peaceful: -1, home: -1, trampled: -1 }).citations;
     const chip = comp ? '<span class="chip done">COMPLETE</span>' : open ? (sel === next ? '<span class="chip">NEXT</span>' : '<span class="chip calm">OPEN</span>') : '<span class="chip calm">LOCKED</span>';
     this.el.detail.innerHTML = `<div class="cmp-head">${chip}<span>LEVEL ${c.id} · ${c.time} · ${esc(c.place)}</span></div>`
       + `<h3>${esc(c.title)}</h3><p>${esc(c.briefing)}</p>`
@@ -184,7 +194,7 @@ export class CampaignUI {
     const rating = Math.min(...medals);
     const total = recs.reduce((a, { r }) => a + (r ? r.bestScore : 0), 0);
     const clean = recs.every(({ r }) => r && r.bestRun && r.bestRun.peaceful === 0);
-    $('fin-text').innerHTML = '<p>The boulevard is quiet. Le Patron is with the gendarmerie, the Fixer is in the cell beside him and their crews have scattered.</p>'
+    $('fin-text').innerHTML = '<p>The boulevard is quiet. Le Patron is with the gendarmerie, the Fixer is in the cell beside him and their crews have scattered. The last train has left Gare de l\'Est.</p>'
       + `<p>${clean ? 'Nobody who came out to march tonight was struck by your baton.' : 'Most of the people on the street tonight came to demonstrate, and went home.'}</p>`;
     $('fin-stats').innerHTML = recs.map(({ c, r }) => `<div class="row"><span>${medalDisc(r ? r.bestMedal : 0)} Level ${c.id} · ${esc(c.card)}</span><span>${r && r.wins ? fmtScore(r.bestScore) + (r.bestTime ? ' · ' + fmtTime(r.bestTime) : '') : '—'}</span></div>`).join('')
       + `<div class="row total"><span>CAMPAIGN SCORE</span><span>${fmtScore(total)}</span></div>`

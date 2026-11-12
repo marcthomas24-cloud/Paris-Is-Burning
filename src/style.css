@@ -236,6 +236,7 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
 #tb-sprint.on { background: var(--amber); color: #111; }
 #tb-gas { right: 120px; bottom: 136px; width: 46px; height: 46px; font-size: 9px; border-color: rgba(200,205,190,0.6); }
 #tb-barrier { right: 168px; bottom: 112px; width: 46px; height: 46px; font-size: 7px; border-color: rgba(255,190,90,0.6); }
+#tb-direct { right: 150px; bottom: 62px; width: 46px; height: 46px; font-size: 8px; border-color: rgba(159,208,255,0.7); }
 #tb-barrier.near { background: rgba(255,190,90,0.35); }
 #tb-medkit { right: 68px; bottom: 120px; width: 46px; height: 46px; font-size: 9px; border-color: rgba(80,200,120,0.6); }
 

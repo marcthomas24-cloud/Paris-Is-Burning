@@ -37,12 +37,12 @@
         <canvas id="minimap" width="200" height="200"></canvas>
         <div class="bar-row"><div class="bar-label">SANTÉ</div><div id="health-bar" class="bar"><div></div></div><div id="medkits" title="First-aid kits (Q)">✚ 3</div></div>
         <div class="bar-row"><div class="bar-label">ENDURANCE</div><div id="stamina-bar" class="bar thin"><div></div></div><div id="barriers" title="Police barriers carried (B)">BAR 4</div><div id="gasnades" title="Tear-gas grenades this phase (G)">GAS 3</div></div>
-        <div class="bar-row" title="Crowd tension: rises when force hits people who are no threat or gas lands on a calm crowd; falls with clean arrests and good barrier use"><div class="bar-label">TENSION</div><div id="tension-bar" class="bar thin"><div></div><span class="mark" style="left:35%"></span><span class="mark" style="left:70%"></span></div><div id="tension-band">CALM</div></div>
+        <div class="bar-row" title="Crowd tension: rises when force hits people who are no threat or gas lands on a calm crowd; falls with clean arrests and good barrier use"><div class="bar-label" id="tension-label">TENSION</div><div id="tension-bar" class="bar thin"><div></div><span class="mark" style="left:35%"></span><span class="mark" style="left:70%"></span></div><div id="tension-band">CALM</div></div>
       </div>
 
       <div id="controls-hint" class="panel">
         <div><b>WASD</b> move · <b>Shift</b> sprint · <b>Space</b> dodge</div>
-        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest · <b>Q</b> first aid · <b>G</b> tear gas · <b>B</b> barrier</div>
+        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest · <b>Q</b> first aid · <b>G</b> tear gas · <b>B</b> barrier<span id="hint-direct" class="hidden"> · <b>F</b> direct (hold)</span></div>
         <div><b>Esc</b> pause · <b>H</b> hide hints</div>
       </div>
 
@@ -66,6 +66,7 @@
         <div id="touch-buttons">
           <button data-k="ShiftLeft" class="tb toggle" id="tb-sprint" aria-label="Sprint (toggle)">SPRINT</button>
           <button data-k="KeyQ" class="tb" id="tb-medkit" aria-label="First aid">✚ AID</button>
+          <button data-k="KeyF" class="tb hidden" id="tb-direct" aria-label="Point and call (hold)">DIRECT</button>
           <button data-k="KeyG" class="tb" id="tb-gas" aria-label="Throw tear gas">GAS</button>
           <button data-k="KeyB" class="tb" id="tb-barrier" aria-label="Place or pick up a barrier">BARRIER</button>
           <button data-k="Space" class="tb" id="tb-dodge" aria-label="Dodge">DODGE</button>
@@ -222,9 +223,10 @@
           <tr><td>Right mouse (hold)</td><td>Shield stance — blocks frontal hits &amp; projectiles, push through crowds</td></tr>
           <tr><td>Space</td><td>Dodge / quick step</td></tr>
           <tr><td>Tab</td><td>Boss lock-on on / off (on by default; also under Options). Locked, A/D circle the boss while facing him</td></tr>
-          <tr><td>E</td><td>Arrest a downed aggressor · respond to incident</td></tr>
+          <tr><td>E</td><td>Arrest a downed aggressor · respond to incident · in the station: shutters, staff, helping someone up</td></tr>
           <tr><td>G</td><td>Throw a tear-gas grenade where the camera looks (aim higher to throw further). 3 per phase, none during boss fights</td></tr>
           <tr><td>B</td><td>Police barrier: shows a preview in front of you (green where it fits); B again or left mouse places it, right mouse or G cancels. B beside one of your barriers picks it up. 4 carried; the crowd walks round them</td></tr>
+          <tr><td>F (hold)</td><td>Direct, from Level 4: point and call. Calm people within about 8 m go the way the camera looks. Call just after swinging the baton and it frightens them instead</td></tr>
           <tr><td>Q</td><td>First aid — restores 40 health (3 kits per run)</td></tr>
           <tr><td>H</td><td>Toggle control hints</td></tr>
           <tr><td>M</td><td>Mute / unmute sound</td></tr>

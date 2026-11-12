@@ -94,6 +94,7 @@ export function installDev(game) {
     const threat = g.crowd.nearest(p, (n) => g.crowd.isThreat(n) || (n.script && n.script.active), m.stage === 'p3' ? 12 : 30);
     let goal = null, fight = false;
     // Level 3 gives the bot a place to walk (the chosen route's mouth, an interaction, behind the van)
+    const own = !threat && m.botInput && m.botInput(I); // a level's own controls for the bot (Level 4: point and call)
     if (threat) { goal = threat.pos; fight = true; } else if (m.botGoal) goal = m.botGoal(B.route || 'A'); else if (m.markerPos) goal = m.markerPos;
     if (g.crowd.arrestable(p) && !threat) I.edges.add('KeyE');
     if (m.promptE && !threat) I.edges.add('KeyE'); // Level 3 interactions (barricade, scooter, handover)
@@ -101,7 +102,7 @@ export function installDev(game) {
     if (m.stage === 'final' && m.extractReady && Math.hypot(p.x + 3, p.z + 112) < 4) I.edges.add('KeyE');
     if (goal) {
       const dx = goal.x - p.x, dz = goal.z - p.z, d = Math.hypot(dx, dz);
-      g.cameraRig.yaw = Math.atan2(-dx, -dz) + (B.stuckT > 0.6 ? B.side * 0.9 : 0);
+      if (!own) g.cameraRig.yaw = Math.atan2(-dx, -dz) + (B.stuckT > 0.6 ? B.side * 0.9 : 0);
       // bosses: react to what can be seen (wind-up pose and ring, charge, opening), never to
       // whether a wind-up is a feint; block blockable attacks, dodge sideways out of heavy ones
       const bs = fight && threat.boss;
@@ -122,6 +123,7 @@ export function installDev(game) {
         else { I.buttons.add(2); if (d > 2.3) I.keys.add('KeyW'); }
       }
       else if (guarded && d < 3.5) { I.buttons.add(2); if (d > 1.7) I.keys.add('KeyW'); }
+      else if (own) { /* the level set the keys */ }
       else if (fight && d < 1.8) I.edges.add('Mouse0'); else { I.keys.add('KeyW'); if (d > 6) I.keys.add('ShiftLeft'); if (B.strafeT > 0) { B.strafeT -= 0.1; I.keys.add(B.side > 0 ? 'KeyD' : 'KeyA'); I.keys.delete('KeyW'); } }
       const before = p.clone();
       window.__step(0.1);
@@ -221,7 +223,7 @@ export function installDev(game) {
   //  __worldPerf({ frames })       frame cost, draw calls and triangles at fixed viewpoints
   const deg = (r) => Math.round(((r * 180) / Math.PI + 360) % 360);
   const district = () => game.world.district;
-  const areaName = (x, z) => (game.level.district ? DISTRICT_AREA(x, z) : z < -110 ? 'Oberkampf' : z < -20 ? 'Oberkampf to Malte' : z < 70 ? 'Malte to Timbaud' : 'Timbaud to the staging area');
+  const areaName = (x, z) => (game.level.areaAt ? game.level.areaAt(x, z) : game.level.district ? DISTRICT_AREA(x, z) : z < -110 ? 'Oberkampf' : z < -20 ? 'Oberkampf to Malte' : z < 70 ? 'Malte to Timbaud' : 'Timbaud to the staging area');
   window.__acts = () => (game.level.phases || []).map((name, i) => ({ i, name, jump: `__jump(${i})`, url: `?dev&level=${game.level.id}&stage=${i}` }));
   window.__pos = () => {
     const p = game.player.pos, c = game.camera.position;
@@ -249,6 +251,7 @@ export function installDev(game) {
       passage: [40, 252, 0], scaffold: [40, 280, 0], squareNorth: [0, 352, 0], squareWide: [40, 440, 225], monument: [-20, 380, 60],
       metro: [27, 386, 180], rally: [-15, 400, 270], arena: [0, 412, 0], exitStreet: [0, 450, 0], extraction: [0, 472, 0],
     },
+    4: { forecourt: [5, 606, 0], facade: [0, 618, 0], entrance: [20, 636, 0], concourse: [0, 646, 0], gateA: [-15, 668, 0], gateB: [15, 668, 0], kiosk: [-18, 669, 270], platform: [0, 686, 0], edge: [-20, 694, 90] },
   };
   window.__view = (name) => { const v = (VIEWS[game.level.id] || {})[name]; return v ? window.__goto(...v) : `views: ${Object.keys(VIEWS[game.level.id] || {}).join(', ')}`; };
   window.__colliders = (on = true, radius = 60) => {
@@ -282,7 +285,7 @@ export function installDev(game) {
   // officer can reach outside the level's walk areas (a collision hole into a building), walk-area
   // ground that is free but cannot be reached (a closed-off pocket), and which landmarks are reached.
   window.__navMap = ({ cell = 1, radius = 0.36, show = false } = {}) => {
-    const w = game.world, B = w.bounds, s = game.level.start, D = game.level.district ? DISTRICT : null;
+    const w = game.world, B = w.bounds, s = game.level.start, D = game.level.layout || (game.level.district ? DISTRICT : null);
     const nx = Math.floor((B.maxX - B.minX) / cell) + 1, nz = Math.floor((B.maxZ - B.minZ) / cell) + 1;
     const X = (i) => B.minX + i * cell, Z = (j) => B.minZ + j * cell;
     const state = new Uint8Array(nx * nz); // 0 unknown, 1 blocked, 2 reached
@@ -328,6 +331,7 @@ export function installDev(game) {
       // round the square's ring road, into both side streets and back past the monument
       square: [[0, 352], [-30, 352], [-36, 365], [-36, 425], [-28, 432], [0, 437], [25, 434], [38, 420], [38, 370], [33, 355], [0, 352], [-20, 384], [-53.5, 395], [-20, 386], [20, 386], [53.5, 395], [20, 405], [0, 412]],
     },
+    4: { main: [[5, 606], [20, 630], [20, 644], [0, 660], [-15, 672], [-16, 683], [-20, 694], [25, 694], [16, 683], [15, 672], [0, 650]] },
     2: { main: [[0, -60], [0, 0], [0, 60]] },
     1: { main: [[0, 100], [0, 0], [0, -105]] },
   };
@@ -356,7 +360,7 @@ export function installDev(game) {
   };
   // Crowd agents sent to far points of the level: who gets there, who sticks, who ends up in a wall.
   window.__npcNav = async (count = 24, seconds = 90, { minD = 30, maxD = 80 } = {}) => {
-    const g = game, crowd = g.crowd, w = g.world, D = g.level.district ? DISTRICT : null;
+    const g = game, crowd = g.crowd, w = g.world, D = g.level.layout || (g.level.district ? DISTRICT : null);
     const rects = D ? D.walkRects : [[-14, -150, 14, 160]];
     const R = (a, b) => a + Math.random() * (b - a);
     const pickPoint = () => { for (let k = 0; k < 50; k++) { const [x0, z0, x1, z1] = rects[Math.floor(Math.random() * rects.length)]; const x = R(x0 + 1, x1 - 1), z = R(z0 + 1, z1 - 1); if (!w.blocked(x, z, 0.5)) return new THREE.Vector3(x, 0, z); } return null; };

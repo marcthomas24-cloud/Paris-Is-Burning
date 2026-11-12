@@ -8,6 +8,8 @@ import { Missions, PHASES } from './missions.js';
 import { Level2, L2_PHASES } from './level2.js';
 import { Level3, L3_PHASES, L3_CROWD, L3_EVENTS } from './level3.js';
 import { DISTRICT } from './district.js';
+import { Level4, L4_PHASES, L4_CROWD, L4_EVENTS } from './level4.js';
+import { STATION, stationArea } from './station.js';
 
 export const LIGHTING = {
   // the original look, values unchanged
@@ -36,6 +38,15 @@ export const LIGHTING = {
     sky: { horizon: [0.17, 0.14, 0.13], low: [0.08, 0.09, 0.12], top: [0.02, 0.03, 0.06], glow: [0.55, 0.28, 0.14], glowK: 0.28, haze: [0.14, 0.12, 0.11] },
     lamp: 3.6, beaconOn: 26, beaconOff: 3, fireLight: 1.5, puddleEnv: 0.6, smokeTint: [0.44, 0.42, 0.42],
   },
+  // Level 4: a station at night. The same lights do an interior's work: the "sun" comes almost
+  // straight down like the hall's lamps (the roofs cast no shadow), the fill is warm and even.
+  station: {
+    hemiSky: 0xb9c0cc, hemiGround: 0x8a8274, hemiI: 1.7,
+    sunColor: 0xfff0d8, sunI: 1.35, sunOffset: [8, 70, 14],
+    exposure: 1.2, baseFog: 0.0065, fogA: 0x1c2028, fogB: 0x30281f,
+    sky: { horizon: [0.16, 0.12, 0.10], low: [0.07, 0.08, 0.11], top: [0.02, 0.03, 0.05], glow: [0.6, 0.28, 0.12], glowK: 0.3, haze: [0.13, 0.11, 0.10] },
+    lamp: 3.4, beaconOn: 24, beaconOff: 3, fireLight: 1.4, puddleEnv: 0.4, smokeTint: [0.5, 0.48, 0.47],
+  },
 };
 
 export const LEVELS = {
@@ -61,6 +72,16 @@ export const LEVELS = {
     district: 'l3', cordonOpen: true, brawls: false,
     crowdLayout: L3_CROWD, events: L3_EVENTS, sirenLanes: [240, 395, 470],
   },
+  // The station (Level4): no boss, a crush to prevent. Completing Level 3 unlocks it.
+  4: {
+    id: 4, name: 'LAST TRAIN', tag: 'Gare de l\'Est · 03h10',
+    Missions: Level4, phases: L4_PHASES, lighting: 'station', hazardDir: 1,
+    policeOff: ['line', 'squad', 'injured', 'guard'], music: true, musicTheme: 'l3',
+    start: STATION.start, bounds: STATION.bounds,
+    district: 'l4', brawls: false, direct: true, // direct: the officer can point and call (F)
+    crowdLayout: L4_CROWD, events: L4_EVENTS, sirenLanes: [560, 585],
+    layout: STATION, areaAt: stationArea, // developer tools
+  },
 };
 
 // Unlocks and records persist on this device. Storage can be unavailable (private windows,
@@ -72,7 +93,8 @@ const KEY = 'parisBurning.progress.v1';
 export const Progress = {
   _read() { try { const p = JSON.parse(localStorage.getItem(KEY)); return p && typeof p === 'object' ? p : {}; } catch { return {}; } },
   _write(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* not persisted */ } },
-  unlocked(id) { return id === 1 || !!(this._read().unlocked || {})[id]; },
+  // (a save that finished the level before, made when the campaign was shorter, opens the next one)
+  unlocked(id) { const p = this._read(), prev = (p.records || {})[id - 1]; return id === 1 || !!(p.unlocked || {})[id] || !!(LEVELS[id] && prev && prev.wins); },
   unlock(id) { if (!LEVELS[id]) return; const p = this._read(); p.unlocked = { ...(p.unlocked || {}), [id]: true }; this._write(p); },
   // completed: won at least once (or, in a save from before records, the next level is unlocked)
   completed(id) { const r = this.record(id); return !!(r && r.wins) || this.unlocked(id + 1) && !!LEVELS[id + 1]; },
@@ -90,7 +112,7 @@ export const Progress = {
     p.lastPlayed = id;
     const out = { firstWin: false, score: false, medal: false, time: false };
     if (run.win) {
-      const sum = { score: run.score, arrests: run.arrests, damage: run.damage, peaceful: run.peaceful, time: Math.round(run.time), medal, win: true };
+      const sum = { score: run.score, arrests: run.arrests, damage: run.damage, peaceful: run.peaceful, home: run.home, trampled: run.trampled, time: Math.round(run.time), medal, win: true };
       out.firstWin = !r.wins;
       out.score = run.score > r.bestScore; out.medal = medal > r.bestMedal; out.time = r.bestTime === null || run.time < r.bestTime;
       r.wins++;

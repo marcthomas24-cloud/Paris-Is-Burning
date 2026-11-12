@@ -147,6 +147,47 @@ export function talk(P, L, t, k) {
   P.hdX += Math.sin(t * 2.7 + L.ph) * 0.05 * k;
 }
 
+// Pressed in a crowd with no room to move (Level 4): forearms up across the chest to keep a
+// space to breathe in, shoulders in, chin lifted and the head turning for air. k 0..1 follows
+// the local density.
+export function pressed(P, L, t, k) {
+  if (k <= 0.01) return;
+  const s = L.side, sway = Math.sin(t * 1.7 + L.ph);
+  mix(P, 'shLX', -0.95, k); mix(P, 'shRX', -0.95, k); mix(P, 'elL', -2.15, k); mix(P, 'elR', -2.15, k);
+  mix(P, 'shLZ', -0.38, k); mix(P, 'shRZ', 0.38, k);
+  P.spX -= 0.07 * k; P.spZ += sway * 0.05 * k; P.y += 0.012 * k; // up on the toes
+  P.hdX -= (0.2 + 0.08 * Math.sin(t * 0.9 + L.ph * 3)) * k;
+  P.hdY += (Math.sin(t * 0.8 + L.ph) * 0.55 + s * 0.15) * k;
+  if (P.mouth !== undefined) { P.mouth = Math.max(P.mouth, 0.35 * k); P.brow = -0.7 * k; P.smile = 0; }
+}
+
+// Walking hand in hand (Level 4's families). side: +1 the left hand, -1 the right. up: 0 an adult
+// reaching down and a little out, 1 a child reaching up. k 0..1.
+export function handHeld(P, side, up, k) {
+  if (k <= 0.01) return;
+  const sh = side > 0 ? 'shL' : 'shR', el = side > 0 ? 'elL' : 'elR';
+  mix(P, sh + 'X', up ? -0.5 : 0.05, k); mix(P, sh + 'Z', side * (up ? 1.75 : 0.42), k); mix(P, el, up ? -0.25 : -0.12, k);
+  if (!up) P.spZ += side * 0.04 * k; else P.hdY += side * 0.25 * k; // the child looks up at them now and then
+}
+
+// An older person's carriage: rounded back, head forward, short careful steps. k 0..1.
+export function stooped(P, k) {
+  if (k <= 0.01) return;
+  P.spX += 0.2 * k; P.hdX -= 0.1 * k; P.y -= 0.025 * k; P.knL += 0.1 * k; P.knR += 0.1 * k;
+  P.shLX += 0.08 * k; P.shRX += 0.08 * k;
+}
+
+// Walked along by someone: an arm over their shoulder, the weight on them, one leg dragging.
+// side: +1 the helper is on their left. k 0..1.
+export function supported(P, side, t, k) {
+  if (k <= 0.01) return;
+  const sh = side > 0 ? 'shL' : 'shR', el = side > 0 ? 'elL' : 'elR';
+  mix(P, sh + 'X', -0.35, k); mix(P, sh + 'Z', side * 1.55, k); mix(P, el, -0.7, k);
+  P.spZ += side * 0.2 * k; P.spX += 0.16 * k; P.hdX += 0.22 * k; P.y -= 0.05 * k;
+  if (side > 0) P.knR += 0.3 * k; else P.knL += 0.3 * k;
+  P.hdY += Math.sin(t * 0.6) * 0.1 * k;
+}
+
 // Reeling from a blow. back: struck from the front (driven backwards). st / dur: time in the stagger.
 export function staggered(P, id, back, st, dur) {
   const b = back ? -1 : 1, v = (id + (back ? 1 : 0)) % 3;

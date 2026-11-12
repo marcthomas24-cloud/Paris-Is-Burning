@@ -51,6 +51,11 @@ export class Player {
     this.surgePush = 0;
     this.medkits = 3;  // first-aid kits per run (Q)
     this.healT = 0;
+    this.directing = null; // 'point' | 'threat' while F is held (levels with the direct verb)
+    this.directK = 0;
+    this.sinceSwing = 99;  // seconds since the baton was last swung
+    this.carrying = null;  // someone being walked along (Level 4)
+    if (this.rig.baton) this.rig.baton.visible = true;
     this.gear.reset();
   }
 
@@ -87,6 +92,7 @@ export class Player {
       g.hud.damageFlash(Math.min(1, amount / 20));
       // a hit interrupts your own wind-up
       if (this.attack && this.attack.phase === 'windup') this.attack = null;
+      if (this.carrying && g.missions.onCarryDropped) g.missions.onCarryDropped(); // they go down with the blow
     }
     this.health = Math.max(0, this.health - amount);
     this.sinceDamage = 0;
@@ -158,10 +164,17 @@ export class Player {
     // barriers (B) and tear-gas grenades (G): see gear.js
     this.gear.update(dt, input);
 
+    // --- direct (F, hold): point and call. With the baton just swung it is a threat, not a direction
+    this.sinceSwing = this.attack ? 0 : this.sinceSwing + dt;
+    const canDirect = !!(g.level && g.level.direct) && !this.dead && !this.carrying && this.dodgeT <= 0 && this.staggerT <= 0 && this.gear.throwT <= 0 && !this.gear.placing;
+    this.directing = canDirect && input.down('KeyF') ? (this.attack || this.sinceSwing < 1.5 ? 'threat' : 'point') : null;
+    this.directK += ((this.directing ? 1 : 0) - this.directK) * Math.min(1, dt * 12);
+    if (this.directing && g.missions.onDirect) g.missions.onDirect(this.directing, camF, dt);
+
     // --- stance & attacks
-    this.blocking = !this.dead && input.mouse(2) && !this.attack && this.dodgeT <= 0;
+    this.blocking = !this.dead && input.mouse(2) && !this.attack && this.dodgeT <= 0 && !this.carrying && this.directing !== 'point';
     this.blockK += ((this.blocking ? 1 : 0) - this.blockK) * Math.min(1, dt * 14);
-    if (input.pressed('Mouse0') && !this.gear.ateClick && !this.gear.placing) this.attackBuffer = 0.22;
+    if (input.pressed('Mouse0') && !this.gear.ateClick && !this.gear.placing && !this.carrying) this.attackBuffer = 0.22;
     const canAttack = !this.dead && this.staggerT <= 0 && this.dodgeT <= 0 && this.gear.throwT <= 0 && (!this.attack || (this.attack.phase === 'recover' && this.attack.t > 0.14));
     if (this.attackBuffer > 0 && canAttack) {
       this.attackBuffer = 0;
@@ -185,7 +198,7 @@ export class Player {
     }
 
     // --- dodge
-    if (!this.dead && input.pressed('Space') && this.dodgeCool <= 0 && this.stamina > 12 && this.staggerT <= 0) {
+    if (!this.dead && !this.carrying && input.pressed('Space') && this.dodgeCool <= 0 && this.stamina > 12 && this.staggerT <= 0) {
       this.dodgeDir.copy(wish.lengthSq() > 0 ? wish : this.forward().negate()).normalize();
       this.dodgeT = 0.32; this.dodgeCool = 0.75; this.invuln = 0.28;
       if (g.missions && g.missions.stats.dodges !== undefined) g.missions.stats.dodges++;
@@ -197,10 +210,12 @@ export class Player {
 
     // --- locomotion
     const shift = input.down('ShiftLeft') || input.down('ShiftRight');
-    this.sprinting = shift && wish.lengthSq() > 0 && !this.blocking && !this.attack && this.stamina > 1;
+    this.sprinting = shift && wish.lengthSq() > 0 && !this.blocking && !this.attack && this.stamina > 1 && !this.carrying && !this.directing;
     let maxSpeed = this.blocking ? 1.9 : this.sprinting ? 6.6 : 4.0;
     if (this.attack) maxSpeed = this.attack.phase === 'strike' ? 2.2 : 1.0;
     if (this.gear.throwT > 0) maxSpeed = Math.min(maxSpeed, 1.6);
+    if (this.directing) maxSpeed = Math.min(maxSpeed, 2.6);
+    if (this.carrying) maxSpeed = Math.min(maxSpeed, 2.0);
     if (this.staggerT > 0) maxSpeed = 0.8;
     if (this.dead) maxSpeed = 0;
     const target = wish.clone().multiplyScalar(maxSpeed);
@@ -251,7 +266,7 @@ export class Player {
 
     // --- facing
     let want = this.heading;
-    if (this.blocking) want = Math.atan2(camF.x, camF.z);
+    if (this.blocking || this.directing) want = Math.atan2(camF.x, camF.z);
     else if (this.attack && this.attack.target && this.attack.phase !== 'recover') {
       // keep turning onto the locked target through wind-up and strike
       const tp = this.attack.target.pos;
@@ -346,6 +361,18 @@ export class Player {
       else { rate = 30; P.shRX = -1.0; P.shRZ = 0.2; P.elR = -0.2; P.spY = 0.35; P.spX = 0.15; }
     }
     if (this.dodgeT > 0) { P.spX = 0.35; P.knL = P.knR = 0.6; P.y = -0.12; }
+    // direct: the baton goes away and the arm points where the camera looks; called with the
+    // baton just swung, it stays up over the shoulder
+    const dk = this.directK;
+    if (dk > 0.02 && !this.attack) {
+      rate = 18;
+      if (this.directing === 'threat') { P.shRX += (-2.5 - P.shRX) * dk; P.elR += (-1.1 - P.elR) * dk; P.shRZ = -0.35 * dk; P.spX += 0.1 * dk; }
+      else { P.shRX += (-1.5 - P.shRX) * dk; P.elR += (-0.08 - P.elR) * dk; P.shRZ = 0.08 * dk; P.spY += 0.14 * dk; P.spX += 0.06 * dk; }
+      P.mouth = 0.75 * dk; P.brow = this.directing === 'threat' ? 0.8 : 0.2;
+    }
+    if (rig.baton) rig.baton.visible = !(this.carrying || (dk > 0.3 && this.directing !== 'threat' && !this.attack));
+    // walking someone along: an arm round them, taking their weight
+    if (this.carrying) { P.shRX = -0.7; P.shRZ = -0.85; P.elR = -1.2; P.spZ -= 0.1; P.spX += 0.06; }
     if (this.staggerT > 0) {
       rate = 18;
       const f = this.forward();

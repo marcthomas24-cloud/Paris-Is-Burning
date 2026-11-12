@@ -40,6 +40,7 @@ const CROSS = LAYOUT.crossStreets;
 //  the pavement within this |z| · focus: where idle demonstrators look (the police line at
 //  lineZ: in front of it they face frontZ, behind it behindZ) · bgExclude: rects {x0, z0, x1, z1}
 //  where the static background population is not drawn (ground a level makes playable)
+//  noCrews: the level has no looting crews and no passers-by running from them
 export const BOULEVARD_LAYOUT = {
   gatherPoints: null,
   marchPaths: [
@@ -138,6 +139,7 @@ export class Crowd {
     this.npcs.forEach((n, i) => {
       if (n.special) { this.retire(n); return; } // scripted characters are placed by their level
       if (n.crew && this._offCrew(n.crew)) { this.retire(n); n.temperament = 'reserve'; return; } // Level 2 / Level 3 crews
+      if (n.kind === 'civilian' && L.noCrews) { this.retire(n); n.temperament = 'reserve'; return; } // nobody to run from
       // first third clusters near the police line so the player starts with a crowd in view
       const nearLine = i < Math.round(this.count * 0.23);
       const gp = nearLine ? gps[i % 3] : gps[3 + (i % (gps.length - 3))];
@@ -1387,7 +1389,8 @@ export class Crowd {
     }
   }
   setDistrictCrews(on) { this.extraOn = !!on && !!this.districtCrews; }
-  _offCrew(c) { return (c.reserve && !this.reserveOn) || (c.extra && !this.extraOn); }
+  // (a level with no looting crews at all, like the station, sets layout.noCrews)
+  _offCrew(c) { return !!this.layout.noCrews || (c.reserve && !this.reserveOn) || (c.extra && !this.extraOn); }
 
   // Boss arena: nobody but the boss may stand inside; people already there are moved out.
   setArena(x, z, r, boss) {

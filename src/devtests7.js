@@ -28,7 +28,7 @@ export function installTests7(game) {
   const settle = (r, win = true) => {
     const m = game.missions;
     m.score = r.score; m.t = r.t ?? 120;
-    Object.assign(m.stats, { arrests: r.arrests, damageTaken: r.damage, peaceful: r.peaceful });
+    Object.assign(m.stats, { arrests: r.arrests, damageTaken: r.damage, peaceful: r.peaceful, home: r.home, trampled: r.trampled });
     game.endGame(win, win ? undefined : 'Test failure.');
     game._showEnd();
     return { ...game.lastResult, tags: tags(), rec: Progress.record(game.level.id) };
@@ -83,7 +83,7 @@ export function installTests7(game) {
         && out.better.flags.score && !out.better.flags.medal && out.better.tags.join() === 'NEW BEST SCORE' && out.better.best === 6000 && out.better.bestRun === 6000 && out.better.bestTime === 100
         && out.failure.plays === 4 && out.failure.wins === 3 && out.failure.best === 6000 && !out.failure.block && out.failure.rank === 'Restart to try again' && !out.failure.finale;
 
-      // ---- the chain: CONTINUE from Level 1 to 3, CAMPAIGN COMPLETE, the finale
+      // ---- the chain: CONTINUE from Level 1 to 4, CAMPAIGN COMPLETE, the finale
       finish(1, { score: 4000, arrests: 7, damage: 10, peaceful: 0 }); // silver (score short)
       $('btn-continue').click(); step(0.3);
       out.chain = { to2: game.level.id };
@@ -93,22 +93,27 @@ export function installTests7(game) {
       out.chain.to3 = game.level.id;
       const w33 = settle({ score: 12500, arrests: 9, damage: 160, peaceful: 0 }); // silver (damage)
       out.chain.l3 = { medal: w33.assessment.medal, cont: shown('btn-continue'), finale: shown('btn-finale'), final: !!document.querySelector('#end-stats .next-card.final') };
+      $('btn-continue').click(); step(0.3);
+      out.chain.to4 = game.level.id;
+      const w44 = settle({ score: 6000, arrests: 0, damage: 20, peaceful: 0, home: 220, trampled: 0 }); // gold (the station's citations)
+      out.chain.l4 = { medal: w44.assessment.medal, keys: w44.assessment.citations.map((c) => c.key).join(), cont: shown('btn-continue'), finale: shown('btn-finale'), final: !!document.querySelector('#end-stats .next-card.final') };
       $('btn-finale').click();
       const finRows = [...document.querySelectorAll('#fin-stats .row')].map((r) => r.textContent);
-      out.finale = { shown: shown('finale-screen'), seen: Progress.finaleSeen(), rows: finRows.length, total: finRows[3], rating: (document.querySelector('#fin-stats .rank') || {}).textContent, medals: [...document.querySelectorAll('#fin-stats .medal')].map((m) => m.classList[1]) };
+      out.finale = { shown: shown('finale-screen'), seen: Progress.finaleSeen(), rows: finRows.length, total: finRows[4], rating: (document.querySelector('#fin-stats .rank') || {}).textContent, medals: [...document.querySelectorAll('#fin-stats .medal')].map((m) => m.classList[1]) };
       // back out to the campaign: everything complete, the finale offered again; then the title screen
       document.querySelector('#finale-screen [data-action="campaign"]').click();
-      out.after = { campaign: shown('campaign-screen'), finaleBtn: shown('cmp-finale'), c3: card(3), start: $('cmp-start').textContent };
+      out.after = { campaign: shown('campaign-screen'), finaleBtn: shown('cmp-finale'), c3: card(3), c4: card(4), start: $('cmp-start').textContent };
       document.querySelector('[data-action="cmp-back"]').click(); out.after.backToFinale = shown('finale-screen');
       document.querySelector('[data-action="main-menu"]').click();
       out.after.menu = { state: game.state, shown: shown('menu'), play: $('btn-play').textContent, tag: $('menu-tag').textContent };
       $('btn-play').click(); step(0.3);
       out.after.playFromMenu = { state: game.state, level: game.level.id, stage: game.missions.stage };
-      const total = 6000 + 9500 + 12500;
-      const chainOk = out.chain.to2 === 2 && out.chain.next3 === 'THE BREAKOUT' && out.chain.to3 === 3 && out.chain.l3.medal === 2 && !out.chain.l3.cont && out.chain.l3.finale && out.chain.l3.final
-        && out.finale.shown && out.finale.seen && out.finale.rows === 4 && out.finale.total.replace(/\D/g, '') === String(total) && out.finale.rating === 'CAMPAIGN RATING · SILVER · PROFESSIONAL'
-        && out.finale.medals.join() === 'gold,gold,silver' && out.after.campaign && out.after.finaleBtn && out.after.c3.done && out.after.c3.medal === 'silver' && out.after.start === 'REPLAY · LEVEL 3'
-        && out.after.backToFinale && out.after.menu.state === 'menu' && out.after.menu.shown && out.after.menu.play === 'REPLAY · LEVEL 3' && out.after.playFromMenu.state === 'playing' && out.after.playFromMenu.level === 3;
+      const total = 6000 + 9500 + 12500 + 6000;
+      const chainOk = out.chain.to2 === 2 && out.chain.next3 === 'THE BREAKOUT' && out.chain.to3 === 3 && out.chain.l3.medal === 2 && out.chain.l3.cont && !out.chain.l3.finale && !out.chain.l3.final
+        && out.chain.to4 === 4 && out.chain.l4.medal === 3 && out.chain.l4.keys === 'score,home,damage,trampled' && !out.chain.l4.cont && out.chain.l4.finale && out.chain.l4.final
+        && out.finale.shown && out.finale.seen && out.finale.rows === 5 && out.finale.total.replace(/\D/g, '') === String(total) && out.finale.rating === 'CAMPAIGN RATING · SILVER · PROFESSIONAL'
+        && out.finale.medals.join() === 'gold,gold,silver,gold' && out.after.campaign && out.after.finaleBtn && out.after.c3.done && out.after.c3.medal === 'silver' && out.after.c4.done && out.after.start === 'REPLAY · LEVEL 4'
+        && out.after.backToFinale && out.after.menu.state === 'menu' && out.after.menu.shown && out.after.menu.play === 'REPLAY · LEVEL 4' && out.after.playFromMenu.state === 'playing' && out.after.playFromMenu.level === 4;
 
       // ---- the pause briefing
       play(2); game.pause();

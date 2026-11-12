@@ -17,7 +17,7 @@ import { IncidentScheduler, BOULEVARD_EVENTS } from './events.js';
 import { Post } from './post.js';
 import { Cinematic } from './cinematic.js';
 import { TouchControls } from './touch.js';
-import { CampaignUI, mission, nextMission, completedCount, summarize, assess } from './campaign.js';
+import { CampaignUI, CAMPAIGN, mission, nextMission, completedCount, summarize, assess } from './campaign.js';
 
 const $ = (id) => document.getElementById(id);
 // controls during a cinematic: nothing pressed
@@ -234,6 +234,8 @@ class Game {
     this.player.reset();
     this.cameraRig.reset(this.player);
     this.applyLighting(def.lighting);
+    // the direct verb (F) belongs to the levels that use it
+    for (const id of ['hint-direct', 'tb-direct']) $(id).classList.toggle('hidden', !def.direct);
   }
 
   // Play a short camera sequence (see cinematic.js). Developer runs can skip them all.
@@ -312,7 +314,7 @@ class Game {
     const id = this.dev ? this.level.id : nextMission(), c = mission(id);
     const fresh = !completedCount() && id === 1;
     $('btn-play').textContent = fresh ? 'PLAY' : Progress.completed(id) ? `REPLAY · LEVEL ${id}` : `CONTINUE · LEVEL ${id}`;
-    $('menu-tag').textContent = `${c.place} · ${c.time}${fresh ? '' : ` · Level ${id} of 3`}`;
+    $('menu-tag').textContent = `${c.place} · ${c.time}${fresh ? '' : ` · Level ${id} of ${CAMPAIGN.length}`}`;
   }
 
   _screen(id) {

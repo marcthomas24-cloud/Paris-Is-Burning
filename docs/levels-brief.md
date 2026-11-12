@@ -61,6 +61,15 @@ switchable colliders; stairs, which need foot planting (B3) or must be avoided w
 **Risks.** Interior lighting is new: one more lighting preset, no new light types. Crowd density near the
 camera will press on the 24 skinned-rig cap; budget a pressed-crowd impostor.
 
+**As built (2026-11-12, `src/level4.js`, `src/station.js`).** All four beats, direct (F), the density gauge, gates, the
+crush and trample rules, families with children, staff and the carried casualty are in. Differences from the brief:
+B1 and B11 were not done first, so there is no slow-walk clip and direct is this level's own verb (the player
+side is general: `LEVELS[n].direct` and `missions.onDirect`, ready for Level 6). Children and older travellers
+are the shared bodies scaled and posed, not new bodies (B8 still open). The hand-holding is posed, not IK.
+Density is read per person (neighbours within a metre) and summed over six named places rather than per grid
+cell. There is no pressed-crowd impostor: beyond the 24 rigs the queue is drawn with the standing impostors.
+No section checkpoints. Until Levels 5 and 6 exist the finale follows Level 4.
+
 ## Level 5 · THE QUAYS · Canal Saint-Martin · 04h05
 
 **The situation.** The last violent groups have left the boulevards and are moving along the canal in small

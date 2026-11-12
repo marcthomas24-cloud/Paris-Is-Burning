@@ -95,15 +95,19 @@ export class HUD {
     const gn = $('gasnades'), gas = p.gear.gas;
     if (gn.dataset.n !== String(gas)) { gn.dataset.n = gas; gn.textContent = 'GAS ' + gas; gn.classList.toggle('empty', !gas); }
     // crowd tension: bar with the tense / volatile marks, and the band as a word
-    const ten = m.tension;
+    // (a level may show its own gauge on this bar: Level 4's crowd density)
+    const ten = m.gauge || m.tension;
     if (ten) {
-      const band = ten.band(), tw = Math.round(ten.value) + '%';
+      const label = ten.label || 'TENSION';
+      if (this._tenLabel !== label) { this._tenLabel = label; $('tension-label').textContent = label; this._band = null; }
+      const band = ten.bandName ? ten.bandName() : ten.band(), tw = Math.round(ten.value) + '%';
       const tb = $('tension-bar').firstElementChild;
       if (tb.style.width !== tw) tb.style.width = tw;
       if (this._band !== band) {
         this._band = band;
-        tb.style.background = band === 'volatile' ? 'var(--red)' : band === 'tense' ? 'var(--amber)' : 'var(--dim)';
-        const lb = $('tension-band'); lb.textContent = band.toUpperCase(); lb.className = band;
+        const cls = ten.band();
+        tb.style.background = cls === 'volatile' ? 'var(--red)' : cls === 'tense' ? 'var(--amber)' : 'var(--dim)';
+        const lb = $('tension-band'); lb.textContent = band.toUpperCase(); lb.className = cls;
       }
     }
     const br = $('barriers'), bh = p.gear.barrierHand;

@@ -79,7 +79,7 @@ export class Gear {
 
   tryGas() {
     const g = this.game, p = this.player;
-    if (p.dead) return false;
+    if (p.dead || p.carrying) return false;
     if (g.crowd.arena) { g.hud.alert('No gas in this fight', 'warn', 1.5, 'gas'); return false; }
     if (this.gas <= 0) { g.hud.alert('No gas grenades left this phase', 'warn', 1.5, 'gas'); return false; }
     if (this.throwT > 0 || p.attack || p.dodgeT > 0 || p.staggerT > 0 || p.blocking) return false;
@@ -212,7 +212,7 @@ export class Gear {
     }
     const near = this.nearBarrier();
     if (near && !g.input.touch) g.hud.prompt('B', 'Pick up barrier');
-    if (!pressB || p.dead) return;
+    if (!pressB || p.dead || p.carrying) return;
     if (near) this.pickUp(near);
     else if (A) g.hud.alert('No barriers in this fight', 'warn', 1.4, 'barrier');
     else if (this.barrierHand <= 0) g.hud.alert('No barriers left. Press B beside one to pick it up', 'warn', 1.8, 'barrier');

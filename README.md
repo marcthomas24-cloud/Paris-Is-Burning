@@ -108,11 +108,11 @@ While the crowd is *tense* or *volatile*, ambient attackers come sooner (up to 2
 
 ## Levels
 
-**Level 1** is the mission described above. Completing it unlocks **Level 2 · Nuit** on that device (saved in `localStorage`; a CONTINUE button appears on the results screen). Completing Level 2 unlocks **Level 3 · The Breakout** the same way.
+**Level 1** is the mission described above. Completing it unlocks **Level 2 · Nuit** on that device (saved in `localStorage`; a CONTINUE button appears on the results screen). Completing Level 2 unlocks **Level 3 · The Breakout** the same way, and Level 3 unlocks **Level 4 · Last Train**.
 
 ### Campaign
 
-The three levels form one campaign, *one night in Paris* from 18h47 to dawn (`src/campaign.js`; design in `docs/campaign-plan.md`).
+The four levels form one campaign, *one night in Paris* from 18h47 to dawn (`src/campaign.js`; design in `docs/campaign-plan.md`).
 
 - **Title screen.** PLAY starts Level 1 on a new device. After that the button reads CONTINUE · LEVEL N (or REPLAY once everything is complete) and goes straight into the level the campaign leads to. The tag line says where and when that level is.
 - **CAMPAIGN** opens the mission select. The three levels sit on a line through the night (it runs down the screen on narrow phones), each marked LOCKED, NEXT or COMPLETE, with its best medal and score. The selected level shows its briefing, its objectives, its medal citations (ticked for the best run) and its record: best score, rating, fastest time and number of completions. START or REPLAY plays it. CAMPAIGN is also on the pause and results screens.
@@ -126,7 +126,7 @@ The three levels form one campaign, *one night in Paris* from 18h47 to dawn (`sr
 
   All four citations earn **Gold · Commendation**, three **Silver · Professional**, one or two **Bronze · Adequate**, and none leaves the run **Under review**. The score targets are the old Commendation bands. The scripted bot usually earns Bronze or Silver.
 - **Results.** Every level has the same results layout: its rows (now including damage received), the score, the medal with the four citations and their values, any NEW BEST / FIRST COMPLETION tags (or your best so far), the radio hook, and a card for the next level and its first objective. The buttons are CONTINUE · LEVEL N, REPLAY (RESTART after a failure), RETRY SECTION after a failure at a checkpoint, and CAMPAIGN.
-- **Finale.** Winning Level 3 offers CAMPAIGN COMPLETE: dawn at 05h40, a short epilogue, each level's best medal, score and time, the campaign score (the sum of the best scores) and a campaign rating (the lowest of the three medals). After that it can be reached from the campaign screen, and every level stays replayable.
+- **Finale.** Winning Level 4 (the last level built so far; Levels 5 and 6 are briefed in `docs/levels-brief.md`) offers CAMPAIGN COMPLETE: dawn at 05h40, a short epilogue, each level's best medal, score and time, the campaign score (the sum of the best scores) and a campaign rating (the lowest of the levels' medals). After that it can be reached from the campaign screen, and every level stays replayable.
 - **Records** are kept per level on the device: plays, completions, best score, best medal, fastest time, the best run and the latest one. A worse run never replaces a better one. Saves from before the campaign (unlocks only) still load. If storage is blocked the game plays normally and remembers nothing. **Options → RESET CAMPAIGN** (tap twice) clears unlocks and records but keeps the settings, which are already saved.
 - **Briefing.** The first-play briefing names the level you start in. Level 1 now opens with a title card, as Levels 2 and 3 do. The pause screen shows the level, what is happening now, and its objectives.
 
@@ -189,7 +189,18 @@ His animation is procedural over the shared rigs: a bladed, bouncing guard with 
 
 **Results:** acts, route, van condition at extraction, van damage incidents, breaches stopped and completed, crew neutralised, arrests, hazard takedowns, peaceful people struck, downed suspects struck, damage received, the Fixer's fight time, strikes stopped by his guard and dodges, crowd tension, time, score and rating. Scoring adds act bonuses (500 / 600 / 600 / 1000), roadblock cleared or Passage crossed with the van untouched (300), breach stopped (+250) or completed (−200), hazard takedowns (+150), 25 per hit on the Fixer and 1500 for his arrest, and 10 per point of van condition at the handover; the proportionate-force rules are those of Levels 1 and 2. Encounter members are drawn only from the looting crews (Level 3 adds three crews of its own: 60 crew members); the rally and passers-by are never recruited.
 
-**Lighting presets** (`src/levels.js`): `dusk` (Level 1) and `night` (Level 2). A preset only changes light colours and intensities, fog, sky uniforms, lamp glow and exposure. It never adds or removes lights, so switching does not compile new shaders.
+**Level 4 · Last Train** (unlocked by completing Level 3; `?dev&level=4` opens it directly, `&stage=0-3` picks the beat). 03h10, Gare de l'Est (`src/station.js`, 600 m south of the boulevard: forecourt, concourse, platform, all level). The Métro has closed and hundreds of people are coming through three entrances and two ticket-gate lines for the last night trains. There is no boss; the danger is a crush. Four beats (`src/level4.js`):
+
+1. **The Forecourt.** The new verb, **direct**: hold **F** to point and call, and calm people within 8 m in the same space go the way the camera looks (a ring on the ground shows the reach). Send a family round a burning bin pyre to the one open entrance. Called within 1.5 s of swinging the baton, the same call frightens people instead.
+2. **The Concourse.** The crowd arrives in waves. A **density gauge** replaces the tension bar: it reads the worst of six places (the three entrances, the two gate lines, the platform edge) from how many people there have five or more others within a metre. Above the red line (70 %) people start to fall, the older first; **E** beside someone on the ground pulls them clear, and anyone not reached in 14 s while the crowd is still on them is trampled. Tools: open and close the entrance shutters (E), ask the staff to open a gate line wide or close it (E beside them, or direct them), barriers (people turned aside by one try the other line), and direct (pointing at a gate line sends people to it; pointing away from both holds them back). The staff put the gates back on tickets when the platform is full.
+3. **The Crew.** Four looters smash the kiosk beside the busier queue. Every blow the officer lands frightens people within 12 m, and people who break into a run in a tight crowd fall. Move the queue first and then deal with them, or use gas, which shifts the crew and whoever else is standing in it. Left alone for 95 s they set the kiosk alight.
+4. **Last Train.** Three trains left, doors open 40 s at a time, people hurrying and standing nearer the edge. Someone who cannot walk has to be lifted (E) and walked to an open train door; the last train waits up to 45 s for them.
+
+**People.** Families are an adult with a child (the level's own ten characters at child height): they walk hand in hand, the adult waits for the child, children cannot be struck and never fall, and in a crush the adult lifts them. Older travellers are slower and stooped. Two members of staff in orange tabards work the gate lines. A new `pressed` pose in `lifelike.js` (forearms up at the chest, head turning for air) follows local density. The model set has no child or older body yet, so both are the shared bodies scaled and posed.
+
+**Results and medal:** score 7,200 or more, 200 people home or more, damage received 60 or less, and nobody trampled. Five people trampled ends the level. Score: 10 per person home, beat bonuses (400 / 600 / 600 / 1000), +150 for each person pulled clear, +500 for dealing with the crew with no panic wave, +400 for the casualty carried aboard, +800 for nobody trampled, −300 per person trampled, −250 per panic wave. The scripted bot, which fights the crew beside the queue, usually earns Silver. There are no section checkpoints in this level.
+
+**Lighting presets** (`src/levels.js`): `dusk` (Level 1), `night` (Level 2), `night3` (Level 3) and `station` (Level 4). A preset only changes light colours and intensities, fog, sky uniforms, lamp glow and exposure. It never adds or removes lights, so switching does not compile new shaders.
 
 ## Fairness rule
 
@@ -343,6 +354,8 @@ src/
   level2.js      Level 2 mission script: sections, encounters, the Leader's first appearance, checkpoints
   level3.js      Level 3 mission script: acts and sections, the route choice, interactions, radio queue,
                  checkpoints, results
+  level4.js      Level 4 mission script: travellers, density and crush, direct, gates and the train, the crew
+  station.js     The Level 4 district: Gare de l'Est (forecourt, concourse, platform, the train)
   district.js    The Level 3 district: streets, square, landmarks, its own shop fronts, built on first entry
   convoy.js      The transfer van: path following, stop rules, moving collider, integrity, breaches
   hazards.js     Level 3 hazards (cook-off car, petrol trail, scaffold, fireworks) and their crew actors
