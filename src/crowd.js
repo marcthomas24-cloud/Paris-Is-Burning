@@ -683,7 +683,8 @@ export class Crowd {
       if (lod === 2) {
         r.visible = false;
         const lyingDown = n.state === 'down' || n.state === 'arrested';
-        if (!lyingDown) this.far.add(n.rig.kind, n.speed > 0.5, { x: n.pos.x, y: n.pos.y, z: n.pos.z, heading: n.heading, scale: n.outfit.height || 1, colors: n.colors, pat: n.outfit.shellPattern === 1 });
+        // (farDy: a level's seated or lying people sink their standing impostor: Level 6)
+        if (!lyingDown && !(n.farDy < -1)) this.far.add(n.rig.kind, n.speed > 0.5, { x: n.pos.x, y: n.pos.y + (n.farDy || 0), z: n.pos.z, heading: n.heading, scale: n.outfit.height || 1, colors: n.colors, pat: n.outfit.shellPattern === 1 });
         n.animAcc += dt;
         continue;
       }

@@ -486,3 +486,23 @@ h2 { font-size: 36px; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 18px
   .cmp-cols { grid-template-columns: 1fr; gap: 10px; }
   .menu-buttons.wide button.primary { flex-basis: 100%; }
 }
+
+/* Level 6: a conversation (dialogue.js). Subtitle box low in the middle, choices as buttons */
+#dialogue { position: absolute; left: 0; right: 0; margin: 0 auto; bottom: 168px; width: min(560px, calc(100vw - 32px)); box-sizing: border-box; padding: 12px 16px 10px; background: rgba(10,12,16,0.82); border-left: 3px solid var(--amber); border-radius: 4px; pointer-events: auto; }
+#dialogue.you { border-left-color: #9fd0ff; }
+#dialogue .dl-who { font-size: 11px; font-weight: 800; letter-spacing: 0.18em; margin-bottom: 4px; }
+#dialogue .dl-text { font-size: 17px; line-height: 1.35; color: var(--text); min-height: 1.35em; }
+#dialogue .dl-choices { display: flex; flex-direction: column; gap: 6px; }
+#dialogue .dl-choices:empty { display: none; }
+#dialogue .dl-ch { display: flex; gap: 10px; align-items: baseline; text-align: left; font: inherit; font-size: 15px; color: var(--text); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 3px; padding: 7px 10px; cursor: pointer; }
+#dialogue .dl-ch:hover, #dialogue .dl-ch:focus-visible { background: rgba(159,208,255,0.16); border-color: rgba(159,208,255,0.6); }
+#dialogue .dl-ch b { flex: none; display: inline-block; min-width: 18px; padding: 0 5px; background: var(--text); color: #111; border-radius: 2px; font-family: var(--mono); text-align: center; }
+#dialogue .dl-ch.def { border-style: dashed; }
+#dialogue .dl-time { height: 2px; margin-top: 8px; background: rgba(255,255,255,0.08); }
+#dialogue .dl-time > div { height: 100%; width: 0; background: #9fd0ff; transition: width 0.1s linear; }
+@media (max-width: 900px) { #dialogue { bottom: auto; top: 128px; } #dialogue .dl-text { font-size: 15px; } }
+/* Options: developer mode's quick starts */
+.audio-settings .dev-starts { display: flex; gap: 8px; margin-top: -4px; }
+.audio-settings .dev-starts.hidden { display: none; }
+.audio-settings .dev-starts button { padding: 7px 14px; font: inherit; font-size: 12px; font-weight: 800; letter-spacing: 0.14em; color: var(--text); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); border-radius: 2px; cursor: pointer; }
+.audio-settings .dev-starts button:hover { background: rgba(255,255,255,0.16); border-color: var(--amber); }

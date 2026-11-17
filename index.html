@@ -42,12 +42,13 @@
 
       <div id="controls-hint" class="panel">
         <div><b>WASD</b> move · <b>Shift</b> sprint · <b>Space</b> dodge</div>
-        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest · <b>Q</b> first aid · <b>G</b> tear gas · <b>B</b> barrier<span id="hint-direct" class="hidden"> · <b>F</b> direct (hold)</span><span id="hint-order" class="hidden"> · <b>1</b> hold · <b>2</b> follow · <b>3</b> advance</span></div>
+        <div><b>LMB</b> baton · <b>RMB</b> shield · <b>E</b> interact / arrest · <b>Q</b> first aid · <b>G</b> tear gas · <b>B</b> barrier<span id="hint-direct" class="hidden"> · <b>F</b> direct (hold)</span><span id="hint-order" class="hidden"> · <b>1</b> hold · <b>2</b> follow · <b>3</b> advance</span><span id="hint-talk" class="hidden"> · <b>E</b> talk (baton down)</span></div>
         <div><b>Esc</b> pause · <b>H</b> hide hints</div>
       </div>
 
       <div id="alerts"></div>
       <div id="prompt" class="hidden"></div>
+      <div id="dialogue" class="hidden"></div>
       <div id="crosshair"></div>
       <div id="offscreen-arrow"></div>
       <div id="threat-warning" class="hidden">⚠ PETROL BOMB</div>
@@ -231,6 +232,7 @@
           <tr><td>B</td><td>Police barrier: shows a preview in front of you (green where it fits); B again or left mouse places it, right mouse or G cancels. B beside one of your barriers picks it up. 4 carried; the crowd walks round them</td></tr>
           <tr><td>F (hold)</td><td>Direct, from Level 4: point and call. Calm people within about 8 m go the way the camera looks. Call just after swinging the baton and it frightens them instead</td></tr>
           <tr><td>1 · 2 · 3</td><td>Orders, in Level 5: <b>1</b> the nearest officer with you holds where you stand · <b>2</b> the nearest one posted comes back to you (hold the key: everyone) · <b>3</b> one advances to where the camera looks and holds there. E beside a burning car puts it out; E beside an officer who is down helps them up</td></tr>
+          <tr><td>E (talk)</td><td>Talk, in Level 6: beside someone marked with a speech mark, with the shield down and the baton still for a few seconds. Answer with <b>1</b> <b>2</b> <b>3</b> (or tap); E skips a line. In the provocation, F calls an officer back, <b>1</b> halts one, <b>2</b> calls one back (hold: all in earshot), <b>3</b> sends one to where you look (at the thrower: to take him quietly)</td></tr>
           <tr><td>Q</td><td>First aid — restores 40 health (3 kits per run)</td></tr>
           <tr><td>H</td><td>Toggle control hints</td></tr>
           <tr><td>M</td><td>Mute / unmute sound</td></tr>
@@ -261,6 +263,9 @@
           <span class="dim small opt-note">Bosses hit for 60% damage, wind up 20% slower and stay open 40% longer. Medals are still awarded; the run is marked ASSISTED.</span>
           <label for="opt-brutality">Police brutality</label><input type="checkbox" id="opt-brutality" /><span></span>
           <span class="dim small opt-note">On: downed and cuffed suspects can be struck with no score penalty. Off: they still react, but it counts as excessive force.</span>
+          <label for="opt-devmode">Developer mode</label><input type="checkbox" id="opt-devmode" /><span></span>
+          <span class="dim small opt-note">Start any level, locked or not (here or from the campaign screen). Runs still record medals.</span>
+          <span id="dev-starts" class="opt-note dev-starts hidden"><button data-action="dev-start" data-level="4">LEVEL 4</button><button data-action="dev-start" data-level="5">LEVEL 5</button><button data-action="dev-start" data-level="6">LEVEL 6</button></span>
         </div>
         <p class="dim small">Settings and campaign progress are saved on this device.</p>
         <div class="menu-buttons"><button data-action="back" class="primary">BACK</button><button data-action="reset-progress" id="btn-reset-progress">RESET CAMPAIGN</button></div>

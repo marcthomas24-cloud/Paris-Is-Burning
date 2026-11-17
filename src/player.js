@@ -151,7 +151,9 @@ export class Player {
     const lkd = lk ? Math.hypot(lk.pos.x - this.pos.x, lk.pos.z - this.pos.z) : 0;
     const mF = lkd > 0.8 ? new THREE.Vector3((lk.pos.x - this.pos.x) / lkd, 0, (lk.pos.z - this.pos.z) / lkd) : camF;
     const mR = lkd > 0.8 ? new THREE.Vector3(-mF.z, 0, mF.x) : camR;
-    if (!this.dead) {
+    // talking (Level 6's dialogue): the officer stands still with his hands down
+    const talking = !!(g.missions && g.missions.talking);
+    if (!this.dead && !talking) {
       if (input.down('KeyW')) wish.add(mF);
       if (input.down('KeyS')) wish.sub(mF);
       if (input.down('KeyD')) wish.add(mR);
@@ -167,14 +169,14 @@ export class Player {
     // --- direct (F, hold): point and call. With the baton just swung it is a threat, not a direction
     this.sinceSwing = this.attack ? 0 : this.sinceSwing + dt;
     const canDirect = !!(g.level && g.level.direct) && !this.dead && !this.carrying && this.dodgeT <= 0 && this.staggerT <= 0 && this.gear.throwT <= 0 && !this.gear.placing;
-    this.directing = canDirect && input.down('KeyF') ? (this.attack || this.sinceSwing < 1.5 ? 'threat' : 'point') : null;
+    this.directing = canDirect && !talking && input.down('KeyF') ? (this.attack || this.sinceSwing < 1.5 ? 'threat' : 'point') : null;
     this.directK += ((this.directing ? 1 : 0) - this.directK) * Math.min(1, dt * 12);
     if (this.directing && g.missions.onDirect) g.missions.onDirect(this.directing, camF, dt);
 
     // --- stance & attacks
-    this.blocking = !this.dead && input.mouse(2) && !this.attack && this.dodgeT <= 0 && !this.carrying && this.directing !== 'point';
+    this.blocking = !this.dead && !talking && input.mouse(2) && !this.attack && this.dodgeT <= 0 && !this.carrying && this.directing !== 'point';
     this.blockK += ((this.blocking ? 1 : 0) - this.blockK) * Math.min(1, dt * 14);
-    if (input.pressed('Mouse0') && !this.gear.ateClick && !this.gear.placing && !this.carrying) this.attackBuffer = 0.22;
+    if (input.pressed('Mouse0') && !talking && !this.gear.ateClick && !this.gear.placing && !this.carrying) this.attackBuffer = 0.22;
     const canAttack = !this.dead && this.staggerT <= 0 && this.dodgeT <= 0 && this.gear.throwT <= 0 && (!this.attack || (this.attack.phase === 'recover' && this.attack.t > 0.14));
     if (this.attackBuffer > 0 && canAttack) {
       this.attackBuffer = 0;
@@ -198,7 +200,7 @@ export class Player {
     }
 
     // --- dodge
-    if (!this.dead && !this.carrying && input.pressed('Space') && this.dodgeCool <= 0 && this.stamina > 12 && this.staggerT <= 0) {
+    if (!this.dead && !this.carrying && !talking && input.pressed('Space') && this.dodgeCool <= 0 && this.stamina > 12 && this.staggerT <= 0) {
       this.dodgeDir.copy(wish.lengthSq() > 0 ? wish : this.forward().negate()).normalize();
       this.dodgeT = 0.32; this.dodgeCool = 0.75; this.invuln = 0.28;
       if (g.missions && g.missions.stats.dodges !== undefined) g.missions.stats.dodges++;

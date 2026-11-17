@@ -157,6 +157,18 @@ something the player did rather than read.
 **Risks.** A level without combat can feel like a cutscene. Beat 3 is the answer: the skills of the whole
 campaign are needed, under time pressure, to prevent a fight. Dialogue must be short: nothing over ten seconds.
 
+**As built (2026-11-12, `src/level6.js`, `src/republique.js`, `src/dialogue.js`).** All four beats, talk (E with the shield down
+and the baton still), the three requests and the captain, the line's surges stopped with direct and the orders, the thrower,
+both endings, the square's memory and the dawn light are in. Differences from the brief: the organiser is not yet placed in
+Level 1's crowd (adding a scripted person there would change Level 1's recorded seeded runs), so the recognition is the
+organiser's own line about 18h47 and the fixed outfit. The orders are the same keys as Level 5 but act on the line: 1 halts
+the nearest officer moving, 2 calls him back (held: everyone in earshot), 3 sends one where you look (at the thrower, to take
+him). There is no camera move into conversation distance and no new face rig: the face fill is the second beacon light moved
+to the speaker's face (no light added), standing in for B5. Sit, lean, huddle, head-drop, kneel-to-treat and nod are pose
+layers in `lifelike.js` over the existing clips (B1 still open); beyond the 24 rigs, seated people are standing impostors
+sunk into the ground. The crowd is about 135, not a few hundred. The light mixes two presets (`dawn0` to `dawn`) as the clock
+runs. No section checkpoints. Not tuned by a person playing it.
+
 ## The Revolution campaign
 
 `docs/revolution-plan.md` covers missions 101–103 against Levels 1–3. If Levels 4–6 are built, each has a

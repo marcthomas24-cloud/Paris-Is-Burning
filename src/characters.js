@@ -599,13 +599,23 @@ export function giveItem(rig, type, rng = Math.random, variant = 'pal') {
     g.add(s);
     g.position.copy(SHIELD_POSE.guard[0]);
     rig.spine.add(g);
+  } else if (type === 'megaphone') {
+    // a loud-hailer held by its pistol grip, the bell pointing along the hand (Level 6's organiser)
+    const bell = new THREE.Mesh(geo('CylinderGeometry(0.11, 0.045, 0.28, 14, 1, true)', () => new THREE.CylinderGeometry(0.11, 0.045, 0.28, 14, 1, true)), colMat(0xe8e6e0, { roughness: 0.5, side: THREE.DoubleSide }));
+    const body = new THREE.Mesh(geo('CylinderGeometry(0.05, 0.05, 0.16, 10)', () => new THREE.CylinderGeometry(0.05, 0.05, 0.16, 10)), colMat(0xc8201c, { roughness: 0.5 }));
+    const grip = new THREE.Mesh(geo('BoxGeometry(0.035, 0.1, 0.045)', () => new THREE.BoxGeometry(0.035, 0.1, 0.045)), colMat(0x1a1a1a));
+    const horn = new THREE.Group(); horn.add(bell, body); bell.position.y = -0.2; body.position.y = -0.02;
+    horn.rotation.x = Math.PI / 2; horn.position.set(0, -0.12, 0.06);
+    grip.position.set(0, -0.07, 0.02);
+    g.add(horn, grip);
+    rig.handR.add(g);
   } else if (type === 'stone') {
     const st = new THREE.Mesh(geo('DodecahedronGeometry(0.06)', () => new THREE.DodecahedronGeometry(0.06)), colMat(0x6a6660));
     st.position.set(0, -0.1, 0.03); g.add(st);
     rig.handR.add(g);
   }
   rig.item = g;
-  rig.gripR = !!rig.baton || !!rig.axe || ['flag', 'frflag', 'bigflag', 'placard', 'phone', 'bottle', 'stone', 'camera', 'loot', 'flare'].includes(type);
+  rig.gripR = !!rig.baton || !!rig.axe || ['flag', 'frflag', 'bigflag', 'placard', 'phone', 'bottle', 'stone', 'camera', 'loot', 'flare', 'megaphone'].includes(type);
   rig.gripL = type === 'bigflag' || type === 'loot' || type === 'impshield';
   g.traverse((o) => { if (o.isMesh) o.castShadow = type === 'banner' || type === 'placard' || type === 'bigflag' || type === 'loot' || type === 'impshield'; });
   return g;

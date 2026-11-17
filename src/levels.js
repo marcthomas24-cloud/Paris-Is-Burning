@@ -12,6 +12,8 @@ import { Level4, L4_PHASES, L4_CROWD, L4_EVENTS } from './level4.js';
 import { STATION, stationArea } from './station.js';
 import { Level5, L5_PHASES, L5_CROWD, L5_EVENTS } from './level5.js';
 import { QUAYS, quaysArea } from './quays.js';
+import { Level6, L6_PHASES, L6_CROWD, L6_EVENTS } from './level6.js';
+import { REP, repArea } from './republique.js';
 
 export const LIGHTING = {
   // the original look, values unchanged
@@ -58,7 +60,42 @@ export const LIGHTING = {
     sky: { horizon: [0.12, 0.13, 0.17], low: [0.06, 0.08, 0.13], top: [0.02, 0.03, 0.07], glow: [0.5, 0.3, 0.18], glowK: 0.22, haze: [0.12, 0.12, 0.14] },
     lamp: 3.8, beaconOn: 24, beaconOff: 3, fireLight: 1.6, puddleEnv: 0.55, smokeTint: [0.42, 0.42, 0.44],
   },
+  // Level 6: Place de la République from 05h10 (the blue hour) to 05h40 (first light). The level
+  // moves from `dawn0` to `dawn` as it is played (mixLighting): the same lights, other values.
+  dawn0: {
+    hemiSky: 0x5a6a92, hemiGround: 0x3a342e, hemiI: 1.45,
+    sunColor: 0xa8bce6, sunI: 0.9, sunOffset: [40, 40, 60],
+    exposure: 1.3, baseFog: 0.0085, fogA: 0x2a3142, fogB: 0x3a3230,
+    sky: { horizon: [0.24, 0.22, 0.28], low: [0.11, 0.13, 0.2], top: [0.03, 0.05, 0.11], glow: [0.6, 0.36, 0.3], glowK: 0.3, haze: [0.18, 0.17, 0.2] },
+    lamp: 3.2, beaconOn: 22, beaconOff: 3, fireLight: 1.3, puddleEnv: 0.55, smokeTint: [0.5, 0.5, 0.54],
+  },
+  dawn: {
+    hemiSky: 0xa9b6cc, hemiGround: 0x6a5a4a, hemiI: 1.75,
+    sunColor: 0xffc49a, sunI: 1.9, sunOffset: [60, 22, 50],
+    exposure: 1.18, baseFog: 0.0075, fogA: 0x8a8c96, fogB: 0x8a7464,
+    sky: { horizon: [0.86, 0.6, 0.48], low: [0.56, 0.52, 0.56], top: [0.26, 0.34, 0.48], glow: [1.0, 0.62, 0.36], glowK: 0.55, haze: [0.6, 0.5, 0.46] },
+    lamp: 0.6, beaconOn: 14, beaconOff: 2, fireLight: 1, puddleEnv: 0.4, smokeTint: [0.85, 0.8, 0.78],
+  },
 };
+
+// A preset between two others (k 0: a, 1: b), for a level whose light changes while it is
+// played (Level 6's dawn). Colours mix in RGB; everything else is linear.
+const lerpHex = (a, b, k) => {
+  const c = (h, s) => (h >> s) & 255;
+  return [16, 8, 0].reduce((v, s) => v | (Math.round(c(a, s) + (c(b, s) - c(a, s)) * k) << s), 0);
+};
+const lerpArr = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+export function mixLighting(a, b, k) {
+  const A = LIGHTING[a], B = LIGHTING[b], out = { sky: {} };
+  for (const key of Object.keys(A)) {
+    const x = A[key], y = B[key];
+    if (key === 'sky') { for (const s of Object.keys(x)) out.sky[s] = Array.isArray(x[s]) ? lerpArr(x[s], y[s], k) : x[s] + (y[s] - x[s]) * k; }
+    else if (Array.isArray(x)) out[key] = lerpArr(x, y, k);
+    else if (/^(hemiSky|hemiGround|sunColor|fogA|fogB)$/.test(key)) out[key] = lerpHex(x, y, k);
+    else out[key] = x + (y - x) * k;
+  }
+  return out;
+}
 
 export const LEVELS = {
   1: {
@@ -103,6 +140,16 @@ export const LEVELS = {
     crowdLayout: L5_CROWD, events: L5_EVENTS, sirenLanes: [-880, -520],
     layout: QUAYS, areaAt: quaysArea, // developer tools
   },
+  // The square at dawn (Level6): no fight to win, a night to end. Completing Level 5 unlocks it.
+  6: {
+    id: 6, name: 'DAWN', tag: 'Place de la République · 05h10',
+    Missions: Level6, phases: L6_PHASES, lighting: 'dawn0', hazardDir: 1,
+    policeOff: [], music: true, musicTheme: 'l3',
+    start: REP.start, bounds: REP.bounds,
+    district: 'l6', brawls: false, direct: true, order: true, talk: true, // talk: E with the baton down
+    crowdLayout: L6_CROWD, events: L6_EVENTS, sirenLanes: [-1100, -1080],
+    layout: REP, areaAt: repArea, // developer tools
+  },
 };
 
 // Unlocks and records persist on this device. Storage can be unavailable (private windows,
@@ -133,7 +180,7 @@ export const Progress = {
     p.lastPlayed = id;
     const out = { firstWin: false, score: false, medal: false, time: false };
     if (run.win) {
-      const sum = { score: run.score, arrests: run.arrests, damage: run.damage, peaceful: run.peaceful, home: run.home, trampled: run.trampled, squad: run.squad, burnt: run.burnt, time: Math.round(run.time), medal, win: true };
+      const sum = { score: run.score, arrests: run.arrests, damage: run.damage, peaceful: run.peaceful, home: run.home, trampled: run.trampled, squad: run.squad, burnt: run.burnt, agreed: run.agreed, blows: run.blows, cleared: run.cleared, time: Math.round(run.time), medal, win: true };
       out.firstWin = !r.wins;
       out.score = run.score > r.bestScore; out.medal = medal > r.bestMedal; out.time = r.bestTime === null || run.time < r.bestTime;
       r.wins++;

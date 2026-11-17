@@ -22,7 +22,7 @@ import { CampaignUI, CAMPAIGN, mission, nextMission, completedCount, summarize, 
 const $ = (id) => document.getElementById(id);
 // controls during a cinematic: nothing pressed
 const PREFS_KEY = 'parisBurning.gameplay.v1';
-const PREF_DEFAULTS = { sens: 1, invertY: false, brutality: false, lockOn: true, assisted: false };
+const PREF_DEFAULTS = { sens: 1, invertY: false, brutality: false, lockOn: true, assisted: false, devMode: false };
 const NO_AIDS = { lockOn: false, assisted: false };
 const wrapAngle = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 function loadPrefs() {
@@ -170,6 +170,7 @@ class Game {
       else if (a === 'resume') this.resume();
       else if (a === 'retry') { const cp = this.missions.cp; this.restart(); if (cp && this.missions.resume) this.missions.resume(cp); }
       else if (a === 'continue') this.startLevel(this.level.id + 1);
+      else if (a === 'dev-start') { if (this.anyLevel()) { this.devStage = null; this.startLevel(+b.dataset.level, { force: true }); } } // Options: developer mode
     }));
     $('onboarding').addEventListener('click', () => this._dismissOnboarding());
     $('cine').addEventListener('pointerdown', (e) => { e.preventDefault(); if (this.cinematic) this.cinematic.skip(); });
@@ -191,6 +192,7 @@ class Game {
       $('opt-sens').value = Math.round(p.sens * 100); $('opt-sens-out').textContent = Math.round(p.sens * 100) + '%';
       $('opt-invert').checked = p.invertY; $('opt-brutality').checked = p.brutality;
       $('opt-lockon').checked = p.lockOn; $('opt-assisted').checked = p.assisted;
+      $('opt-devmode').checked = p.devMode; $('dev-starts').classList.toggle('hidden', !p.devMode);
       this.cameraRig.sens = p.sens; this.cameraRig.invertY = p.invertY;
     };
     const savePrefs = this._savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(this.prefs)); } catch (e) { /* storage blocked */ } syncPrefs(); };
@@ -199,6 +201,7 @@ class Game {
     $('opt-brutality').addEventListener('change', (e) => { this.prefs.brutality = e.target.checked; savePrefs(); });
     $('opt-lockon').addEventListener('change', (e) => { this.prefs.lockOn = e.target.checked; savePrefs(); });
     $('opt-assisted').addEventListener('change', (e) => { this.prefs.assisted = e.target.checked; savePrefs(); });
+    $('opt-devmode').addEventListener('change', (e) => { this.prefs.devMode = e.target.checked; savePrefs(); });
     syncPrefs();
   }
 
@@ -238,6 +241,9 @@ class Game {
     for (const id of ['hint-direct', 'tb-direct']) $(id).classList.toggle('hidden', !def.direct);
     // ... and so do the squad's orders (1 / 2 / 3)
     for (const id of ['hint-order', 'tb-hold', 'tb-follow', 'tb-advance']) $(id).classList.toggle('hidden', !def.order);
+    // ... and talk (E with the baton down)
+    $('hint-talk').classList.toggle('hidden', !def.talk);
+    this.faceFill = null;
   }
 
   // Play a short camera sequence (see cinematic.js). Developer runs can skip them all.
@@ -295,7 +301,8 @@ class Game {
   // Colours, intensities, fog and sky uniforms only: the light count never changes,
   // so the existing shader programs stay valid (no recompilation on switch).
   applyLighting(name) {
-    const L = LIGHTING[name] || LIGHTING.dusk;
+    // (a level can pass a mixed preset of its own: Level 6's dawn, levels.js mixLighting)
+    const L = typeof name === 'object' && name ? name : LIGHTING[name] || LIGHTING.dusk;
     this.lighting = L;
     this.hemi.color.set(L.hemiSky); this.hemi.groundColor.set(L.hemiGround); this.hemi.intensity = L.hemiI;
     this.sun.color.set(L.sunColor); this.sun.intensity = L.sunI; this.sunOffset.set(...L.sunOffset);
@@ -449,6 +456,8 @@ class Game {
   // Player aids (Options): lock-on in boss fights and Assisted boss fights. Harness-driven runs
   // ignore the device's settings (a test sets game.testAids instead), so seeded results and the
   // boss tests are the same on every device.
+  // any level may be started, locked or not: a ?dev page, or Options' developer mode
+  anyLevel() { return !!this.dev || !!this.prefs.devMode; }
   aids() { return this.manualStep ? (this.testAids || NO_AIDS) : this.prefs; }
 
   // the boss the officer locks on to: one in a fight, past his introduction, not yet down
@@ -556,6 +565,10 @@ class Game {
     const on = Math.floor(this.time * 4) % 2 === 0;
     const A = this.crowd && this.crowd.arena;
     this.policeLights.forEach((l, i) => {
+      // a level's face fill (Level 6: the face of whoever the officer is talking to). The second
+      // beacon light does it, so no light is added and no shader recompiles
+      if (i === 1 && this.faceFill) { l.position.copy(this.faceFill.pos); l.color.setHex(0xffeedd); l.intensity = this.faceFill.i; l.distance = 4; return; }
+      l.distance = 22;
       if (A) {
         // boss arena: the two beacons strobe red and blue at its edge (same lights, new colours)
         l.position.set(A.x + (i ? 1 : -1) * A.r * 0.75, 3.2, A.z - A.r * 0.35);

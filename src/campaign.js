@@ -3,7 +3,8 @@
 // Medals are a record of how a mission was played, never a currency: completion is required,
 // then four citations decide it: score, arrests, damage received and no peaceful person struck;
 // the station (Level 4) cites people home and nobody trampled instead of arrests and force,
-// the quays (Level 5) officers still standing and cars burnt out instead of damage and force.
+// the quays (Level 5) officers still standing and cars burnt out instead of damage and force,
+// the square at dawn (Level 6) requests agreed, no blow landed and the square cleared by 05h40.
 // Records are kept by Progress (levels.js) in the same storage key as the unlocks.
 import { Progress } from './levels.js';
 
@@ -43,6 +44,13 @@ export const CAMPAIGN = [
     objectives: ['Order the squad: 1 hold, 2 follow, 3 advance', 'Hold the bridges and turn the bands back', 'Protect the fire crew at the burning shop', 'End it at the lock'],
     targets: { score: 6500, arrests: 4, squad: 3, burnt: 5 }, cite: 'quays',
   },
+  {
+    id: 6, time: '05h10', title: 'DAWN', card: 'DAWN', place: 'Place de la République',
+    opening: 'You are a CRS officer at Place de la République, behind the line, at the end of the night.',
+    briefing: 'A few hundred people are still round the monument: exhausted, some hurt, some angry, none armed. The order is to clear the square by 05h40. Walk in without the shield, talk to the people who speak for the square, and end the night without a charge.',
+    objectives: ['Walk in: shield down, baton down', 'Talk: E beside the people who speak for the square', 'Stop your own line when the bottle comes', 'First light: let them go home'],
+    targets: { score: 6500, agreed: 3 }, cite: 'dawn',
+  },
 ];
 export const mission = (id) => CAMPAIGN.find((c) => c.id === id) || CAMPAIGN[0];
 
@@ -61,13 +69,18 @@ const esc = (v) => String(v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // What a finished run is judged on (the same fields in every level).
 export function summarize(m, win) {
   const s = m.stats;
-  return { win: !!win, score: m.score, arrests: s.arrests, damage: Math.round(s.damageTaken || 0), peaceful: s.peaceful, home: s.home, trampled: s.trampled, squad: s.squad, burnt: s.burnt, time: m.t, assisted: !!s.assisted };
+  return { win: !!win, score: m.score, arrests: s.arrests, damage: Math.round(s.damageTaken || 0), peaceful: s.peaceful, home: s.home, trampled: s.trampled, squad: s.squad, burnt: s.burnt, agreed: s.agreed, blows: s.blows, cleared: s.cleared, time: m.t, assisted: !!s.assisted };
 }
 
 // The four citations and the medal they add up to. No medal without completion.
 export function assess(id, run) {
   const c = mission(id), t = c.targets, station = c.cite === 'station';
-  const citations = c.cite === 'quays' ? [
+  const citations = c.cite === 'dawn' ? [
+    { key: 'score', label: `Score ${fmtScore(t.score)} or more`, value: fmtScore(run.score), ok: run.score >= t.score },
+    { key: 'agreed', label: `Requests agreed: ${t.agreed} of 3`, value: run.agreed ?? '—', ok: run.agreed >= t.agreed },
+    { key: 'blows', label: 'Nobody struck, by either side', value: run.blows ?? '—', ok: run.blows === 0 },
+    { key: 'cleared', label: 'Square cleared by 05h40, without a charge', value: run.cleared ? 'yes' : run.cleared === 0 ? 'no' : '—', ok: run.cleared === 1 },
+  ] : c.cite === 'quays' ? [
     { key: 'score', label: `Score ${fmtScore(t.score)} or more`, value: fmtScore(run.score), ok: run.score >= t.score },
     { key: 'arrests', label: `${t.arrests} arrests or more`, value: run.arrests, ok: run.arrests >= t.arrests },
     { key: 'squad', label: `${t.squad} of 4 squad officers standing or more`, value: run.squad ?? '—', ok: run.squad >= t.squad },
@@ -147,7 +160,7 @@ export class CampaignUI {
   }
 
   // a level can be started when it is unlocked, or always in a developer build
-  canStart(id) { return Progress.unlocked(id) || !!this.game.dev; }
+  canStart(id) { return Progress.unlocked(id) || this.game.anyLevel(); }
 
   open(from) {
     this.from = from || 'menu';
@@ -167,22 +180,22 @@ export class CampaignUI {
     this.el.track.style.setProperty('--reach', String(reach / (CAMPAIGN.length - 1)));
     for (const b of this.el.track.querySelectorAll('[data-mission]')) {
       const id = +b.dataset.mission, rec = Progress.record(id), open = Progress.unlocked(id), comp = Progress.completed(id);
-      const state = comp ? 'COMPLETE' : open ? (id === next ? 'NEXT' : 'OPEN') : this.game.dev ? 'LOCKED · DEV' : 'LOCKED';
-      b.querySelector('.cmp-node').innerHTML = comp && rec && rec.bestMedal > 0 ? medalDisc(rec.bestMedal) : `<span class="num">${open || this.game.dev ? id : '🔒'}</span>`;
+      const state = comp ? 'COMPLETE' : open ? (id === next ? 'NEXT' : 'OPEN') : this.game.anyLevel() ? 'LOCKED · DEV' : 'LOCKED';
+      b.querySelector('.cmp-node').innerHTML = comp && rec && rec.bestMedal > 0 ? medalDisc(rec.bestMedal) : `<span class="num">${open || this.game.anyLevel() ? id : '🔒'}</span>`;
       b.querySelector('.cmp-state').textContent = state + (rec && rec.wins ? ` · ${fmtScore(rec.bestScore)}` : '');
       b.classList.toggle('locked', !open); b.classList.toggle('done', comp); b.classList.toggle('next', id === next && !comp);
       b.classList.toggle('sel', id === sel); b.setAttribute('aria-pressed', String(id === sel));
     }
     const c = mission(sel), rec = Progress.record(sel), open = Progress.unlocked(sel), comp = Progress.completed(sel);
     const best = rec && rec.bestRun;
-    const cites = best ? assess(sel, best).citations : assess(sel, { win: false, score: -1, arrests: -1, damage: Infinity, peaceful: -1, home: -1, trampled: -1, squad: -1, burnt: -1 }).citations;
+    const cites = best ? assess(sel, best).citations : assess(sel, { win: false, score: -1, arrests: -1, damage: Infinity, peaceful: -1, home: -1, trampled: -1, squad: -1, burnt: -1, agreed: -1, blows: -1, cleared: -1 }).citations;
     const chip = comp ? '<span class="chip done">COMPLETE</span>' : open ? (sel === next ? '<span class="chip">NEXT</span>' : '<span class="chip calm">OPEN</span>') : '<span class="chip calm">LOCKED</span>';
     this.el.detail.innerHTML = `<div class="cmp-head">${chip}<span>LEVEL ${c.id} · ${c.time} · ${esc(c.place)}</span></div>`
       + `<h3>${esc(c.title)}</h3><p>${esc(c.briefing)}</p>`
       + `<div class="cmp-cols"><div><div class="lbl">OBJECTIVES</div><ul class="objectives">${c.objectives.map((o) => `<li>${esc(o)}</li>`).join('')}</ul></div>`
       + `<div><div class="lbl">MEDAL CITATIONS${best ? ' · BEST RUN' : ''}</div><ul class="citations">${cites.map((x) => `<li class="${best && x.ok ? 'ok' : 'no'}"><span>${esc(x.label)}</span></li>`).join('')}</ul></div></div>`
       + (rec && rec.wins ? `<div class="cmp-best">${medalDisc(rec.bestMedal)}<span>BEST ${fmtScore(rec.bestScore)} · ${MEDALS[Math.max(0, rec.bestMedal)].rank}${rec.bestTime ? ' · ' + fmtTime(rec.bestTime) : ''} · ${rec.wins} ${rec.wins === 1 ? 'completion' : 'completions'}${best && best.assisted ? ' · assisted' : ''}</span></div>`
-        : !open ? `<div class="cmp-best dim">Complete Level ${c.id - 1} to unlock${this.game.dev ? ' · developer build: START plays it anyway' : ''}</div>` : '');
+        : !open ? `<div class="cmp-best dim">Complete Level ${c.id - 1} to unlock${this.game.anyLevel() ? ' · developer mode: START plays it anyway' : ''}</div>` : '');
     this.el.start.textContent = comp ? `REPLAY · LEVEL ${sel}` : `START · LEVEL ${sel}`;
     this.el.start.disabled = !this.canStart(sel);
     this.el.finale.classList.toggle('hidden', !campaignDone());
@@ -192,7 +205,7 @@ export class CampaignUI {
     const g = this.game, id = this.sel;
     if (!this.canStart(id)) return;
     if (g.level && id !== g.level.id) g.devStage = null; // a dev stage belongs to the level it was given for
-    g.startLevel(id, { force: !!g.dev });
+    g.startLevel(id, { force: g.anyLevel() });
   }
 
   back() { this.game._screen(this.from); }
@@ -207,8 +220,13 @@ export class CampaignUI {
     const rating = Math.min(...medals);
     const total = recs.reduce((a, { r }) => a + (r ? r.bestScore : 0), 0);
     const clean = recs.every(({ r }) => r && r.bestRun && r.bestRun.peaceful === 0);
-    $('fin-text').innerHTML = '<p>The boulevard is quiet. Le Patron is with the gendarmerie, the Fixer is in the cell beside him and their crews have scattered. The last train has left Gare de l\'Est and the canal is quiet.</p>'
-      + `<p>${clean ? 'Nobody who came out to march tonight was struck by your baton.' : 'Most of the people on the street tonight came to demonstrate, and went home.'}</p>`;
+    // the closing line is what the player did at dawn (the latest run of Level 6), not something to read
+    const dawn = (Progress.record(6) || {}).last;
+    const home = !dawn ? 'Most of the people on the street tonight came to demonstrate, and went home.'
+      : dawn.cleared ? 'At first light the last of them stood up and walked home past you. Nobody charged the square.'
+        : 'The square was cleared at dawn with a charge. Most of the people on it had come to demonstrate.';
+    $('fin-text').innerHTML = '<p>The boulevard is quiet. Le Patron is with the gendarmerie, the Fixer is in the cell beside him and their crews have scattered. The last train has left Gare de l\'Est, the canal is quiet and Place de la République is empty.</p>'
+      + `<p>${home}${clean ? ' Nobody who came out to march tonight was struck by your baton.' : ''}</p>`;
     $('fin-stats').innerHTML = recs.map(({ c, r }) => `<div class="row"><span>${medalDisc(r ? r.bestMedal : 0)} Level ${c.id} · ${esc(c.card)}</span><span>${r && r.wins ? fmtScore(r.bestScore) + (r.bestTime ? ' · ' + fmtTime(r.bestTime) : '') : '—'}</span></div>`).join('')
       + `<div class="row total"><span>CAMPAIGN SCORE</span><span>${fmtScore(total)}</span></div>`
       + `<div class="rank">CAMPAIGN RATING · ${rating ? MEDALS[rating].name + ' · ' : ''}${MEDALS[rating].rank}</div>`

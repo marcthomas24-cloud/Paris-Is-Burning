@@ -243,3 +243,59 @@ export function rising(P, id, dir, k, t) {
   P.hdX = 0.35 * (1 - stand);
   P.spZ = Math.sin(k * 9 + id) * 0.07 * stand * (1 - stand) * 4;
 }
+
+// ---------------------------------------------------------------- Level 6: the square at dawn
+// Sitting. h is the height of the seat: 0 on the ground (legs crossed), about 0.25 a kerb (knees
+// up), about 0.48 a step or a bench. The body sags a little forward with tiredness. k 0..1.
+export function seated(P, L, h, k) {
+  if (k <= 0.01) return;
+  const ground = h < 0.12, kerb = !ground && h < 0.36;
+  const hip = ground ? -1.45 : kerb ? -1.75 : -1.5, knee = ground ? 2.35 : kerb ? 2.15 : 1.55;
+  mix(P, 'hpLX', hip, k); mix(P, 'hpRX', hip + (L.side > 0 ? 0.08 : -0.08), k);
+  mix(P, 'knL', knee, k); mix(P, 'knR', knee - (ground ? 0.1 : 0.12), k);
+  if (ground) { mix(P, 'hpLZ', 0.55, k); mix(P, 'hpRZ', -0.55, k); }
+  mix(P, 'y', ground ? -0.8 : kerb ? -0.66 : -0.46, k);
+  P.spX += (kerb ? 0.18 : 0.1 + L.slouch) * k;
+  // forearms on the knees, hands hanging (kerb), or in the lap
+  if (kerb) { mix(P, 'shLX', -0.75, k); mix(P, 'shRX', -0.75, k); mix(P, 'elL', -0.9, k); mix(P, 'elR', -0.9, k); }
+  else { mix(P, 'shLX', -0.45, k); mix(P, 'shRX', -0.45, k); mix(P, 'elL', -1.25, k); mix(P, 'elR', -1.25, k); P.shLZ -= 0.1 * k; P.shRZ += 0.1 * k; }
+}
+
+// Arms wrapped round themselves against the cold (or a flag round the shoulders). k 0..1.
+export function hugSelf(P, k) {
+  if (k <= 0.01) return;
+  mix(P, 'shLX', -0.85, k); mix(P, 'shRX', -0.85, k); mix(P, 'elL', -2.1, k); mix(P, 'elR', -2.1, k);
+  mix(P, 'shLZ', -0.42, k); mix(P, 'shRZ', 0.42, k);
+  P.spX += 0.06 * k; P.hdX += 0.08 * k;
+}
+
+// Leaning on the person beside them, the head on a shoulder. side: +1 they are on the left. k 0..1.
+export function leanOn(P, side, k) {
+  if (k <= 0.01) return;
+  P.spZ += side * 0.2 * k; P.tiltZ += side * 0.04 * k;
+  P.hdY += side * 0.25 * k; P.hdX += 0.12 * k;
+}
+
+// Up all night: the head drops, catches itself and comes back up; the shoulders hang. k 0..1.
+export function weary(P, L, t, k) {
+  if (k <= 0.01) return;
+  const f = fract(t / (9 + L.fidgetT * 0.4) + L.ph), drop = sstep(f, 0.55, 0.85) * (1 - sstep(f, 0.9, 0.93));
+  P.hdX += (0.1 + 0.42 * drop) * k; P.spX += 0.06 * k;
+  P.shLX += 0.05 * k; P.shRX += 0.05 * k;
+  if (P.mouth !== undefined) { P.smile = 0; P.brow = Math.min(P.brow, -0.2 * k); }
+}
+
+// Kneeling over someone on the ground, both hands working (a street medic). t: the clock. k 0..1.
+export function treating(P, L, t, k) {
+  if (k <= 0.01) return;
+  const w = Math.sin(t * 2.3 + L.ph) * 0.12;
+  mix(P, 'y', -0.5, k); mix(P, 'hpLX', -1.45, k); mix(P, 'knL', 1.55, k); mix(P, 'hpRX', -0.15, k); mix(P, 'knR', 1.75, k);
+  mix(P, 'spX', 0.55, k); mix(P, 'hdX', 0.45, k);
+  mix(P, 'shRX', -1.15 + w, k); mix(P, 'elR', -0.55, k); mix(P, 'shLX', -1.0 - w, k); mix(P, 'elL', -0.75, k);
+}
+
+// A nod to someone: chin down and back up once over `dur` seconds. u: 0..1 through it.
+export function nod(P, u) {
+  if (u <= 0 || u >= 1) return;
+  P.hdX += Math.sin(u * Math.PI) * 0.38;
+}
